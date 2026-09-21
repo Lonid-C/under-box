@@ -1,0 +1,32 @@
+# 把履历核验的规则层挂进 DeepSeek Harness。
+#
+# ⚠️ 重要：这个 patch 里的 name 必须是绝对路径，而 dsh 加载插件时，模块解析的起点是
+# **插件文件自己所在的目录**。插件 import 的 @deepseek-ai/dsh-tools / @deepseek-ai/cordis
+# 只存在于 harness 的模块树中，所以插件必须放在能向上走到那棵树的目录里，否则整个 boot
+# 会失败：
+#   Error: dsh: plugin tree failed to load: ... Cannot find package '@deepseek-ai/dsh-tools'
+#
+# 三个能用的放法（任选其一）：
+#   A. 放进 harness 源码仓库内，例如 <repo>/scratch-plugin/dsh-resume-verify/   ← 官方教程的做法
+#   B. 放进 $DSH_HOME/profiles/ 下，例如 $DSH_HOME/profiles/resume-verify/      ← npm 装的 dsh 也能用
+#   C. 用 dsh plugin --profile web add file:/path/to/dsh-resume-verify 装成 bundle（需要 pnpm）
+#
+# 最省事的是直接跑 ./install.sh，它会按 B 装好并生成路径正确的 patch。
+#
+# 用法：
+#   DSH_HOME=/你的/dsh-home dsh web --patch /绝对路径/dsh-resume-verify/cordis.yml
+
+- insert:
+    - id: resume-verify
+      # 指向插件源码。改成上面 A/B/C 里你实际选的那个绝对路径。
+      name: '/Users/a1234/WorkBuddy/2026-09-19-13-43-06/dsh-resume-verify/src/index.ts'
+      config:
+        # open_box 仓库根目录。规则实现 python/resume_rules.py 靠 PYTHONPATH 导入它的 app.* 模块，
+        # 所以 open_box 本身不需要任何改动。
+        openBoxRoot: '/Users/a1234/Desktop/open_box'
+        # 必须是装了 open_box 依赖（pydantic 等）的解释器。
+        # 别用系统 python3，除非它确实装过。例如：
+        #   pythonBin: '/Users/a1234/Desktop/open_box/.venv/bin/python'
+        pythonBin: 'python3'
+        # 判定是纯计算，不该慢。超时通常意味着上面两项配错了。
+        timeoutMs: 60000

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>履历核验报告</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&family=Noto+Serif+SC:wght@600&family=Spectral:wght@400;500&display=swap">
+<link rel="stylesheet" href="/report.css">
+</head>
+<body>
+<main class="sheet" id="sheet" aria-busy="true">
+  <p class="label">正在载入报告…</p>
+</main>
+
+<script>
+"use strict";
+
+const STATUS_LABEL = { ok:"已证实", part:"部分证实", ask:"待澄清", none:"未找到公开记录", who:"身份未确认" };
+const STATUS_ORDER = ["ok","part","ask","none","who"];
+const MARK_CLASS   = { ok:"m-ok", part:"m-part", ask:"m-ask", none:"m-none", who:"m-who" };
+
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    n.appendChild(typeof kid === "string" ? document.createTextNode(kid) : kid);
+  }
+  return n;
+};
+const mark = s => el("span", { class: "mark " + MARK_CLASS[s], "aria-hidden": "true" });
+
+/* 学年分组：9 月及以后属当年—次年学年 */
+function academicYear(claim) {
+  const src = claim.date_start || claim.date_label || "";
+  const m = src.match(/(\d{4})[-.](\d{1,2})/);
+  if (!m) return "时间未标注";
+  const y = +m[1], mo = +m[2];
+  const start = mo >= 9 ? y : y - 1;
+  return `${start}—${start + 1}学年`;
+}
+
+const fmtDate = s => (s ? String(s).slice(0, 10) : null);
+
+/* ── 报头 ─────────────────────────────────────────────── */
+function renderMasthead(r) {
+  const meta = (k, v) => el("div", {}, el("span", { class: "label", text: k }), el("span", { class: "val num", text: v }));
+  return el("header", {},
+    el("div", { class: "masthead" },
+      el("div", {},
+        el("p", { class: "label", text: "履历核验报告 · 公开来源汇总" }),
+        el("h1", { text: r.candidate_name }),
+        el("p", { class: "sub", text: `依据 ${r.source_file || "候选人提交材料"} 生成 · 运行模式 ${r.mode}` }),
+        r.fictional ? el("span", { class: "fiction-tag", text: r.fictional_notice || "候选人与来源均为虚构" }) : null,
+      ),
+      el("div", { class: "meta-set" },
+        meta("应聘岗位", r.position),
+        meta("报告编号", r.report_no),
+        meta("生成时间", (r.generated_at || "").replace("T", " ").slice(0, 16)),
+      ),
+    ),
+    el("hr", { class: "rule-double" }),
+    el("hr", { class: "rule-thin" }),
+  );
+}
+
+/* ── 输入风险 ─────────────────────────────────────────── */
+function renderRisks(r) {
+  const risks = r.input_risks || [];
+  if (!risks.length) return null;
+  return el("section", { class: "risk", role: "note", "aria-labelledby": "risk-h" },
+    el("h2", { id: "risk-h", text: `输入风险提示：检测到 ${risks.length} 处` }),
+    el("p", { text: "以下文本已从送入模型的内容中剔除，下方各条结论不受其影响。" }),
+    el("ul", {}, risks.map(k => el("li", {},
+      el("span", { text: `${k.locator ? k.locator + "　" : ""}${k.detail}　` }),
+      el("code", { text: `“${k.excerpt}”` }),
+    ))),
+  );
+}
+
+/* ── 统计带 ───────────────────────────────────────────── */
+function renderStats(r) {
+  const c = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
+  r.claims.forEach(v => { c[v.status] += 1; });
+  const total = r.claims.length || 1;
+  const seg = (cls, n) => n ? el("span", { class: cls, style: `width:${(n / total * 100).toFixed(3)}%` }) : null;
+
+  return el("section", { class: "stats", "aria-label": "条目状态分布" },
+    el("div", { class: "bar", role: "img",
+      "aria-label": STATUS_ORDER.map(s => `${STATUS_LABEL[s]} ${c[s]} 条`).join("，") },
+      seg("s-ok", c.ok), seg("s-part", c.part), seg("s-ask", c.ask), seg("s-grey", c.none + c.who),
+    ),
+    el("div", { class: "legend" },
+      STATUS_ORDER.map(s => el("span", { class: "item" },
+        mark(s), el("span", { text: STATUS_LABEL[s] }), el("span", { class: "count num", text: String(c[s]) }),
+      )),
+      el("span", { class: "note", text: "覆盖率只反映公开信息的多少，不代表候选人的可信程度。" }),
+    ),
+  );
+}
+
+/* ── 左栏时间轴 ───────────────────────────────────────── */
+function renderTimeline(r, onSelect) {
+  const groups = new Map();
+  r.claims.forEach((v, i) => {
+    const key = academicYear(v.claim);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push([v, i]);
+  });
+
+  const nav = el("nav", { class: "timeline", "aria-label": "履历时间轴" });
+  for (const [year, rows] of groups) {
+    const g = el("section", { class: "group" },
+      el("div", { class: "group-head" }, el("span", { class: "label", text: year }), el("span", { class: "line" })),
+    );
+    rows.forEach(([v, i]) => {
+      const btn = el("button", {
+        type: "button", class: "row", id: `row-${v.claim.id}`,
+        "data-index": String(i), "aria-current": "false",
+        "aria-label": `${v.claim.date_label}　${v.claim.raw_text}　${STATUS_LABEL[v.status]}`,
+      },
+        el("span", { class: "when num", text: v.claim.date_label }),
+        el("span", { class: "rail" }, mark(v.status), el("span", { class: "stem" })),
+        el("span", { class: "what" },
+          el("span", { class: "title", text: v.claim.raw_text }),
+          el("span", { class: "sub" },
+            el("span", { text: STATUS_LABEL[v.status] }),
+            el("span", { class: "sep", text: "|" }),
+            el("span", { text: v.claim.category }),
+            v.needs_human ? el("span", { class: "sep", text: "|" }) : null,
+            v.needs_human ? el("span", { text: "需人工复核" }) : null,
+          ),
+        ),
+        el("span", { class: "tier-box" + (v.best_tier ? "" : " empty"), title: v.best_tier ? `来源等级 ${v.best_tier}` : "无来源", text: v.best_tier || "—" }),
+      );
+      btn.addEventListener("click", () => onSelect(i));
+      g.appendChild(btn);
+    });
+    nav.appendChild(g);
+  }
+  return nav;
+}
+
+/* ── 右栏证据卡片 ─────────────────────────────────────── */
+function field(name, ...content) {
+  return el("div", { class: "field" }, el("dt", { class: "label", text: name }), el("dd", {}, ...content));
+}
+
+function renderCard(v) {
+  const evs = v.evidence || [];
+  const card = el("div", { class: "card" },
+    el("div", { class: "card-head" },
+      el("div", {}, el("p", { class: "label", text: `条目 ${v.claim.id.toUpperCase()} · ${v.claim.category}` }),
+        el("h2", { text: v.claim.date_label })),
+      el("span", { class: "card-status" }, mark(v.status), el("span", { text: STATUS_LABEL[v.status] }),
+        v.best_tier ? el("span", { class: "tier-box", text: v.best_tier }) : null),
+    ),
+  );
+
+  const dl = el("dl", { class: "fields" });
+
+  dl.appendChild(field("简历原文", el("span", { text: v.claim.raw_text }),
+    el("div", { class: "muted", style: "font-size:12px;margin-top:4px" }, v.claim.raw_locator)));
+
+  dl.appendChild(field("来源", evs.length
+    ? evs.map(e => el("div", { class: "src-line" },
+        el("div", {}, el("a", { href: e.url, target: "_blank", rel: "noopener noreferrer nofollow", text: e.title }),
+          el("span", { class: "muted", text: "　查看原文 ↗" })),
+        el("div", { class: "pub" }, `${e.publisher}　·　`,
+          el("span", { class: "nowrap", text: `来源等级 ${e.source_tier}` }),
+          e.origin_url ? `　·　转载自 ${e.origin_url}（去重后不重复计数）` : ""),
+      ))
+    : el("span", { class: "empty-note", text: "未检索到可用的公开来源。" })));
+
+  dl.appendChild(field("原文片段", evs.filter(e => e.snippet).length
+    ? evs.filter(e => e.snippet).map(e => el("blockquote", { class: "quote", style: "margin:0 0 8px" }, e.snippet))
+    : el("span", { class: "empty-note", text: "无。" })));
+
+  dl.appendChild(field("时间", evs.length
+    ? evs.map(e => el("div", { class: "muted num" },
+        `发布 ${fmtDate(e.published_at) || "页面未标注"}　·　访问 ${(e.accessed_at || "").replace("T", " ").slice(0, 16)}`))
+    : el("span", { class: "empty-note", text: "—" })));
+
+  const sig = evs.flatMap(e => e.identity_signals || []);
+  const cft = evs.flatMap(e => e.identity_conflicts || []);
+  dl.appendChild(field("身份关联", el("div", { class: "chips" },
+    sig.map(s => el("span", { class: "sig", text: "＋ " + s })),
+    cft.map(s => el("span", { class: "cft", text: "− " + s })),
+    (!sig.length && !cft.length) ? el("span", { class: "empty-note", text: "无可比对的身份字段。" }) : null,
+  ), evs.length ? el("div", { class: "muted num", style: "font-size:12px;margin-top:4px" },
+      "身份分 " + evs.map(e => e.identity_score).join(" / ") + (v.needs_human ? "　·　需人工复核" : "")) : null));
+
+  dl.appendChild(field("已证明", v.proved.length
+    ? el("ul", { class: "elem-list proved" }, v.proved.map(p => el("li", { text: p })))
+    : el("span", { class: "empty-note", text: "尚无要素被证明。" })));
+
+  dl.appendChild(field("尚未证明", v.unproved.length
+    ? el("ul", { class: "elem-list unproved" }, v.unproved.map(u => {
+        const [head, why] = u.split("｜");
+        return el("li", {}, el("span", { text: head }), why ? el("span", { class: "why", text: "　" + why }) : null);
+      }))
+    : el("span", { class: "empty-note", text: "该条要素已全部覆盖。" })));
+
+  dl.appendChild(field("下一步", el("span", { text: v.next_step || "—" })));
+
+  card.appendChild(dl);
+  card.appendChild(el("div", { class: "actions" },
+    el("button", { type: "button", class: "btn btn-solid", "aria-pressed": "false", text: "标记为已复核" }),
+    el("button", { type: "button", class: "btn btn-ghost", "aria-pressed": "false", text: "请候选人补充" }),
+  ));
+  card.querySelectorAll(".actions .btn").forEach(b => b.addEventListener("click", () => {
+    b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  }));
+  return card;
+}
+
+/* ── 澄清清单 ─────────────────────────────────────────── */
+function renderAskList(r, activeId) {
+  const qs = r.claims.filter(v => v.question);
+  const box = el("section", { class: "asklist", "aria-label": "澄清清单" },
+    el("p", { class: "label", text: `澄清清单 · 共 ${qs.length} 条` }));
+  box.appendChild(el("ol", {}, qs.map((v, i) => el("li", { "data-active": String(v.claim.id === activeId) },
+    el("span", { class: "q-num", text: String(i + 1).padStart(2, "0") }),
+    el("span", {}, el("span", { class: "q-text", text: v.question }),
+      el("span", { class: "q-for", text: `对应：${v.claim.date_label}　${v.claim.raw_text}` })),
+  ))));
+  return box;
+}
+
+/* ── 组装 ─────────────────────────────────────────────── */
+function render(r) {
+  const sheet = document.getElementById("sheet");
+  document.title = `${r.candidate_name} · 履历核验报告 ${r.report_no}`;
+  sheet.textContent = "";
+  sheet.setAttribute("aria-busy", "false");
+
+  sheet.appendChild(renderMasthead(r));
+  const risks = renderRisks(r);
+  if (risks) sheet.appendChild(risks);
+  sheet.appendChild(renderStats(r));
+
+  const pane = el("div", { class: "pane", id: "pane", role: "region", "aria-live": "polite", "aria-label": "证据卡片" });
+  const grid = el("div", { class: "body-grid" },
+    renderTimeline(r, select), el("div", { class: "divider", "aria-hidden": "true" }), pane);
+  sheet.appendChild(grid);
+
+  sheet.appendChild(el("footer", { class: "foot" }, el("p", { text: r.disclaimer })));
+
+  function select(i) {
+    const v = r.claims[i];
+    document.querySelectorAll(".row").forEach(b =>
+      b.setAttribute("aria-current", String(b.dataset.index === String(i))));
+    pane.textContent = "";
+    pane.appendChild(renderCard(v));
+    pane.appendChild(renderAskList(r, v.claim.id));
+  }
+
+  // 演示时先点第 5 条
+  select(Math.min(4, r.claims.length - 1));
+  const first = document.querySelector('.row[aria-current="true"]');
+  if (first) first.scrollIntoView({ block: "nearest" });
+}
+
+fetch("/api/report/lin")
+  .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+  .then(render)
+  .catch(err => {
+    document.getElementById("sheet").innerHTML =
+      '<p class="label">报告载入失败</p><p>' + String(err) + "</p>";
+  });
+</script>
+</body>
+</html>

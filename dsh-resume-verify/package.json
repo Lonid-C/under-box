@@ -1,0 +1,20 @@
+{
+  "name": "dsh-resume-verify",
+  "version": "0.1.0",
+  "private": true,
+  "description": "履历核验的规则层作为 DeepSeek Harness 插件：理解归模型，判定归规则",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness"
+  ]
+}

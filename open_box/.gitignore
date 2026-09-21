@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+out/*.json
+
+# 真实简历样例含个人隐私，绝不入库
+CV_example/
+out/

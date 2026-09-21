@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UNDERBOX · TA 的优秀，滴水不漏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --cream:#F6F3EC; --paper:#FFFFFF; --ink:#14130F; --ink-2:#55524A; --ink-3:#8A867B;
+  --pink:#FF2E9A; --pink-soft:#FFE4F2; --grid:rgba(20,19,15,.05);
+  --rad:4px; --colw:520px;
+  --shadow:5px 5px 0 var(--ink); --shadow-sm:3px 3px 0 var(--ink); --shadow-hero:9px 9px 0 var(--ink);
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --sans:'Inter','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;
+  --disp:'Archivo Black','Inter','PingFang SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--cream); color:var(--ink); font:400 14px/1.65 var(--sans);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px; -webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+
+/* ══ 两个状态 ═══════════════════════════════════════ */
+/* 用 auto 外边距做垂直居中，而不是 justify-content:center——
+   后者在内容高于视口时会把顶部一起挤出屏幕且滚不到；auto 边距在溢出时自动归零，可正常滚动。 */
+body[data-stage="hero"]{display:flex;flex-direction:column;min-height:100vh;padding:5vh 0}
+body[data-stage="hero"] .hero-wrap{margin-top:auto}
+body[data-stage="hero"] .hero-foot{margin-bottom:auto}
+body[data-stage="hero"] > *{flex:0 0 auto}
+body[data-stage="hero"] .site,
+body[data-stage="hero"] .notice,
+body[data-stage="hero"] .risk-panel,
+body[data-stage="hero"] .col-right,
+body[data-stage="hero"] .side-extra{display:none}
+body[data-stage="app"] .hero-wrap,
+body[data-stage="app"] .hero-foot{display:none}
+
+/* ══ 落地页：品牌 ═══════════════════════════════════ */
+.hero-wrap{text-align:center;padding:0 28px;margin-bottom:38px}
+.hero-mark{font-family:var(--disp);font-size:clamp(38px,7.4vw,74px);line-height:1;letter-spacing:-.02em;margin:0}
+.hero-mark em{color:var(--pink);font-style:normal}
+.hero-slogan{margin:16px 0 0;font-size:clamp(15px,2.1vw,21px);color:var(--ink-2);letter-spacing:.02em}
+.hero-slogan em{color:var(--pink);font-style:normal;font-weight:500}
+.hero-foot{text-align:center;font-size:12.5px;color:var(--ink-3);margin:22px 28px 0;letter-spacing:.01em}
+.hero-foot b{color:var(--ink-2);font-weight:500}
+
+/* ══ 主界面顶栏 ═════════════════════════════════════ */
+header.site{border-bottom:2px solid var(--ink);background:var(--paper)}
+.hdr-in{display:flex;align-items:center;gap:20px;padding:15px 28px;max-width:1400px;margin:0 auto}
+.mark{font-family:var(--disp);font-size:21px;letter-spacing:-.01em;line-height:1}
+.mark em{color:var(--pink);font-style:normal}
+.mark small{display:block;font-family:var(--sans);font-weight:500;font-size:10px;letter-spacing:.06em;color:var(--ink-2);margin-top:5px}
+.top-nav{display:flex;gap:22px;margin-left:26px;font-size:13.5px}
+.top-nav span{padding-bottom:2px;color:var(--ink-2)}
+.top-nav span.on{color:var(--ink);font-weight:500;border-bottom:2px solid var(--pink)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-2)}
+.badge{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--ink);background:var(--pink-soft);padding:3px 9px;font-size:11px;font-weight:600;border-radius:999px}
+.badge i{width:7px;height:7px;border-radius:50%;background:var(--pink);display:block}
+.ghost{font:inherit;font-size:12px;font-weight:500;background:var(--paper);border:2px solid var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer}
+.ghost:hover{background:var(--pink-soft)}
+
+/* ══ 提示条 / 风险 ══════════════════════════════════ */
+.notice{background:var(--pink);color:#fff;border-bottom:2px solid var(--ink)}
+.notice-in{max-width:1400px;margin:0 auto;padding:11px 28px;display:flex;align-items:center;gap:12px;font-size:13px}
+.notice b{background:var(--ink);color:#fff;font-size:10.5px;letter-spacing:.1em;padding:3px 7px;border-radius:3px;font-weight:600}
+.notice button{margin-left:auto;background:transparent;border:0;color:#fff;font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;padding:2px 4px}
+.risk-panel{display:none;background:var(--ink);color:#EFEEE8}
+.risk-panel.open{display:block}
+.risk-in{max-width:1400px;margin:0 auto;padding:14px 28px;font-size:12.5px;line-height:1.7}
+.risk-in code{background:rgba(255,255,255,.12);padding:1px 6px;border-radius:3px;font-family:ui-monospace,Menlo,monospace}
+.risk-in .k{color:#B9B5AA}
+
+/* ══ 两栏 ═══════════════════════════════════════════ */
+main.grid{display:grid;grid-template-columns:var(--colw) minmax(0,1fr);gap:26px;padding:26px 28px 60px;max-width:1400px;margin:0 auto;align-items:start;position:relative;width:100%}
+body[data-stage="hero"] main.grid{padding:0 28px}
+body[data-stage="hero"] .col-left{grid-column:1/-1;justify-self:center;width:var(--colw)}
+.col-left{width:var(--colw)}
+.card{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);transition:box-shadow .5s var(--ease)}
+.card+.card{margin-top:22px}
+.card-h{padding:13px 16px;border-bottom:2px solid var(--ink);display:flex;align-items:center;gap:8px}
+.card-h h2{margin:0;font-size:13.5px;font-weight:600}
+.card-h .n{margin-left:auto;font-size:11.5px;color:var(--ink-2);font-weight:500}
+.card-b{padding:16px}
+
+/* ══ 投料卡（两个状态里完全同一份 DOM）══════════════ */
+#intake{position:relative;will-change:transform}
+body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
+#intake.accepted .drop{border-style:solid;background:var(--pink-soft)}
+.pulse{position:absolute;inset:-2px;border:2px solid var(--pink);border-radius:var(--rad);pointer-events:none;opacity:0}
+#intake.accepted .pulse{animation:pulse .62s var(--ease)}
+@keyframes pulse{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.05)}}
+
+.drop{border:2px dashed var(--ink);border-radius:var(--rad);padding:40px 18px;text-align:center;cursor:pointer;background:var(--cream);transition:background .14s,transform .14s,box-shadow .14s,border-style .14s}
+.drop:hover{background:var(--pink-soft)}
+.drop.hot{background:var(--pink-soft);transform:translate(2px,2px);box-shadow:none;border-style:solid}
+.drop.nope{animation:shake .34s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.drop .ico{margin-bottom:12px;font-size:0;line-height:0}
+.drop .ico svg{width:44px;height:44px}
+.drop b{display:block;font-family:var(--disp);font-size:22px;letter-spacing:-.01em;margin-bottom:7px}
+.drop span.s{margin:0;display:block;font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drop span.s.ok{color:var(--pink);font-weight:600}
+.urlrow{margin-top:12px;text-align:center}
+.urlrow button{font:inherit;font-size:12px;color:var(--ink-2);background:none;border:0;border-bottom:1.5px dashed var(--ink-3);padding:1px 2px;cursor:pointer}
+.urlrow button:hover{color:var(--ink);border-color:var(--ink)}
+.urlbox{display:none;margin-top:11px}
+.urlbox.on{display:block}
+.urlbox input{width:100%;font:inherit;font-size:13px;padding:9px 11px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper)}
+.urlbox .tip{font-size:11.5px;color:var(--ink-2);margin-top:7px}
+.btn{display:block;width:100%;margin-top:11px;font:inherit;font-size:13px;font-weight:600;padding:11px 14px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--pink);color:#fff;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s}
+.btn:hover{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink)}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn[disabled]{background:var(--ink-3);cursor:not-allowed;box-shadow:none;transform:none}
+
+.steps{display:none;margin-top:15px;border-top:1.5px dashed #D8D4C9;padding-top:11px}
+.steps.on{display:block}
+.step{display:flex;gap:9px;align-items:center;font-size:12.5px;padding:5px 0;color:var(--ink-3)}
+.step .b{width:13px;height:13px;border:2px solid var(--ink-3);border-radius:50%;flex:none;transition:background .2s,border-color .2s}
+.step.doing{color:var(--ink);font-weight:500}
+.step.doing .b{border-color:var(--pink);background:var(--pink)}
+.step.done{color:var(--ink-2)}
+.step.done .b{border-color:var(--ink);background:var(--ink)}
+
+/* ══ 概览 / 边界 ═════════════════════════════════════ */
+.bar{display:flex;height:9px;border:2px solid var(--ink);border-radius:999px;overflow:hidden;margin-bottom:13px;background:var(--paper)}
+.legend{display:flex;flex-wrap:wrap;gap:9px 15px;font-size:12px}
+.legend .it{display:flex;align-items:center;gap:6px;cursor:pointer;border:0;background:none;font:inherit;font-size:12px;padding:2px 0;color:var(--ink)}
+.legend .it[aria-pressed="false"]{opacity:.38}
+.legend .it i{width:9px;height:9px;border-radius:2px;display:block;border:1.5px solid var(--ink)}
+.legend .it b{font-weight:600}
+.metric{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px solid #E8E4DA}
+.metric:last-child{border-bottom:0}
+.metric span:last-child{font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ══ 右栏 ═══════════════════════════════════════════ */
+.col-right{min-width:0}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.chipf{font:inherit;font-size:12px;font-weight:500;padding:6px 12px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.chipf i{width:8px;height:8px;border-radius:2px;border:1.5px solid var(--ink);display:block}
+.chipf[aria-pressed="true"]{background:var(--ink);color:#fff}
+.chipf[aria-pressed="true"] i{border-color:#fff}
+.toolbar .count{margin-left:auto;font-size:12px;color:var(--ink-2)}
+
+.pending{border:2px dashed #D8D4C9;border-radius:var(--rad);background:var(--paper);padding:26px;text-align:center;color:var(--ink-2);font-size:13px}
+.pending[hidden]{display:none}
+.pending .dots::after{content:'';animation:dots 1.4s steps(4,end) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+
+.claims{list-style:none;margin:0;padding:0;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);box-shadow:var(--shadow);overflow:hidden}
+.claims[hidden]{display:none}
+.claims li+li{border-top:1.5px solid #E4E0D6}
+.row{display:grid;grid-template-columns:14px 104px 62px 58px minmax(0,1fr) 34px 20px;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;background:none;border:0;padding:13px 16px;cursor:pointer;transition:background .1s}
+.row:hover{background:#FCFAF6}
+.row[aria-expanded="true"]{background:var(--pink-soft)}
+.row .dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--ink)}
+.row .st{font-size:11px;font-weight:600;padding:3px 8px;border:2px solid var(--ink);border-radius:999px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .dt{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.row .ct{font-size:11.5px;color:var(--ink-2)}
+.row .tx{min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .tr{font-size:11px;font-weight:600;text-align:center;border:2px solid var(--ink);border-radius:3px;padding:1px 0}
+.row .tr.none{border-color:#D8D4C9;color:var(--ink-3)}
+.row .cv{font-size:11px;color:var(--ink-3);transition:transform .15s}
+.row[aria-expanded="true"] .cv{transform:rotate(180deg)}
+.flag{display:inline-block;font-size:10px;font-weight:600;margin-left:7px;padding:1px 6px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);vertical-align:1px}
+
+.detail{display:none;padding:4px 16px 20px;background:#FCFAF6;border-top:1.5px dashed #D8D4C9}
+.detail.on{display:block}
+.dsec{margin-top:16px}
+.dsec>h4{margin:0 0 7px;font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--ink-2);text-transform:uppercase}
+.raw{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);padding:11px 13px;font-size:13.5px}
+.raw .loc{display:block;font-size:11px;color:var(--ink-3);margin-top:5px}
+.el{display:flex;flex-direction:column;gap:6px}
+.el .e{display:flex;gap:9px;align-items:baseline;font-size:13px}
+.el .e .mk{flex:none;width:15px;font-size:11px;font-weight:700}
+.el .e.yes .mk{color:#1D9E75}
+.el .e.no{color:var(--ink-2)}
+.el .e.no .mk{color:var(--ink-3)}
+.hint{margin-top:8px;font-size:11.5px;color:var(--ink-2);background:var(--paper);border-left:3px solid var(--ink);padding:7px 10px}
+.ev{border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);padding:12px 13px}
+.ev+.ev{margin-top:10px}
+.ev-h{display:flex;align-items:baseline;gap:9px;margin-bottom:5px}
+.ev-h .t{font-size:11px;font-weight:700;border:2px solid var(--ink);border-radius:3px;padding:1px 6px;flex:none}
+.ev-h b{font-size:13px;font-weight:600}
+.ev-m{font-size:11.5px;color:var(--ink-2);margin-bottom:9px;word-break:break-all}
+.q{font-size:13px;border-left:3px solid var(--pink);padding:2px 0 2px 11px;margin-bottom:9px}
+.sig{font-size:11.5px;color:var(--ink-2)}
+.sig b{font-weight:600;color:var(--ink)}
+.diff{background:var(--paper);border:2px solid var(--ink);border-left:8px solid var(--ink);border-radius:var(--rad);padding:11px 13px;font-size:13px}
+.diff .cap{display:block;font-size:11px;color:var(--ink-2);margin-bottom:5px}
+.next{font-size:13px;padding-left:16px;position:relative}
+.next::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;background:var(--pink);border:1.5px solid var(--ink);border-radius:2px}
+.empty{font-size:13px;color:var(--ink-2);background:var(--paper);border:2px dashed #D8D4C9;border-radius:var(--rad);padding:13px}
+
+/* ══ 来源分级面板 / 空态 / 流式 ════════════════════ */
+.navlink{color:inherit;text-decoration:none;padding-bottom:2px}
+.navlink:hover{color:var(--ink)}
+body[data-noreport] .navlink{opacity:.4;pointer-events:none}
+.tierpanel{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:80;width:min(640px,94vw);max-height:70vh;overflow:auto;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);padding:16px}
+.tierpanel h3{margin:0 0 4px;font-size:14px}
+.tierpanel .sub{font-size:11.5px;color:var(--ink-2);margin-bottom:12px}
+.tierpanel .grp{margin-bottom:10px}
+.tierpanel .grp>b{display:block;font-size:12px;margin-bottom:4px}
+.tierpanel .chip{display:inline-block;font-size:12px;border:1.5px solid var(--ink);border-radius:999px;padding:2px 9px;margin:0 5px 5px 0;cursor:pointer;background:var(--paper)}
+.tierpanel .chip:hover{background:var(--pink-soft)}
+.tierpanel .close{position:absolute;top:10px;right:12px;background:none;border:0;font:inherit;font-size:15px;cursor:pointer}
+.plan-q{border-top:1.5px dashed #D8D4C9;padding:7px 0 0;margin-top:7px;font-size:12.5px}
+.plan-q .qq{font-weight:500}
+.plan-q .meta{font-size:11px;color:var(--ink-2);margin:2px 0 4px}
+.bub.streaming::after{content:"▍";color:var(--pink);animation:caret .9s steps(2) infinite;margin-left:1px}
+@keyframes caret{50%{opacity:0}}
+.bub.msg-err{background:#FAECE7;border-color:#712B13;color:#712B13}
+
+
+/* ══ 核验状态窗口（左下角，与右下角对话错开）══════ */
+.status-dock{position:fixed;left:22px;bottom:22px;z-index:65;display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.status-pill{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:12.5px;font-weight:600;padding:9px 15px;border:2px solid var(--ink);border-radius:999px;background:var(--paper);cursor:pointer;box-shadow:var(--shadow-sm)}
+.status-pill:hover{background:var(--pink-soft)}
+.status-pill .spin{width:9px;height:9px;border-radius:50%;background:var(--pink);display:block;animation:spPulse 1s infinite}
+@keyframes spPulse{0%,100%{opacity:.25}50%{opacity:1}}
+.status-panel{position:fixed;left:22px;bottom:76px;width:min(400px,calc(100vw - 44px));max-height:min(62vh,640px);display:flex;flex-direction:column;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;z-index:66;animation:chatIn .26s var(--ease) both}
+.status-panel[hidden]{display:none}
+.sp-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid var(--ink);background:var(--cream);flex:none}
+.sp-dot{width:9px;height:9px;border-radius:50%;background:var(--pink);display:block;animation:spPulse 1s infinite}
+#statusDock.done .sp-dot{background:#1D9E75;animation:none}
+#statusDock.failed .sp-dot{background:#D85A30;animation:none}
+.sp-h b{font-size:13px}
+.sp-time{margin-left:auto;font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.sp-btn{background:none;border:0;font:inherit;font-size:14px;line-height:1;color:var(--ink);cursor:pointer;padding:2px 5px}
+.sp-steps{padding:10px 12px 4px;flex:none}
+.sp-step{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;color:var(--ink-3)}
+.sp-step .d{width:11px;height:11px;border:2px solid var(--ink-3);border-radius:50%;flex:none;display:block}
+.sp-step.doing{color:var(--ink);font-weight:500}
+.sp-step.doing .d{border-color:var(--pink);background:var(--pink)}
+.sp-step.done{color:var(--ink-2)}
+.sp-step.done .d{background:var(--ink);border-color:var(--ink)}
+.sp-log{flex:1;min-height:110px;max-height:240px;overflow-y:auto;margin:6px 12px;padding:9px 10px;background:var(--cream);border:1.5px solid #D8D4C9;border-radius:3px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.7;color:var(--ink-2);white-space:pre-wrap;word-break:break-all}
+.sp-foot{padding:8px 12px;border-top:1.5px solid #D8D4C9;font-size:11.5px;color:var(--ink-2);flex:none}
+#statusDock.failed .sp-foot{color:#712B13}
+#statusDock .status-pill{display:none}
+#statusDock.collapsed .status-panel{display:none}
+#statusDock.collapsed .status-pill{display:inline-flex}
+#statusDock[hidden]{display:none}
+
+/* ══ 入场动画 ═══════════════════════════════════════ */
+.anim{opacity:0}
+.anim.run{animation-fill-mode:both;animation-duration:.56s;animation-timing-function:var(--ease)}
+.anim.run.up{animation-name:fadeUp}
+.anim.run.down{animation-name:fadeDown}
+.anim.run.right{animation-name:slideIn}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+@keyframes slideIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+#claims li{animation:fadeUp .42s var(--ease) both}
+
+/* ══ 问答（chatbot）══════════════════════════════════ */
+body[data-stage="hero"] .chat-dock,
+body[data-stage="hero"] .chat{display:none}          /* 落地页不出现，出了报告才需要问 */
+.chat-dock{position:fixed;right:22px;bottom:22px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.chat-toggle{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:13px;font-weight:600;padding:10px 16px;border:2px solid var(--ink);border-radius:999px;background:var(--pink);color:#fff;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s}
+/* hidden 属性默认靠 UA 的 display:none 生效，但上面写了 display:inline-flex 会把它盖掉 */
+.chat-toggle[hidden]{display:none}
+.chat-toggle:hover{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink)}
+.chat-toggle:active{transform:translate(3px,3px);box-shadow:none}
+.chat-toggle .dot{width:8px;height:8px;border-radius:50%;background:#fff;display:block}
+
+/* 面板独立定位：默认贴右下（在胶囊按钮上方），拖动后由 JS 改成 left/top 并记住位置 */
+.chat{position:fixed;right:22px;bottom:96px;width:392px;max-width:calc(100vw - 44px);height:min(566px,calc(100vh - 130px));display:none;flex-direction:column;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden}
+.chat.open{display:flex;animation:chatIn .26s var(--ease) both}
+.chat.dragging{animation:none;user-select:none}
+@keyframes chatIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.chat-h{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:2px solid var(--ink);background:var(--cream);cursor:grab}
+.chat.dragging .chat-h{cursor:grabbing}
+.chat-h .grip{font-size:11px;letter-spacing:1px;color:var(--ink-3);line-height:1;margin-right:1px}
+.chat-h .mark{font-family:var(--disp);font-size:13px;letter-spacing:-.01em}
+.chat-h .mark em{color:var(--pink);font-style:normal}
+.chat-h .st{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-2);font-weight:500}
+.chat-h .st i{width:6px;height:6px;border-radius:50%;background:#B4B2A9;display:block}
+.chat-h .st.on i{background:#1D9E75}
+.chat-h button{background:none;border:0;font:inherit;font-size:14px;line-height:1;color:var(--ink);cursor:pointer;padding:2px 4px}
+
+.chat-body{flex:1;min-height:0;overflow-y:auto;padding:13px;scroll-behavior:smooth}
+.lead{border:2px solid var(--ink);border-radius:var(--rad);background:var(--cream);padding:11px;margin-bottom:14px}
+.lead h5{margin:0 0 9px;font-size:10.5px;font-weight:600;letter-spacing:.07em;color:var(--ink-2);text-transform:uppercase}
+.sug{display:block;width:100%;text-align:left;font:inherit;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);padding:9px 11px;cursor:pointer;box-shadow:2px 2px 0 var(--ink);transition:transform .08s,box-shadow .08s,background .12s}
+.sug+.sug{margin-top:8px}
+.sug:hover{background:var(--pink-soft)}
+.sug:active{transform:translate(2px,2px);box-shadow:none}
+.sug b{display:block;font-size:12.5px;font-weight:600;line-height:1.45;margin-bottom:3px}
+.sug span{display:block;font-size:11px;color:var(--ink-2);line-height:1.5}
+.sug .n{display:inline-block;width:15px;height:15px;margin-right:6px;border:1.5px solid var(--ink);border-radius:3px;font-size:9.5px;line-height:12px;text-align:center;vertical-align:1px}
+
+.msg{margin-bottom:11px}
+.msg .who{font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--ink-3);margin-bottom:4px}
+.msg .bub{border:2px solid var(--ink);border-radius:var(--rad);padding:9px 11px;font-size:13px;line-height:1.68;white-space:pre-wrap;word-break:break-word}
+.msg.me{display:flex;flex-direction:column;align-items:flex-end}
+.msg.me .bub{background:var(--ink);color:#fff}
+.msg.ai .bub{background:var(--cream)}
+.msg.err .bub{background:#FAECE7;border-color:#712B13;color:#712B13}
+.msg .tag{display:inline-block;font-size:9.5px;font-weight:600;border:1.5px solid var(--ink);border-radius:3px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.typing i{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ink-2);margin-right:3px;animation:blink 1.05s infinite}
+.typing i:nth-child(2){animation-delay:.17s}
+.typing i:nth-child(3){animation-delay:.34s}
+@keyframes blink{0%,60%,100%{opacity:.22}30%{opacity:1}}
+
+.chat-foot{border-top:2px solid var(--ink);padding:10px;background:var(--cream)}
+.chat-foot .in{display:flex;gap:8px}
+.chat-foot textarea{flex:1;font:inherit;font-size:13px;line-height:1.45;height:44px;padding:9px 11px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);resize:none}
+.chat-foot button.send{font:inherit;font-size:13px;font-weight:600;padding:0 15px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--pink);color:#fff;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s}
+.chat-foot button.send:active{transform:translate(2px,2px);box-shadow:none}
+.chat-foot button.send[disabled]{background:var(--ink-3);box-shadow:none;cursor:not-allowed;transform:none}
+.chat-foot .note{font-size:10.5px;color:var(--ink-3);margin-top:7px;line-height:1.55}
+
+/* ══ 已接收条 + PDF 查看器 ══════════════════════════ */
+.fileline{display:none;align-items:center;gap:9px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--pink-soft);padding:9px 11px;font-size:12.5px;margin-bottom:11px}
+.fileline.on{display:flex}
+.fileline .ic{flex:none;font-size:11px;font-weight:700;color:var(--pink)}
+.fileline b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.fileline .x{margin-left:auto;flex:none;background:none;border:0;font:inherit;font-size:13px;line-height:1;color:var(--ink);cursor:pointer;padding:2px 4px}
+
+.pdf-view{display:none;flex-direction:column;border:2px solid var(--ink);border-radius:var(--rad);overflow:hidden;background:#E9E5DA}
+.pdf-view.on{display:flex;height:min(72vh,820px)}   /* 固定视口高度：页面高于它时查看器自己滚，不推乱整页布局 */
+.pdf-bar{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--cream);border-bottom:2px solid var(--ink);flex:none}
+.pdf-bar button{font:inherit;font-size:12px;font-weight:600;line-height:1;min-width:26px;height:24px;padding:0 7px;border:2px solid var(--ink);border-radius:3px;background:var(--paper);color:var(--ink);cursor:pointer}
+.pdf-bar button:hover:not([disabled]):not(.on){background:var(--pink-soft)}
+.pdf-bar button[disabled]{opacity:.35;cursor:not-allowed}
+.pdf-bar button.on{background:var(--ink);color:#fff}
+.pdf-bar .pg{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-2);min-width:52px;text-align:center}
+.pdf-bar .pg b{color:var(--ink);font-weight:600}
+.pdf-bar .zoom{font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-2);min-width:38px;text-align:center}
+.pdf-bar .gap{flex:1}
+.pdf-bar .div{width:2px;height:16px;background:#D8D4C9;margin:0 2px}
+.pdf-stage{flex:1;min-height:0;overflow:auto;padding:12px;display:flex;justify-content:center;align-items:flex-start}
+.pdf-stage canvas{display:block;background:#fff;border:1px solid #C9C4B8;box-shadow:2px 2px 0 rgba(20,19,15,.12)}
+.pdf-msg{margin:auto;text-align:center;font-size:12.5px;color:var(--ink-2);line-height:1.7;padding:18px}
+.pdf-msg a{color:var(--ink);text-decoration:underline}
+.pdf-view .cap{padding:6px 10px;background:var(--cream);border-top:2px solid var(--ink);font-size:10.5px;color:var(--ink-2);flex:none}
+
+/* 已经拿到 PDF 之后，另外两条投料路径就该让位给查看器 */
+#intake.has-file .drop,
+#intake.has-file .urlrow,
+#intake.has-file .urlbox{display:none}
+
+/* 放大阅读：一个居中的阅读窗口，而不是铺满屏幕。
+   A4 是竖版，铺满 1400px 宽只会得到"页面窄窄一条、两边大片死白"；
+   限到 860px 并让它在竖向撑满，页面占比才合理。 */
+body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,.42);z-index:69}
+#intake.expanded{position:fixed;top:20px;bottom:20px;left:50%;transform:translateX(-50%);width:min(860px,calc(100vw - 40px));max-width:none;margin:0;z-index:70;display:flex;flex-direction:column}
+#intake.expanded .card-b{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
+/* 四步清单这时已经跑完了，留着只会挤压文档——阅读模式下让它让位 */
+#intake.expanded .steps{display:none}
+#intake.expanded .fileline{margin-bottom:9px}
+#intake.expanded .pdf-view{flex:1;height:auto;min-height:0}
+#intake.expanded .pdf-stage{padding:18px}
+
+@media(max-width:980px){
+  main.grid{grid-template-columns:minmax(0,1fr)}
+  body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left{width:100%}
+  .top-nav{display:none}
+  .row{grid-template-columns:14px 96px minmax(0,1fr) 20px}
+  .row .dt,.row .ct,.row .tr{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body data-stage="hero">
+
+<div class="hero-wrap">
+  <h1 class="hero-mark">UNDER<em>BOX</em></h1>
+  <p class="hero-slogan">TA 的优秀，<em>滴水不漏</em></p>
+</div>
+
+<header class="site anim down" data-enter="0">
+  <div class="hdr-in">
+    <div class="mark">UNDER<em>BOX</em><small>TA 的优秀，滴水不漏</small></div>
+    <nav class="top-nav">
+      <span class="on">逐条检验</span>
+      <span id="navTier" role="button" tabindex="0" title="按来源等级汇总">来源分级</span>
+      <a id="navExport" class="navlink" href="/api/export?format=md" title="下载 Markdown 报告">报告导出 ↓</a>
+    </nav>
+    <div class="tierpanel" id="tierPanel" hidden></div>
+    <div class="top-right">
+      <span class="badge" id="modeBadge"><i></i>载入中…</span>
+      <span>报告 <b id="rno">—</b></span>
+      <button class="ghost" id="reset" type="button">换一份简历</button>
+    </div>
+  </div>
+</header>
+
+<div class="notice anim down" data-enter="80">
+  <div class="notice-in">
+    <b>INPUT RISK</b><span id="risk-line">—</span><span id="searchWarn" style="display:none;margin-left:6px;opacity:.92">· 未配置搜索 key，本页检索为空</span>
+    <button id="risk-btn" aria-expanded="false">查看详情</button>
+  </div>
+</div>
+<div class="risk-panel" id="risk-panel"><div class="risk-in" id="risk-body"></div></div>
+
+<main class="grid">
+  <aside class="col-left">
+    <section class="card" id="intake">
+      <div class="pulse"></div>
+      <div class="card-h"><h2>上传简历</h2><span class="n">PDF / DOCX / 个人网页</span></div>
+      <div class="card-b">
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="把简历拖到这里，或点击选择文件">
+          <div class="ico">
+            <svg viewBox="0 0 48 48" fill="none" stroke="#14130F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M24 32V9"/><path d="M15 18l9-9 9 9"/><path d="M8 30v6a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4v-6"/>
+            </svg>
+          </div>
+          <b>把简历扔进来</b>
+          <span class="s" id="hint">支持 PDF / DOCX / MD · 或点击选择文件</span>
+        </div>
+        <input type="file" id="file" accept=".pdf,.docx,.doc,.md,.txt" hidden>
+
+        <div class="fileline" id="fileline">
+          <span class="ic" id="fileKind">PDF</span>
+          <b id="fname">—</b>
+          <button class="x" id="fclear" type="button" aria-label="移除">✕</button>
+        </div>
+
+        <div class="pdf-view" id="pdfView">
+          <div class="pdf-bar">
+            <button id="pdfPrev" type="button" title="上一页" aria-label="上一页">‹</button>
+            <span class="pg"><b id="pdfPage">1</b> / <span id="pdfCount">1</span></span>
+            <button id="pdfNext" type="button" title="下一页" aria-label="下一页">›</button>
+            <span class="div"></span>
+            <button id="pdfOut" type="button" title="缩小" aria-label="缩小">−</button>
+            <span class="zoom" id="pdfZoom">100%</span>
+            <button id="pdfIn" type="button" title="放大" aria-label="放大">＋</button>
+            <button id="pdfFit" type="button" title="按宽度铺满" class="on">适宽</button>
+            <button id="pdfFitPage" type="button" title="整页放进视口">适页</button>
+            <span class="gap"></span>
+            <button id="pdfGrow" type="button" title="放大阅读（铺满整屏）" aria-label="放大阅读">⤢</button>
+            <button id="pdfOpen" type="button" title="在新标签打开原文件" aria-label="在新标签打开">↗</button>
+          </div>
+          <div class="pdf-stage" id="pdfStage">
+            <div class="pdf-msg" id="pdfMsg">正在载入查看器…</div>
+          </div>
+          <div class="cap" id="pdfCap"></div>
+        </div>
+
+        <div class="urlrow"><button type="button" id="urltoggle">或者，粘贴个人网页地址</button></div>
+        <div class="urlbox" id="urlbox">
+          <input type="url" id="url" placeholder="https://example.edu.cn/~you">
+          <div class="tip">只读公开页面；登录墙后的内容不抓取。</div>
+        </div>
+        <div class="steps" id="steps">
+          <div class="step" data-s="0"><span class="b"></span><span class="t">解析并检测输入风险</span></div>
+          <div class="step" data-s="1"><span class="b"></span><span class="t">画像归纳并拆成可独立证伪的陈述</span></div>
+          <div class="step" data-s="2"><span class="b"></span><span class="t">按策略检索并取证</span></div>
+          <div class="step" data-s="3"><span class="b"></span><span class="t">逐条判定（身份 · 分级 · 状态）</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card side-extra anim up" data-enter="430">
+      <div class="card-h"><h2>概览</h2><span class="n" id="total">—</span></div>
+      <div class="card-b"><div class="bar" id="bar"></div><div class="legend" id="legend"></div></div>
+    </section>
+
+    <section class="card side-extra anim up" data-enter="500">
+      <div class="card-h"><h2>边界</h2></div>
+      <div class="card-b" style="font-size:12.5px;color:var(--ink-2)">
+        <div id="metrics"></div>
+        <div style="margin-top:12px;line-height:1.7" id="disc"></div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="col-right anim right" data-enter="300">
+    <div class="toolbar" id="toolbar" hidden>
+      <div class="filters" id="filters"></div>
+      <span class="count" id="shown">—</span>
+    </div>
+    <div class="pending" id="emptyFirst">把简历拖进左边的窗口，这里会出现逐条核验结果。</div>
+    <div class="pending" id="pending" hidden>正在逐条核验<span class="dots"></span></div>
+    <ul class="claims" id="claims" hidden></ul>
+  </section>
+</main>
+
+<p class="hero-foot">
+  不上传云端 · 只读<b>公开来源</b> · 每条结论都带出处 · <b>不给候选人打分</b>，不做排名与录用建议
+</p>
+
+<div class="status-dock anim up" data-enter="520" id="statusDock" hidden>
+  <button class="status-pill" id="statusPill" type="button" hidden>
+    <span class="spin"></span><span id="spPillTxt">核验中</span>
+  </button>
+</div>
+
+<section class="status-panel" id="statusPanel" aria-live="polite" hidden>
+    <div class="sp-h">
+      <span class="sp-dot" id="spDot"></span>
+      <b id="spTitle">正在核验</b>
+      <span class="sp-time" id="spTime"></span>
+      <button class="sp-btn" id="statusCollapse" type="button" title="收起">—</button>
+    </div>
+    <div class="sp-steps" id="spSteps"></div>
+    <div class="sp-log" id="spLog" role="log"></div>
+    <div class="sp-foot" id="spFoot"></div>
+</section>
+
+<div class="chat-dock anim up" data-enter="640">
+  <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false">
+    <span class="dot"></span>问问这份报告
+  </button>
+</div>
+
+<!-- 面板放在 dock 之外：dock 上有入场动画的 transform，会把后代的 position:fixed
+     捕获成"相对 dock 定位"，面板就会偏掉。同级才是真的相对视口。
+     也**不要**给面板套 .anim 入场动画——它在入场那一刻还是 display:none（默认关着），
+     给 display:none 的元素加动画不会启动，fill-mode:both 会把它永久按在 opacity:0 上。
+     面板自己展开时的 chatIn 就是它的入场。 -->
+<section class="chat" id="chat" aria-label="就这份报告提问">
+    <div class="chat-h" id="chatHead" title="拖动可以移动面板；双击回到右下角">
+      <span class="grip" aria-hidden="true">⣿</span>
+      <span class="mark">UNDER<em>BOX</em></span>
+      <span class="st" id="chatSt"><i></i><span id="chatStTxt">连接中…</span></span>
+      <button id="chatClose" type="button" aria-label="收起">✕</button>
+    </div>
+    <div class="chat-body" id="chatBody">
+      <div class="lead">
+        <h5>引导问题 · 依据本次核验结果</h5>
+        <div id="leadList"></div>
+      </div>
+    </div>
+    <div class="chat-foot">
+      <div class="in">
+        <textarea id="chatIn" rows="1" placeholder="就这份报告问点什么…" aria-label="输入问题"></textarea>
+        <button class="send" id="chatStop" type="button" hidden title="停止生成">停止</button>
+        <button class="send" id="chatSend" type="button" disabled>发送</button>
+      </div>
+      <div class="note" id="chatNote">回答由 DeepSeek 流式生成，只依据本页的核验结果；结论以本页证据为准。</div>
+    </div>
+  </section>
+
+<script>
+let REPORT = null;
+
+const STATUS = {
+  ok:   {label:'已证实',        dot:'#1D9E75', bg:'#E1F5EE', fg:'#085041'},
+  part: {label:'部分证实',      dot:'#BA7517', bg:'#FAEEDA', fg:'#633806'},
+  ask:  {label:'待澄清',        dot:'#D85A30', bg:'#FAECE7', fg:'#712B13'},
+  none: {label:'未找到公开记录', dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
+  who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'}
+};
+const ORDER = ['ok','part','ask','none','who'];
+const TIER_NAME = {A:'A 级 · 官方站点上的公示 / 通知 / 名单', B:'B 级 · 认证主体公众号 / 权威媒体', C:'C 级 · 平台元数据（GitHub / Crossref / ORCID）', D:'D 级 · 判不出更高等级'};
+/* 摘要里不要重复日期：原文逐字保留日期，而旁边已经有日期列。
+   多数在行首（`2023.05　…`），但也有在行尾的（c01：`…本科在读　2022.09 — 2026.06`），
+   所以两头都剥。只在列表里剥；详情里的「简历原文」仍然逐字原样。 */
+const DATE_PREFIX = /^\d{4}\.\d{1,2}(\s*[—–-]\s*\d{4}\.\d{1,2})?\s*(起)?[\s　]*/;
+const DATE_SUFFIX = /[\s　]+\d{4}\.\d{1,2}(\s*[—–-]\s*\d{4}\.\d{1,2})?\s*$/;
+const summaryOf = t => {
+  const s = (t || '').replace(DATE_PREFIX, '').replace(DATE_SUFFIX, '').trim();
+  return s || t;
+};
+const OK_EXT = ['pdf','docx','doc','md','txt'];
+
+const $ = id => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'text') n.textContent = v;
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    n.appendChild(typeof kid === 'string' ? document.createTextNode(kid) : kid);
+  }
+  return n;
+};
+
+/* ══ 报告渲染 ═══════════════════════════════════ */
+function renderRisks() {
+  if (!REPORT) return;
+  const rs = REPORT.risks || [];
+  const kinds = {};
+  for (const r of rs) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+  const NM = {tiny_font:'极小字号', low_contrast:'低对比度', offscreen:'画到页面外', injection_pattern:'提示词注入'};
+  $('risk-line').textContent = rs.length
+    ? `${rs.length} 处 · ${Object.entries(kinds).map(([k,v])=>`${NM[k]||k} ${v}`).join(' · ')} · 已从送入模型的内容中剔除`
+    : '未检测到输入风险';
+  const body = $('risk-body'); body.innerHTML = '';
+  if (!rs.length) { body.appendChild(el('div', {text:'简历中未发现隐藏文字或提示词注入。'})); return; }
+  body.appendChild(el('div', {class:'k', text:'以下内容已从送入模型的正文中移除，命中的整行以占位符替代：'}));
+  rs.forEach(r => body.appendChild(el('div', {style:'margin-top:8px'},
+    el('code', {text:r.excerpt}), el('div', {class:'k', style:'margin-top:4px', text:`${r.locator} · ${r.detail}`}))));
+}
+
+function renderOverview() {
+  if (!REPORT) return;
+  const c = Object.fromEntries(ORDER.map(s => [s, 0]));
+  REPORT.claims.forEach(x => c[x.status]++);
+  const total = REPORT.claims.length || 1;
+  const bar = $('bar'); bar.innerHTML = '';
+  for (const s of ORDER) if (c[s]) bar.appendChild(el('span', {style:`width:${c[s]/total*100}%;background:${STATUS[s].dot}`}));
+  const lg = $('legend'); lg.innerHTML = '';
+  for (const s of ORDER) lg.appendChild(el('button', {class:'it', 'data-s':s, 'aria-pressed':'true', type:'button', title:'点击只看这一类'},
+    el('i', {style:`background:${STATUS[s].dot}`}), el('span', {text:STATUS[s].label}), el('b', {text:String(c[s])})));
+  $('total').textContent = `共 ${REPORT.claims.length} 条陈述`;
+  const elements = REPORT.claims.reduce((a,x)=>a+x.elements.length,0);
+  const proved = REPORT.claims.reduce((a,x)=>a+x.proved.length,0);
+  const human = REPORT.claims.filter(x=>x.needsHuman).length;
+  const pct = (a,b) => b ? `${a}/${b}（${Math.round(a/b*100)}%）` : '—';
+  const met = $('metrics'); met.innerHTML = '';
+  [['检索到公开来源', pct(REPORT.claims.filter(x=>x.evidence.length).length, total)],
+   ['来源可关联到本人', pct(REPORT.claims.filter(x=>['ok','part','ask'].includes(x.status)).length, total)],
+   ['要素被全部证明', pct(c.ok, total)],
+   ['要素级覆盖率', pct(proved, elements)],
+   ['需人工复核', pct(human, total)]
+  ].forEach(([k,v]) => met.appendChild(el('div', {class:'metric'}, el('span',{text:k}), el('span',{text:v}))));
+  $('disc').textContent = REPORT.disclaimer + ' 覆盖率只反映公开信息的多少，不代表候选人的可信程度。';
+  $('rno').textContent = REPORT.reportNo;
+}
+
+function detailOf(c) {
+  const d = el('div', {class:'detail'});
+  d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'简历原文（逐字）'}),
+    el('div', {class:'raw'}, c.rawText, el('span', {class:'loc', text:c.locator}))));
+  if (c.elements.length) {
+    const list = el('div', {class:'el'});
+    c.elements.forEach(e => {
+      const yes = c.proved.includes(e);
+      list.appendChild(el('div', {class:'e ' + (yes ? 'yes' : 'no')},
+        el('span', {class:'mk', text: yes ? '✓' : '–'}), el('span', {text:e})));
+    });
+    d.appendChild(el('div', {class:'dsec'},
+      el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
+      c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
+  }
+  if (c.evidence.length) {
+    const box = el('div');
+    c.evidence.forEach(ev => {
+      const card = el('div', {class:'ev'});
+      const tint = ev.tier==='A' ? '#E1F5EE' : ev.tier==='B' ? '#FAEEDA' : ev.tier==='C' ? '#E6F1FB' : '#F0EDE6';
+      card.appendChild(el('div', {class:'ev-h'},
+        el('span', {class:'t', text:ev.tier || '—', style:`background:${tint}`}),
+        el('b', {text:ev.title || '（无标题）'})));
+      card.appendChild(el('div', {class:'ev-m'}, `${ev.publisher || '（无发布主体）'}${ev.date ? ' · ' + ev.date : ''} · ${ev.url}`));
+      if (ev.snippet) card.appendChild(el('div', {class:'q', text:'“' + ev.snippet + '”'}));
+      const sig = [];
+      if (ev.signals && ev.signals.length) sig.push(el('div', {}, el('b', {text:'身份信号 '}), ev.signals.join(' · ')));
+      if (ev.conflicts && ev.conflicts.length) sig.push(el('div', {}, el('b', {text:'身份矛盾 '}), ev.conflicts.join(' · ')));
+      sig.push(el('div', {}, el('b', {text:'来源等级 '}), TIER_NAME[ev.tier] || ev.tier || '—'));
+      if (ev.isRepost) sig.push(el('div', {}, el('b', {text:'转载 '}), '此文为转载，不构成多重证明'));
+      card.appendChild(el('div', {class:'sig'}, sig));
+      box.appendChild(card);
+    });
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
+  } else {
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
+      el('div', {class:'empty', text:'公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
+  }
+  const diffs = c.evidence.flatMap(e => e.contradicts || []);
+  if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
+    el('div', {class:'diff'}, el('span', {class:'cap', text:'差异不等于造假：可能是后续接任、口径不同，或材料未公开。'}),
+      el('div', {text:diffs.join('；')}))));
+  const conflicts = c.evidence.flatMap(e => e.conflicts || []);
+  if (conflicts.length && c.status === 'who') d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'为什么不计入本人'}),
+    el('div', {class:'diff'}, el('span', {class:'cap', text:'同名不等于同一人。只要页面的学校、学院等与候选人不符，这条记录就不算在他头上——宁可标“身份未确认”转人工，也不认错人。'}),
+      el('div', {text:conflicts.join('；')}))));
+  if (c.nextStep) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'下一步'}), el('div', {class:'next', text:c.nextStep})));
+  if (c.question) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'可问的问题'}), el('div', {class:'raw', text:c.question})));
+  // 检索策略：点开才请求（9 条 × 一次请求没必要），数据来自策略引擎
+  const psec = el('div', {class:'dsec'}, el('h4', {text:'检索策略'}));
+  const pbtn = el('button', {class:'ghost', type:'button', text:'查看这条的检索计划'});
+  const pout = el('div', {class:'planout'});
+  pbtn.addEventListener('click', () => loadClaimPlan(c.id, pout, pbtn));
+  psec.append(pbtn, pout);
+  d.appendChild(psec);
+  return d;
+}
+
+function renderClaims() {
+  if (!REPORT) return;
+  const ul = $('claims'); ul.innerHTML = '';
+  REPORT.claims.forEach((c, i) => {
+    const st = STATUS[c.status];
+    const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':c.status},
+      el('span', {class:'dot', style:`background:${st.dot}`}),
+      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:st.label}),
+      el('span', {class:'dt', text:c.date || '—'}),
+      el('span', {class:'ct', text:c.category}),
+      el('span', {class:'tx'}, summaryOf(c.rawText), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
+      el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
+      el('span', {class:'cv', text:'▾'}));
+    const det = detailOf(c);
+    row.addEventListener('click', () => {
+      const open = row.getAttribute('aria-expanded') === 'true';
+      row.setAttribute('aria-expanded', String(!open));
+      det.classList.toggle('on', !open);
+    });
+    const li = el('li', {}, row, det);
+    li.style.animationDelay = (i * 42) + 'ms';
+    ul.appendChild(li);
+  });
+  ul.hidden = false;
+  $('pending').hidden = true;
+}
+
+let activeStatus = null;
+function applyFilter() {
+  if (!REPORT) return;
+  let shown = 0;
+  document.querySelectorAll('#claims > li').forEach(li => {
+    const ok = !activeStatus || li.querySelector('.row').dataset.status === activeStatus;
+    li.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  $('shown').textContent = `显示 ${shown} / ${REPORT.claims.length} 条`;
+  document.querySelectorAll('#filters .chipf').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === 'all' ? !activeStatus : b.dataset.s === activeStatus)));
+  document.querySelectorAll('#legend .it').forEach(b => b.setAttribute('aria-pressed', String(activeStatus ? b.dataset.s === activeStatus : true)));
+}
+function buildFilters() {
+  if (!REPORT) return;
+  const box = $('filters'); box.innerHTML = '';
+  const counts = {}; REPORT.claims.forEach(x => counts[x.status] = (counts[x.status]||0)+1);
+  box.appendChild(el('button', {class:'chipf', type:'button', 'data-s':'all', 'aria-pressed':'true', text:`全部 ${REPORT.claims.length}`}));
+  ORDER.forEach(s => { if (counts[s]) box.appendChild(el('button', {class:'chipf', type:'button', 'data-s':s, 'aria-pressed':'false'},
+    el('i', {style:`background:${STATUS[s].dot}`}), el('span', {text:`${STATUS[s].label} ${counts[s]}`}))); });
+  // 监听只绑一次（initFilters），这里只负责重建 DOM——真实结果回来会重新渲染，
+  // 重复绑定会一次点击触发多次过滤。
+}
+
+function initFilters() {
+  $('filters').addEventListener('click', e => { const b = e.target.closest('.chipf'); if (!b) return;
+    activeStatus = b.dataset.s === 'all' ? null : b.dataset.s; applyFilter(); });
+  $('legend').addEventListener('click', e => { const b = e.target.closest('.it'); if (!b) return;
+    activeStatus = activeStatus === b.dataset.s ? null : b.dataset.s; applyFilter(); });
+}
+
+/* ══ 状态切换 ═══════════════════════════════════ */
+function runEnter() {
+  document.querySelectorAll('[data-enter]').forEach(n => {
+    n.classList.remove('run');
+    n.style.animationDelay = n.dataset.enter + 'ms';
+    void n.offsetWidth;
+    n.classList.add('run');
+  });
+}
+function clearEnter() { document.querySelectorAll('[data-enter]').forEach(n => n.classList.remove('run')); }
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function flip(card, ms, before, after) {
+  const first = card.getBoundingClientRect();
+  before();
+  void card.offsetHeight;
+  const last = card.getBoundingClientRect();
+  const dx = first.left - last.left, dy = first.top - last.top;
+  if (reduceMotion()) { card.style.transform = ''; card.style.transition = ''; after(); return; }
+  card.style.transition = 'none';
+  card.style.transform = `translate(${dx}px, ${dy}px)`;
+  card.style.zIndex = '30';
+  requestAnimationFrame(() => {
+    card.style.transition = `transform ${ms}ms var(--ease)`;
+    card.style.transform = 'translate(0px, 0px)';
+  });
+  card.addEventListener('transitionend', function done(e) {
+    if (e.propertyName !== 'transform') return;
+    card.removeEventListener('transitionend', done);
+    card.style.transition = ''; card.style.transform = ''; card.style.zIndex = '';
+  });
+  after();
+}
+
+/** 核心：投料窗口从页面正中 FLIP 到左栏里它的终点。
+    纯位移、不缩放——所以窗口里的字不会被拉变形。 */
+function morphToApp() {
+  flip($('intake'), 880,
+    () => { document.body.dataset.stage = 'app'; },
+    () => { runEnter(); setTimeout(() => runFlow(pendingFile), 900); });
+}
+function morphToHero() {
+  flip($('intake'), 760,
+    () => { clearEnter(); document.body.dataset.stage = 'hero'; },
+    () => {});
+}
+
+/* ══ 核验流程 ═══════════════════════════════════ */
+function runSteps() {
+  const steps = [...document.querySelectorAll('#steps .step')];
+  $('steps').classList.add('on');
+  steps.forEach(s => s.className = 'step');
+  $('emptyFirst').hidden = true;      // 空态让位给「进行中」
+  $('pending').hidden = false;
+  $('toolbar').hidden = true;
+  let i = 0;
+  const tick = () => {
+    if (i > 0) steps[i-1].className = 'step done';
+    if (i >= steps.length) {
+      // 四步跑完 → 出结果 + 打开阅读区（顺序有讲究：先让台账出现，再给原件）
+      setTimeout(() => { renderClaims(); openViewer(); }, 240);
+      return;
+    }
+    steps[i].className = 'step doing';
+    i++;
+    setTimeout(tick, reduceMotion() ? 0 : 460);
+  };
+  tick();
+}
+
+/* ══ 投料交互 ═══════════════════════════════════ */
+let started = false;
+const HINT_DEFAULT = '支持 PDF / DOCX / MD · 或点击选择文件';
+
+function reject(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const d = $('drop');
+  d.classList.remove('nope'); void d.offsetWidth; d.classList.add('nope');
+  $('hint').classList.remove('ok');
+  $('hint').textContent = `只收 ${OK_EXT.join(' / ').toUpperCase()}，这个是 .${ext}`;
+  setTimeout(() => { if (!started) $('hint').textContent = HINT_DEFAULT; }, 2600);
+}
+
+function accept(name, file = null) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (!OK_EXT.includes(ext)) return reject(name);
+  if (started) return;
+  started = true;
+  pendingFile = file && file.name === name ? file : null;
+  $('fname').textContent = name;
+  $('hint').textContent = `✓ 已接收 ${name.length > 28 ? name.slice(0, 28) + '…' : name}`;
+  $('hint').classList.add('ok');
+  $('intake').classList.add('accepted');
+  setTimeout(morphToApp, 210);
+}
+
+function initIntake() {
+  const drop = $('drop'), file = $('file');
+  drop.addEventListener('click', () => file.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
+  ['dragenter','dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('hot'); }));
+  ['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('hot'); }));
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer?.files?.[0];
+    accept(f ? f.name : 'resume.pdf', f || null);
+  });
+  file.addEventListener('change', () => { if (file.files[0]) accept(file.files[0].name, file.files[0]); });
+
+  $('fclear').addEventListener('click', () => {
+    Viewer.clear();
+    $('intake').classList.remove('has-file');
+    $('fileline').classList.remove('on');
+    pendingFile = null;
+  });
+
+  $('urltoggle').addEventListener('click', () => {
+    const box = $('urlbox');
+    box.classList.toggle('on');
+    if (box.classList.contains('on')) {
+      $('url').focus();
+      $('url').addEventListener('input', e => { if (e.target.value.trim()) accept('个人网页.html'); }, { once: true });
+    }
+  });
+
+  $('risk-btn').addEventListener('click', e => {
+    const p = $('risk-panel'); const open = p.classList.toggle('open');
+    e.target.setAttribute('aria-expanded', String(open));
+    e.target.textContent = open ? '收起' : '查看详情';
+  });
+
+  $('reset').addEventListener('click', () => {
+    morphToHero();
+    setTimeout(() => {
+      started = false;
+      Viewer.clear();
+      pendingFile = null;
+      $('intake').classList.remove('has-file');
+      $('fileline').classList.remove('on');
+      $('hint').textContent = HINT_DEFAULT;
+      $('hint').classList.remove('ok');
+      $('intake').classList.remove('accepted');
+      $('steps').classList.remove('on');
+      document.querySelectorAll('#steps .step').forEach(s => s.className = 'step');
+      $('claims').innerHTML = ''; $('claims').hidden = true; $('pending').hidden = false;
+      activeStatus = null; applyFilter();
+      scrollTo({ top: 0, behavior: 'smooth' });
+    }, 780);
+  });
+}
+
+/* ══ 问答（chatbot）══════════════════════════════
+   真连 DeepSeek Harness：页面由 serve.py 提供时走 /api/ask（服务端把本页的核验结果
+   作为材料喂给 harness，再把回答带回来）。
+   直接双击打开（file://）时浏览器不允许访问本地服务，降级为本地演示回复，
+   并在状态栏和气泡上明确标出——不假装连上了。
+   ══════════════════════════════════════════════ */
+
+
+/** 三条引导问题——从本次报告的实际结论里挑最值得追问的三处，不是泛泛的范例。 */
+function buildLeads() {
+  if (!REPORT) return [];
+  const byId = id => REPORT.claims.find(c => c.id === id);
+  const n = c => Number(c.id.replace(/\D/g, '')) || c.id;   // c05 → 5，别写成「第 05 条」
+  const out = [];
+
+  const ask = byId('c05') || REPORT.claims.find(c => c.status === 'ask');
+  if (ask) out.push({
+    q: `第 ${n(ask)} 条判了「待澄清」，为什么不是「未找到」？`,
+    why: `公告只证明了${ask.proved.join('、') || '部分要素'}；`
+       + `${ask.unproved.join('、') || '其余要素'}在公开来源里找不到——证明一条不等于证明全部。`,
+  });
+
+  const missing = REPORT.claims.filter(c => c.status === 'none');
+  if (missing.length) out.push({
+    q: `这 ${missing.length} 条「未找到公开记录」的，帮我列一份补证清单`,
+    why: missing.map(c => `${c.category}（${c.date}）`).join('、')
+       + '——公开查不到不等于不实，该请本人补材料。',
+  });
+
+  const who = REPORT.claims.find(c => c.status === 'who');
+  if (who) out.push({
+    q: `第 ${n(who)} 条同名但学校专业都不符，我该怎么跟候选人确认？`,
+    why: ((who.evidence[0] || {}).conflicts || []).join('；')
+       + '——同名不等于同一人，宁可转人工也不认错人。',
+  });
+
+  return out.slice(0, 3);
+}
+
+function renderLeads() {
+  const leadList = $('leadList'); if (!leadList) return;
+  leadList.innerHTML = '';
+  buildLeads().forEach((s, i) => {
+    leadList.appendChild(el('button', { class: 'sug', type: 'button', 'data-q': s.q },
+      el('b', {}, el('span', { class: 'n', text: String(i + 1) }), s.q),
+      el('span', { text: s.why })));
+  });
+}
+
+/* 来源分级面板：真实报告按等级分组。等级只说明"来源有多权威"，不说明人可信与否。 */
+function toggleTierPanel() {
+  const p = $('tierPanel');
+  if (!p || p.hidden === false) { p.hidden = true; return; }
+  if (!REPORT) return;
+  p.innerHTML = '';
+  const close = el('button', { class: 'close', type: 'button', text: '✕' });
+  close.addEventListener('click', () => p.hidden = true);
+  p.append(close, el('h3', { text: '来源分级' }),
+    el('div', { class: 'sub', text: '等级只说明「这个来源有多权威」，不说明候选人可信与否。点一条可跳到对应的核验结果。' }));
+  const groups = {};
+  REPORT.claims.forEach(c => { const k = c.tier || '—'; (groups[k] = groups[k] || []).push(c); });
+  for (const t of ['A', 'B', 'C', 'D', '—']) {
+    const list = groups[t];
+    if (!list || !list.length) continue;
+    const label = t === '—' ? '未定级（没有检索到来源）' : `${t} 级 · ${(TIER_NAME[t] || '').split('·')[1] || ''}`;
+    const g = el('div', { class: 'grp' }, el('b', { text: `${label}　${list.length} 条` }));
+    list.forEach(c => {
+      const chip = el('button', { class: 'chip', type: 'button', text: `${c.id} ${STATUS[c.status].label}` });
+      chip.addEventListener('click', () => {
+        p.hidden = true;
+        const li = [...document.querySelectorAll('#claims > li')]
+          .find(x => x.querySelector('.row').dataset.id === c.id);
+        li?.querySelector('.row').click();
+        li?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      g.appendChild(chip);
+    });
+    p.appendChild(g);
+  }
+  p.hidden = false;
+}
+
+/* 检索策略：把策略引擎对这条陈述实际会发的查询摊开给人看。 */
+async function loadClaimPlan(claimId, out, btn) {
+  btn.disabled = true;
+  out.textContent = '加载中…';
+  try {
+    const r = await fetch('/api/plan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claimId }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    out.innerHTML = '';
+    out.appendChild(el('div', { class: 'hint',
+      text: `策略档案 ${d.strategy.name}（${d.strategy.id}）　预算 ${d.budget.searches} 次检索 / ${d.budget.reads} 次读页` }));
+    const ROUND = { 1: '定锚', 2: '取证', 3: '补漏' };
+    let cur = 0;
+    d.queries.forEach(q => {
+      if (q.round !== cur) {
+        cur = q.round;
+        out.appendChild(el('div', { style: 'margin-top:7px;font-weight:600;font-size:11.5px',
+          text: `第 ${cur} 轮 · ${ROUND[cur] || '?'}` }));
+      }
+      out.appendChild(el('div', { class: 'plan-q' },
+        el('div', { class: 'qq', text: q.text + (q.site ? `　[限定 ${q.site}]` : '') }),
+        el('div', { class: 'meta',
+          text: (q.element ? `→ 证「${q.element}」　` : '→ 全要素　') + (q.purpose || '') })));
+    });
+    if (!d.queries.length) out.appendChild(el('div', { class: 'meta', text: '（这条没有产出任何可用查询）' }));
+    if (d.droppedByBudget?.length) {
+      out.appendChild(el('div', { class: 'meta', text: `另有 ${d.droppedByBudget.length} 条被预算裁掉，未列入` }));
+    }
+    (d.notes || []).forEach(n => out.appendChild(el('div', { class: 'meta', text: n })));
+  } catch (e) {
+    out.textContent = '加载失败：' + e.message;
+  }
+  btn.disabled = false;
+}
+
+/* 对话走 SSE 流式：服务端把模型增量原样转发，这里逐段渲染。
+   没有核验报告之前禁用——问答的材料就是那份报告，没有报告就没有可回答的东西。 */
+const Chat = {
+  ctrl: null,
+  /** 返回完整回答文本；onDelta(已累计文本) 逐段回调。 */
+  async askStream(question, onDelta, onDone) {
+    this.ctrl = new AbortController();
+    const res = await fetch('/api/ask/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+      signal: this.ctrl.signal,
+    });
+    // 错误发生在建连阶段时，服务端回的是 JSON 而不是事件流
+    if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `HTTP ${res.status}`);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', full = '', seconds = null, finished = false;
+    for (;;) {
+      const { value, done: rdDone } = await reader.read();
+      if (rdDone) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (const part of parts) {
+        const line = part.split('\n').find(l => l.startsWith('data: '));
+        if (!line) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (ev.error) throw new Error(ev.error);
+        if (ev.delta) { full += ev.delta; onDelta(full); }
+        if (ev.done) { seconds = ev.seconds; finished = true; }
+      }
+    }
+    onDone?.(seconds);
+    return full;
+  },
+  abort() { this.ctrl?.abort(); },
+};
+
+
+function initChat() {
+  const dock = $('chatDock'), panel = $('chat'), body = $('chatBody');
+  const input = $('chatIn'), send = $('chatSend'), stop = $('chatStop');
+  let busy = false;
+
+  /* 没有报告就没有材料——问答在核验完成前是关着的 */
+  const setChatReady = ready => {
+    $('chatToggle').disabled = !ready;
+    $('chatToggle').title = ready ? '' : '先核验一份简历';
+  };
+  setChatReady(false);
+  window.__chatReady = setChatReady;
+
+  /* 三个引导小块（换一份报告后要用真实结论重算，所以拆成独立函数） */
+  const leadList = $('leadList');
+  leadList.addEventListener('click', e => {
+    const b = e.target.closest('.sug');
+    if (b) send_(b.dataset.q);        // 用 data-q，别去剥渲染出来的文本
+  });
+
+  const scrollChat = () => { body.scrollTop = body.scrollHeight; };
+
+  function bubble(kind, text, typing = false, tag = null) {
+    return el('div', { class: 'msg ' + kind },
+      el('div', { class: 'who' }, kind === 'me' ? '你' : 'UNDERBOX',
+        tag ? el('span', { class: 'tag', text: tag }) : null),
+      typing
+        ? el('div', { class: 'bub typing' }, el('i'), el('i'), el('i'))
+        : el('div', { class: 'bub', text }));
+  }
+
+  async function send_(question) {
+    const q = (question ?? input.value).trim();
+    if (!q) return;
+    if (busy) return;
+    if (!REPORT) { body.appendChild(bubble('err', '先核验一份简历——问答的材料就是那份报告。')); scrollChat(); return; }
+    busy = true;
+    input.value = '';
+    input.style.height = '44px';
+    send.disabled = true;
+    stop.hidden = false;
+
+    body.appendChild(bubble('me', q));
+    const bub = el('div', { class: 'bub streaming' });
+    body.appendChild(el('div', { class: 'msg ai' },
+      el('div', { class: 'who' }, 'UNDERBOX'), bub));
+    scrollChat();
+
+    let acc = '';
+    try {
+      const full = await Chat.askStream(q,
+        t => { acc = t; bub.textContent = t; scrollChat(); },
+        secs => { if (secs) bub.dataset.secs = secs; });
+      bub.classList.remove('streaming');
+      bub.textContent = acc || '（模型没有返回内容）';
+    } catch (err) {
+      bub.classList.remove('streaming');
+      if (err.name === 'AbortError') {
+        bub.textContent = (acc || '') + '\n\n（已中断——以上是中断前已生成的内容）';
+      } else {
+        bub.classList.add('msg-err');
+        bub.textContent = `没能问到模型：${err.message}`;
+      }
+    }
+    if (bub.dataset.secs) {
+      bub.parentElement.querySelector('.who').append(el('span', { class: 'tag', text: bub.dataset.secs + 's' }));
+    }
+    scrollChat();
+    busy = false;
+    stop.hidden = true;
+    send.disabled = !input.value.trim();
+  }
+
+  input.addEventListener('input', () => {
+    send.disabled = !input.value.trim();
+    input.style.height = '44px';
+    input.style.height = Math.min(input.scrollHeight, 96) + 'px';
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send_(); }
+  });
+  send.addEventListener('click', () => send_());
+
+  /* ── 自由拖动 ───────────────────────────────────────
+     默认贴右下（在胶囊按钮上方）；拖过之后位置记进 localStorage，下次打开还在原地。
+     双击标题栏复位。窗口缩放时把面板夹回可视区，不让它跑到屏幕外找不回来。 */
+  const POS_KEY = 'underbox.chat.pos';
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+  const readPos = () => {
+    try {
+      const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+      return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+    } catch { return null; }
+  };
+  const pinTo = (x, y) => {
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  };
+  const unpin = () => {
+    panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = '';
+  };
+  const keepInView = () => {
+    if (!panel.classList.contains('open') || !panel.style.left) return;
+    pinTo(clamp(parseFloat(panel.style.left) || 0, 6, Math.max(6, innerWidth - panel.offsetWidth - 6)),
+          clamp(parseFloat(panel.style.top) || 0, 6, Math.max(6, innerHeight - panel.offsetHeight - 6)));
+  };
+
+  const head = $('chatHead');
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  head.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;        // 别抢 ✕ 的点击
+    const r = panel.getBoundingClientRect();
+    dragging = true;
+    panel.classList.add('dragging');
+    pinTo(r.left, r.top);
+    sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    pinTo(clamp(ox + e.clientX - sx, 6, Math.max(6, innerWidth - panel.offsetWidth - 6)),
+          clamp(oy + e.clientY - sy, 6, Math.max(6, innerHeight - panel.offsetHeight - 6)));
+  });
+  const stopDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove('dragging');
+    try {
+      localStorage.setItem(POS_KEY, JSON.stringify({
+        x: parseFloat(panel.style.left) || 0, y: parseFloat(panel.style.top) || 0,
+      }));
+    } catch { /* 隐私模式下 localStorage 可能不可写，忽略 */ }
+  };
+  head.addEventListener('pointerup', stopDrag);
+  head.addEventListener('pointercancel', stopDrag);
+  head.addEventListener('dblclick', e => {
+    if (e.target.closest('button')) return;
+    unpin();
+    try { localStorage.removeItem(POS_KEY); } catch { /* 同上 */ }
+  });
+  addEventListener('resize', keepInView);
+
+  const setOpen = open => {
+    panel.classList.toggle('open', open);
+    $('chatToggle').setAttribute('aria-expanded', String(open));
+    $('chatToggle').hidden = open;
+    if (open) {
+      const p = readPos();
+      if (p) pinTo(p.x, p.y);
+      keepInView();
+      input.focus();
+      scrollChat();
+    }
+  };
+  $('chatToggle').addEventListener('click', () => setOpen(true));
+  $('chatClose').addEventListener('click', () => setOpen(false));
+  stop.addEventListener('click', () => { Chat.abort(); stop.hidden = true; });
+
+  // 状态角标：有真实报告之前，问答没有材料可用
+  const setChatStatus = txt => { $('chatStTxt').textContent = txt; };
+  setChatStatus('需先核验一份简历');
+  window.__chatStatus = setChatStatus;
+}
+
+/* ══ PDF 查看器 ══════════════════════════════════
+   用 PDF.js 自己渲染到 canvas——只有这样翻页和缩放才能做成和这套视觉一致的控件。
+   PDF.js 从 cdnjs 取。两条降级路径，都不让它变成一个死掉的白框：
+     ① PDF.js 本身没拿到（离线 / CDN 挂了）→ 交给浏览器内置查看器（iframe）
+     ② 拿到了但打不开文档（典型是 file:// 下的跨域限制）→ 说明原因 + 给"在新标签打开"
+   ══════════════════════════════════════════════ */
+// 用 jsdelivr 的 pdfjs-dist：cdnjs 上**没有 cmaps 目录**（403），
+// 而简历这类 PDF 常用非嵌入的 CID 中文字体（如 STSong-Light）——
+// 没有 CMap 就只能画出线条、画不出字，画布看着是空白的。
+// 脚本 / worker / cmaps 三样同源，少一个都会出问题。
+const PDFJS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
+let pendingFile = null;          // 待预览的 File（真实上传时用 blob URL）
+
+const Viewer = {
+  doc: null, page: 1, pages: 1, zoom: 1, url: null, _seq: 0, _task: null,
+  fitMode: 'width',            // 'width' 适宽 / 'page' 适页；zoom 是在它之上的倍率
+
+  el(id) { return document.getElementById(id); },
+
+  async lib() {
+    if (this._lib) return this._lib;
+    if (!this._pending) {
+      this._pending = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = PDFJS_CDN + 'build/pdf.min.js';
+        s.onload = () => {
+          if (!window.pdfjsLib) return reject(new Error('PDF.js 加载后没挂上'));
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_CDN + 'build/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        };
+        s.onerror = () => reject(new Error('PDF.js 加载失败'));
+        document.head.appendChild(s);
+      }).catch(err => { this._pending = null; throw err; });
+    }
+    this._lib = await this._pending;
+    return this._lib;
+  },
+
+  async open(url, caption) {
+    this.url = url;
+    this.page = 1; this.zoom = 1; this.doc = null; this._seq++;
+    this.el('pdfView').classList.add('on');
+    this.el('pdfCap').textContent = caption || '';
+    const msg = this.el('pdfMsg');
+    [...this.el('pdfStage').querySelectorAll('canvas,iframe')].forEach(n => n.remove());
+    msg.hidden = false;
+    msg.textContent = '正在载入 PDF…';
+    try {
+      const lib = await this.lib();
+      // cMapUrl 不是可选项：没有它，非嵌入的 CID 中文字体画不出来
+      this.doc = await lib.getDocument({
+        url,
+        cMapUrl: PDFJS_CDN + 'cmaps/',
+        cMapPacked: true,
+      }).promise;
+      this.pages = this.doc.numPages;
+      msg.hidden = true;
+      this.el('pdfCount').textContent = this.pages;
+      await this.render();
+    } catch (err) {
+      this.fallback(err);
+    }
+  },
+
+  async render() {
+    if (!this.doc) return;
+    const seq = ++this._seq;
+    try { this._task?.cancel?.(); } catch { /* 上一帧已经在收尾，忽略 */ }
+    const page = await this.doc.getPage(this.page);
+    if (seq !== this._seq) return;
+
+    const stage = this.el('pdfStage');
+    const base = page.getViewport({ scale: 1 });
+    const availW = Math.max(160, stage.clientWidth - 26);       // 减掉 stage 的内边距
+    const availH = Math.max(160, stage.clientHeight - 26);
+    // 两种"100%"：适宽铺满横向、适页把整页塞进视口。zoom 是在当前基准之上的倍率。
+    const fit = this.fitMode === 'page'
+      ? Math.min(availW / base.width, availH / base.height)
+      : availW / base.width;
+    const vp = page.getViewport({ scale: fit * this.zoom });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // 每次换一张新 canvas：同一个 canvas 上并发 render 会直接抛错，
+    // 而快速翻页时旧的一帧很可能还没画完。
+    [...stage.querySelectorAll('canvas')].forEach(n => n.remove());
+    const c = document.createElement('canvas');
+    c.id = 'pdfCanvas';
+    c.width = Math.floor(vp.width * dpr);
+    c.height = Math.floor(vp.height * dpr);
+    c.style.width = Math.floor(vp.width) + 'px';
+    c.style.height = Math.floor(vp.height) + 'px';
+    stage.appendChild(c);
+
+    this._task = page.render({
+      canvasContext: c.getContext('2d'),
+      viewport: vp,
+      transform: dpr === 1 ? null : [dpr, 0, 0, dpr, 0, 0],
+    });
+    try { await this._task.promise; } catch { return; }          // 被 cancel 掉的那帧，正常
+    if (seq !== this._seq) return;
+
+    this.el('pdfPage').textContent = this.page;
+    this.el('pdfZoom').textContent = Math.round(this.zoom * 100) + '%';
+    this.el('pdfPrev').disabled = this.page <= 1;
+    this.el('pdfNext').disabled = this.page >= this.pages;
+  },
+
+  fallback(err) {
+    const stage = this.el('pdfStage'), msg = this.el('pdfMsg');
+    this.doc = null;
+    [...stage.querySelectorAll('canvas,iframe')].forEach(n => n.remove());
+    if (/PDF\.js/.test(String(err && err.message))) {
+      // 连查看器都没拿到 → 退回浏览器内置查看器，能看多少算多少
+      const f = document.createElement('iframe');
+      f.src = this.url;
+      f.title = 'PDF（浏览器内置查看器）';
+      f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff';
+      stage.appendChild(f);
+      msg.hidden = true;
+      this.el('pdfCap').textContent = 'PDF.js 没能加载（离线？），已改用浏览器内置查看器。';
+      return;
+    }
+    msg.hidden = false;
+    msg.textContent = '';
+    const p1 = document.createElement('div');
+    p1.textContent = location.protocol === 'file:'
+      ? '内嵌预览需要本地服务：页面是从 file:// 打开的，浏览器不允许它读取本地文件。'
+        + '用 python3 serve.py 起服务后再打开就能预览。'
+      : `没能渲染这份 PDF：${String((err && err.message) || err)}`;
+    const a = document.createElement('a');
+    a.href = this.url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '在新标签打开原文件';
+    msg.append(p1, document.createElement('br'), a);
+  },
+
+  clear() {
+    this._seq++;
+    try { this._task?.cancel?.(); } catch { /* 同上 */ }
+    [...this.el('pdfStage').querySelectorAll('canvas,iframe')].forEach(n => n.remove());
+    this.el('pdfView').classList.remove('on');
+    this.el('pdfMsg').hidden = false;
+    this.el('pdfMsg').textContent = '正在载入查看器…';
+    if (this.url && this.url.startsWith('blob:')) URL.revokeObjectURL(this.url);
+    this.doc = null; this.url = null; this.page = 1; this.pages = 1; this.zoom = 1;
+    this.setExpanded(false);
+  },
+
+  setExpanded(on) {
+    const card = this.el('intake');
+    card.classList.toggle('expanded', on);
+    document.body.classList.toggle('reading', on);
+    this.el('pdfGrow').textContent = on ? '⤡' : '⤢';
+    this.el('pdfGrow').title = on ? '退出放大阅读' : '放大阅读（铺满整屏）';
+    // 放大的目的是"整页读完"，所以进来默认适页、退出回到适宽。
+    // 两个按钮随时可以覆盖，这里的默认值只是省一次点击。
+    this.fitMode = on ? 'page' : 'width';
+    this.zoom = 1;
+    this.el('pdfFit').classList.toggle('on', !on);
+    this.el('pdfFitPage').classList.toggle('on', on);
+    requestAnimationFrame(() => { if (this.doc) this.render(); });
+  },
+};
+
+function initViewer() {
+  const V = Viewer;
+  const step = d => { if (!V.doc) return; V.page = Math.min(V.pages, Math.max(1, V.page + d)); V.render(); };
+  const setFit = mode => {
+    V.fitMode = mode;
+    V.zoom = 1;
+    V.el('pdfFit').classList.toggle('on', mode === 'width');
+    V.el('pdfFitPage').classList.toggle('on', mode === 'page');
+    V.render();
+  };
+  V.el('pdfPrev').addEventListener('click', () => step(-1));
+  V.el('pdfNext').addEventListener('click', () => step(1));
+  V.el('pdfIn').addEventListener('click', () => { V.zoom = Math.min(3, +(V.zoom + 0.2).toFixed(2)); V.render(); });
+  V.el('pdfOut').addEventListener('click', () => { V.zoom = Math.max(0.4, +(V.zoom - 0.2).toFixed(2)); V.render(); });
+  V.el('pdfFit').addEventListener('click', () => setFit('width'));
+  V.el('pdfFitPage').addEventListener('click', () => setFit('page'));
+  V.el('pdfGrow').addEventListener('click', () => V.setExpanded(!V.el('intake').classList.contains('expanded')));
+  V.el('pdfOpen').addEventListener('click', () => { if (V.url) open(V.url, '_blank', 'noopener'); });
+  V.el('pdfStage').addEventListener('keydown', e => {
+    if (e.key === 'PageDown') { e.preventDefault(); step(1); }
+    if (e.key === 'PageUp') { e.preventDefault(); step(-1); }
+  });
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' && V.el('intake').classList.contains('expanded')) V.setExpanded(false);
+  });
+  // 宽度变了要按新宽度重算"适宽"，否则放大/缩小窗口后页面会错位
+  if (window.ResizeObserver) {
+    let t;
+    new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if (V.doc) V.render(); }, 140); })
+      .observe(V.el('pdfStage'));
+  }
+}
+
+/** 核验跑完之后打开阅读区：能预览 PDF 就预览，不能就说清为什么。 */
+function openViewer() {
+  const card = $('intake');
+  card.classList.add('has-file');
+  $('fileline').classList.add('on');
+  const name = $('fname').textContent;
+  const isPdf = /\.pdf$/i.test(name);
+  const kind = (name.split('.').pop() || '').toUpperCase();
+  $('fileKind').textContent = kind;
+
+  if (!isPdf) {
+    $('pdfCap').textContent = `${kind} 不能内嵌预览——查看器只渲染 PDF。`;
+    $('pdfView').classList.add('on');
+    $('pdfMsg').hidden = false;
+    $('pdfMsg').textContent = '这个格式没有内嵌预览。PDF 会在这里逐页渲染。';
+    return;
+  }
+  const url = pendingFile ? URL.createObjectURL(pendingFile) : 'sample-resume.pdf';
+  Viewer.open(url, pendingFile
+    ? `${name} · 本地文件，未上传到任何服务器`
+    : `${name} · 演示样本，共 3 页，内容为虚构`);
+}
+
+/* ══ 真实核验 / 演示两条路 ═══════════════════════
+   由 serve.py 提供页面时走**真实流水线**（open_box：解析 → 画像 → 拆分 → 按策略检索 → 规则判定）；
+   从 file:// 打开时没有后端，退回本地 fixture 演示，并在徽标上写明"演示数据"。
+   两种模式的差别如实展示，不混着装。 */
+const MODE = { real: false, searchConfigured: false, llmConfigured: false };
+
+function setFirstEmpty(text) {
+  const e = $('emptyFirst'); if (!e) return;
+  e.hidden = false; e.textContent = text;
+}
+
+async function probeMode() {
+  try {
+    const h = await (await fetch('/api/health')).json();
+    MODE.real = !!h.verify;
+    MODE.searchConfigured = !!h.searchConfigured;
+    MODE.llmConfigured = h.llmConfigured !== false;
+  } catch { MODE.real = false; }
+  if (!MODE.real) {
+    setFirstEmpty('本页需要 serve.py 提供后端。用 python3 serve.py 启动后，从 http://127.0.0.1:8787/ 打开。');
+  }
+  updateModeBadge();
+}
+
+function updateModeBadge() {
+  const b = $('modeBadge'); if (!b) return;
+  if (!MODE.real) { b.innerHTML = '<i></i>未连接后端'; b.style.background = '#F0EDE6'; return; }
+  b.innerHTML = MODE.searchConfigured
+    ? '<i></i>LIVE · 真实核验'
+    : '<i></i>LIVE · 未配搜索 key';
+  b.style.background = MODE.searchConfigured ? '#E1F5EE' : '#FAEEDA';
+  const w = $('searchWarn');
+  if (w) w.style.display = MODE.searchConfigured ? 'none' : 'inline';
+}
+
+/** 把真实结果替换进页面：渲染函数都吃全局 REPORT，所以换掉它再各跑一次即可。 */
+function applyReport(report) {
+  REPORT = report;
+  activeStatus = null;
+  $('emptyFirst').hidden = true;
+  $('toolbar').hidden = false;
+  window.__chatReady?.(true);
+  window.__chatStatus?.('就绪 · 依据真实核验结果');
+  $('chatSt').classList.add('on');
+  delete document.body.dataset.noreport;
+  renderRisks(); renderOverview(); buildFilters(); renderLeads();
+  // 台账在这里就渲染——刷新恢复路径不走核验流程的 finish()，不在这里渲染就永远是空的
+  renderClaims(); applyFilter();
+  $('pending').hidden = true;
+}
+
+/* ══ 核验状态窗口 ════════════════════════════════
+   左下角浮动面板：阶段、进度、关键日志。可收起成胶囊继续干别的，随时点开。
+   每一行日志都是流水线里真实发生的（后端把 run_pipeline 的进度原样推过来），
+   不是前端自己编的动画。 */
+const StatusDock = {
+  stages: ['解析并检测输入风险', '画像归纳并拆成可独立证伪的陈述', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
+  started: 0, timer: null,
+  el: id => document.getElementById(id),
+  reset() {
+    const dock = this.el('statusDock');
+    dock.hidden = false;
+    dock.classList.remove('done', 'failed', 'collapsed');
+    this.el('spTitle').textContent = '正在核验';
+    this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
+    const box = this.el('spSteps'); box.innerHTML = '';
+    this.stages.forEach((s, i) => box.appendChild(
+      el('div', { class: 'sp-step', 'data-i': i }, el('span', { class: 'd' }), el('span', { text: s }))));
+    this.el('spLog').innerHTML = '';
+    this.started = Date.now();
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      this.el('spTime').textContent = ((Date.now() - this.started) / 1000).toFixed(0) + 's';
+    }, 500);
+    this.el('spTime').textContent = '0s';
+  },
+  open(expand) {
+    const dock = this.el('statusDock');
+    dock.hidden = false;
+    dock.classList.toggle('collapsed', !expand);
+    this.el('statusPanel').hidden = !expand;
+    this.el('statusPill').hidden = expand;
+    if (expand) this.el('spLog').scrollTop = this.el('spLog').scrollHeight;
+  },
+  setStage(i, state) {
+    const row = this.el('spSteps').querySelector(`[data-i="${i}"]`);
+    if (row) row.className = 'sp-step ' + state;
+  },
+  progress(done, total) { this.el('spPillTxt').textContent = `核验中 ${done}/${total}`; },
+  log(line, hi = false) {
+    const box = this.el('spLog');
+    box.appendChild(el('span', { class: 'ln' + (hi ? ' hi' : ''), text: line }));
+    while (box.children.length > 200) box.removeChild(box.firstChild);   // 防长跑爆内存
+    box.scrollTop = box.scrollHeight;
+  },
+  done(secs) {
+    clearInterval(this.timer);
+    this.el('statusDock').classList.add('done');
+    this.el('spTitle').textContent = '核验完成';
+    this.el('spTime').textContent = (secs ?? '?') + 's';
+    this.el('spFoot').textContent = '核验完成，右侧台账与左侧原件已就绪。可收起本窗口继续查看。';
+    this.stages.forEach((_, i) => this.setStage(i, 'done'));
+    this.el('spPillTxt').textContent = '核验完成';
+  },
+  fail(msg) {
+    clearInterval(this.timer);
+    this.el('statusDock').classList.add('failed');
+    this.el('spTitle').textContent = '核验失败';
+    this.el('spTime').textContent = '';
+    this.el('spFoot').textContent = msg;
+    this.el('spPillTxt').textContent = '核验失败';
+  },
+};
+
+async function verifyStream(file, onEv) {
+  const res = await fetch('/api/verify/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+    body: file,
+  });
+  if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.error || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done: rdDone } = await reader.read();
+    if (rdDone) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split('\n\n');
+    buf = parts.pop();
+    for (const part of parts) {
+      const line = part.split('\n').find(l => l.startsWith('data: '));
+      if (!line) continue;
+      const ev = JSON.parse(line.slice(6));
+      if (ev.ping) continue;
+      onEv(ev);
+    }
+  }
+}
+
+async function runFlow(file) {
+  const steps = [...document.querySelectorAll('#steps .step')];
+  $('steps').classList.add('on');
+  steps.forEach(s => s.className = 'step');
+  $('emptyFirst').hidden = true;      // 空态让位给「进行中」
+  $('pending').hidden = false;
+  $('toolbar').hidden = true;
+  const finish = () => setTimeout(openViewer, 240);   // 台账已在 applyReport 里渲染
+
+  /* 真实核验：四步对应服务端的真实阶段。没有后端就不允许开始——本页没有任何演示数据。 */
+  if (!MODE.real) { setFirstEmpty('本页需要 serve.py 提供后端才能核验。用 python3 serve.py 启动后刷新。'); return; }
+  if (!file) return;
+
+  StatusDock.reset();
+  StatusDock.open(true);              // 开始处理时窗口自动展开
+  steps[0].className = 'step doing';
+
+  let doneEv = null;
+  try {
+    await verifyStream(file, ev => {
+      if (ev.done) { doneEv = ev; return; }
+      const L = ev.log || '';
+      if (!L) return;
+      // 阶段推进按**真实日志里的标记**判定，不是前端自己猜的
+      if (L.includes('归纳候选人画像') || L.includes('[1/6]')) { StatusDock.setStage(0, 'doing'); steps[0].className = 'step doing'; }
+      if (L.includes('画像完成')) { StatusDock.setStage(0, 'done'); StatusDock.setStage(1, 'doing'); steps[0].className = 'step done'; steps[1].className = 'step doing'; }
+      if (L.includes('[2/6]')) { StatusDock.setStage(1, 'doing'); steps[1].className = 'step doing'; }
+      if (L.includes('[3-5/6]')) { StatusDock.setStage(0, 'done'); StatusDock.setStage(1, 'done'); StatusDock.setStage(2, 'doing'); steps[1].className = 'step done'; steps[2].className = 'step doing'; }
+      if (L.includes('[6/6]')) { StatusDock.setStage(2, 'done'); StatusDock.setStage(3, 'doing'); steps[2].className = 'step done'; steps[3].className = 'step doing'; }
+      const m = L.match(/\((\d+)\/(\d+)\)/);
+      if (m) StatusDock.progress(m[1], m[2]);
+      StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('画像完成'));
+    });
+    if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
+    steps.forEach(s => s.className = 'step done');
+    steps[3].querySelector('.t').textContent =
+      `逐条判定 · ${doneEv.report.claims.length} 条 · ${doneEv.seconds}s`;
+    StatusDock.done(doneEv.seconds);
+    applyReport(doneEv.report);
+    finish();
+  } catch (err) {
+    StatusDock.fail(err.message);
+    $('pending').hidden = false;
+    $('pending').textContent = `核验失败：${err.message}`;
+    $('pending').style.color = '#712B13';
+  }
+}
+
+/* ══ 启动 ═══════════════════════════════════════ */
+renderRisks(); renderOverview(); buildFilters(); initFilters(); initIntake(); initChat(); initViewer();
+renderLeads();
+$('statusCollapse').addEventListener('click', () => {
+  const dock = $('statusDock');
+  dock.classList.add('collapsed');
+  $('statusPanel').hidden = true;
+  $('statusPill').hidden = false;
+});
+$('statusPill').addEventListener('click', () => {
+  const dock = $('statusDock');
+  dock.classList.remove('collapsed');
+  $('statusPanel').hidden = false;
+  $('statusPill').hidden = true;
+});
+$('navTier').addEventListener('click', toggleTierPanel);
+document.body.dataset.noreport = '1';
+// 页面刷新后向服务端要回最近一次真实报告——不然一刷新就"丢"了
+(async () => {
+  try {
+    const r = await fetch('/api/report');
+    if (!r.ok) return;
+    const d = await r.json();
+    applyReport(d.report);
+  } catch { /* 没有报告就保持空态 */ }
+})();
+probeMode();
+
+if (location.hash === '#app') {              // 深链：直接进主界面，不播动画
+  document.body.dataset.stage = 'app';
+  runEnter(); renderClaims();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "_note": "学校名 → 主域名 + 常见学院子域，用于 plan.py 生成 site: 限定查询。查不到就退化为不带 site: 的普通查询。",
+  "_fictional_note": ".example 是 RFC 6761 保留域名，只用于内置虚构 fixture，不指向任何真实站点。",
+  "schools": [
+    {"name": "晴川大学", "aliases": ["晴川大"], "domain": "qingchuan.edu.example", "dept_domains": ["cs.qingchuan.edu.example", "xsc.qingchuan.edu.example", "jwc.qingchuan.edu.example"], "fictional": true},
+    {"name": "晴川师范学院", "aliases": [], "domain": "qcnu.edu.example", "dept_domains": [], "fictional": true},
+    {"name": "清华大学", "aliases": ["清华"], "domain": "tsinghua.edu.cn", "dept_domains": ["cs.tsinghua.edu.cn", "jwc.tsinghua.edu.cn"]},
+    {"name": "北京大学", "aliases": ["北大"], "domain": "pku.edu.cn", "dept_domains": ["cs.pku.edu.cn", "eecs.pku.edu.cn"]},
+    {"name": "复旦大学", "aliases": ["复旦"], "domain": "fudan.edu.cn", "dept_domains": ["cs.fudan.edu.cn"]},
+    {"name": "上海交通大学", "aliases": ["上海交大", "交大"], "domain": "sjtu.edu.cn", "dept_domains": ["cs.sjtu.edu.cn", "jwc.sjtu.edu.cn"]},
+    {"name": "浙江大学", "aliases": ["浙大"], "domain": "zju.edu.cn", "dept_domains": ["cs.zju.edu.cn"]},
+    {"name": "南京大学", "aliases": ["南大"], "domain": "nju.edu.cn", "dept_domains": ["cs.nju.edu.cn"]},
+    {"name": "中国科学技术大学", "aliases": ["中科大", "科大"], "domain": "ustc.edu.cn", "dept_domains": ["cs.ustc.edu.cn"]},
+    {"name": "哈尔滨工业大学", "aliases": ["哈工大"], "domain": "hit.edu.cn", "dept_domains": ["cs.hit.edu.cn"]},
+    {"name": "西安交通大学", "aliases": ["西交", "西安交大"], "domain": "xjtu.edu.cn", "dept_domains": ["cs.xjtu.edu.cn"]},
+    {"name": "同济大学", "aliases": ["同济"], "domain": "tongji.edu.cn", "dept_domains": ["cs.tongji.edu.cn"]},
+    {"name": "北京航空航天大学", "aliases": ["北航"], "domain": "buaa.edu.cn", "dept_domains": ["scse.buaa.edu.cn"]},
+    {"name": "北京理工大学", "aliases": ["北理工"], "domain": "bit.edu.cn", "dept_domains": ["cs.bit.edu.cn"]},
+    {"name": "华中科技大学", "aliases": ["华科", "华中大"], "domain": "hust.edu.cn", "dept_domains": ["cs.hust.edu.cn"]},
+    {"name": "武汉大学", "aliases": ["武大"], "domain": "whu.edu.cn", "dept_domains": ["cs.whu.edu.cn"]},
+    {"name": "中山大学", "aliases": ["中大"], "domain": "sysu.edu.cn", "dept_domains": ["cse.sysu.edu.cn"]},
+    {"name": "东南大学", "aliases": ["东大"], "domain": "seu.edu.cn", "dept_domains": ["cse.seu.edu.cn"]},
+    {"name": "天津大学", "aliases": ["天大"], "domain": "tju.edu.cn", "dept_domains": ["cic.tju.edu.cn"]},
+    {"name": "南开大学", "aliases": ["南开"], "domain": "nankai.edu.cn", "dept_domains": ["cc.nankai.edu.cn"]},
+    {"name": "厦门大学", "aliases": ["厦大"], "domain": "xmu.edu.cn", "dept_domains": ["informatics.xmu.edu.cn"]},
+    {"name": "山东大学", "aliases": ["山大"], "domain": "sdu.edu.cn", "dept_domains": ["cs.sdu.edu.cn"]}
+  ]
+}

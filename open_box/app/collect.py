@@ -24,7 +24,8 @@ from .parse import extract_main_text, wrap_untrusted
 from .plan import (MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, Query,
                    claim_school, plan_queries, provided_urls, school_domain)
 from .schema import Claim, Evidence, as_str_list
-from .search import (crossref_hits, github_hits, PageFetcher, rephrase_variants,
+from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
+                     PageFetcher, rephrase_variants,
                      SearchFiltered, SearchHit, Searcher, SearchUnavailable, url_in_domain)
 from .strategy import _name_variants
 
@@ -470,6 +471,10 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     while pending and budget.can_search():
         q = pending.popleft()
         site = school_site if q.site == "school" else q.site
+        if q.kind == "patent" and not site:
+            # 裸搜专利等于最贵的引擎配最差的精度（见 search.PATENT_SITE 的说明）。
+            # 先在专利域里找；找不到再退回裸搜，退回逻辑在下面的空结果分支里。
+            site = PATENT_SITE
         discovery = False
         if q.source.startswith("school:") and q.site == "school" and not site:
             if not school:
@@ -489,7 +494,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         attempted.add(key)
         started = time.monotonic()
         try:
-            hits = (crossref_hits(q.text) if q.kind == "crossref"
+            # crossref 这个 kind 名字是历史遗留，实际走 Crossref + OpenAlex 两个
+            # 免费公开 API，一次都不消耗搜索额度。
+            hits = (paper_hits(q.text) if q.kind == "crossref"
                     else _search_resilient(q.text, site, searcher, org, say))
         except SearchFiltered:
             # 审核误伤，改述也没过：**只跳过这一条查询**，不中止整条流水线。
@@ -532,6 +539,10 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             elif official and site:
                 fallback = replace(q, text=f'"{school}" {q.text}', site=None, source="fallback:school")
             elif q.kind == "crossref":
+                fallback = replace(q, kind="web", site=None)
+            elif q.kind == "patent" and site == PATENT_SITE:
+                # 专利域里没有，不代表没这件专利：可能只在国内数据库有公开公告。
+                # 退回裸搜（贵，但这是最后一次机会），别把"没查到"说成"不存在"。
                 fallback = replace(q, kind="web", site=None)
             elif site and len(re.findall(r"[\w\u3400-\u9fff]+", q.text)) >= 2:
                 fallback = replace(q, site=None)

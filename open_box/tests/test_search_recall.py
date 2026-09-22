@@ -132,14 +132,43 @@ class RecallTests(unittest.TestCase):
         plan = build_plan(c, "张三 Sam Zhang", ResumeProfile(), doc=doc)
         self.assertTrue(any(q.site == "mp.weixin.qq.com" for q in plan.queries))
 
-    def test_crossref_dispatch_uses_structured_evidence(self):
-        with patch("app.collect.crossref_hits", return_value=[SearchHit(
+    def test_paper_dispatch_uses_free_apis_not_paid_search(self):
+        """论文走 Crossref + OpenAlex（都免费），一次都不该碰计费搜索。"""
+        class NoSearch:
+            def search(self, q, site=None):
+                raise AssertionError("论文陈述不该消耗搜索额度")
+
+        with patch("app.collect.paper_hits", return_value=[SearchHit(
                 "https://doi.org/test", content="张三获一等奖")]) as api:
             found, _ = collect_for_claim(
-                claim(), "张三", object(), Extractor(), fetcher=Fetcher(),
+                claim(), "张三", NoSearch(), Extractor(), fetcher=Fetcher(),
                 queries=[Query("Some paper", kind="crossref")])
         api.assert_called_once()
         self.assertTrue(found)
+
+    def test_patent_queries_are_scoped_to_the_patent_domain_first(self):
+        """专利不裸搜：裸查询走最贵的引擎，精度还最差。
+
+        先在免费可读的专利域里找；那里没有才退回裸搜，且退回时仍是一次真实检索，
+        不把"没查到"直接说成"不存在"。
+        """
+        from app.search import PATENT_SITE
+
+        seen = []
+
+        class Search:
+            def search(self, q, site=None):
+                seen.append(site)
+                return []
+
+        collect_for_claim(
+            claim(), "张三", Search(), Extractor(), fetcher=Fetcher(),
+            queries=[Query("\"张三\" 一种装置", kind="patent")],
+            budget=Budget(max_searches=3, max_page_reads=1))
+
+        self.assertEqual(seen[0], PATENT_SITE,
+                         f"专利首查应限定到 {PATENT_SITE}，实际 {seen[0]}")
+        self.assertIn(None, seen[1:], "专利域查空后应退回裸搜，不能就此了结")
 
     def test_provider_network_failure_is_not_an_empty_result(self):
         import httpx

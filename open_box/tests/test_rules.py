@@ -695,7 +695,9 @@ class FakeZhipuSearch:
     """复刻智谱 Web Search 的请求校验与响应形状。"""
 
     def __init__(self, hits: list[dict] | None = None, *, status: int = 200,
-                 error: dict | None = None):
+                 error: dict | None = None, by_engine: dict[str, list] | None = None):
+        # by_engine 用来验证"便宜档空、贵档有"的升级路径
+        self.by_engine = by_engine
         self.hits = hits if hits is not None else [
             {"link": "https://xsc.tsinghua.edu.cn/tzgg/1.html", "title": "获奖名单公示",
              "content": "片段", "media": "学生工作部"}]
@@ -716,7 +718,12 @@ class FakeZhipuSearch:
             def do_POST(self):  # noqa: N802
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 outer.requests.append({"auth": self.headers.get("Authorization"), "body": body})
-                data = {"error": outer.error} if outer.error else {"search_result": outer.hits}
+                if outer.error:
+                    data = {"error": outer.error}
+                elif outer.by_engine is not None:
+                    data = {"search_result": outer.by_engine.get(body.get("search_engine"), [])}
+                else:
+                    data = {"search_result": outer.hits}
                 payload = json.dumps(data, ensure_ascii=False).encode()
                 self.send_response(outer.status)
                 self.send_header("Content-Type", "application/json")
@@ -1178,6 +1185,69 @@ def test_32_llm_balance_error_under_429_is_fatal():
             raise AssertionError("连续限流应该抛 LLMTransient")
         except LLMTransient as exc:
             assert "Rate limit reached" in str(exc), f"丢掉了供应商原文：{exc}"
+
+
+def test_33_site_queries_use_the_cheap_engine_and_escalate_only_when_asked():
+    """带域限定的查询默认走 search_std（0.01/次，pro 的三分之一）。
+
+    升级是**可选**的，不是默认：期望单价 = 0.01 + p(空) × 0.03，学校官网这类
+    窄域查询空结果本来就多，p(空) 超过 2/3 反而比直接用 pro 贵。所以默认只打
+    一次便宜档；要不要拿钱换召回，交给部署的人按自己的空率决定。
+    """
+    saved = {k: os.environ.get(k) for k in
+             ("SEARCH_ENGINE", "SEARCH_ENGINE_FALLBACK", "SEARCH_ENGINE_OPEN")}
+    try:
+        for k in saved:
+            os.environ.pop(k, None)
+
+        hit = [{"link": "https://xsc.tsinghua.edu.cn/tzgg/1.html", "title": "公示",
+                "content": "片段", "media": "学生工作部"}]
+
+        # 默认：带 site 用 std，且只打一次
+        with FakeZhipuSearch(by_engine={"search_std": hit, "search_pro": hit}) as srv:
+            s1 = ZhipuSearcher(api_key="sk-test",
+                               endpoint=f"http://127.0.0.1:{srv.port}/web_search")
+            assert len(s1.search("张三 公示", site="tsinghua.edu.cn")) == 1
+            assert len(srv.requests) == 1, "不该无缘无故打第二次"
+            assert srv.requests[0]["body"]["search_engine"] == "search_std", \
+                f"带域限定应默认用最便宜的 std，实际 {srv.requests[0]['body']['search_engine']}"
+            assert srv.requests[0]["body"]["search_domain_filter"] == "tsinghua.edu.cn"
+
+        # 默认：std 空结果也不升级，如实返回空
+        with FakeZhipuSearch(by_engine={"search_std": [], "search_pro": hit}) as srv:
+            s2 = ZhipuSearcher(api_key="sk-test",
+                               endpoint=f"http://127.0.0.1:{srv.port}/web_search")
+            assert s2.search("张三 公示", site="tsinghua.edu.cn") == []
+            assert len(srv.requests) == 1, "默认不开兜底，空就是空"
+
+        # 显式打开兜底：std 空 → 用 pro 再确认一次
+        os.environ["SEARCH_ENGINE_FALLBACK"] = "search_pro"
+        with FakeZhipuSearch(by_engine={"search_std": [], "search_pro": hit}) as srv:
+            s3 = ZhipuSearcher(api_key="sk-test",
+                               endpoint=f"http://127.0.0.1:{srv.port}/web_search")
+            assert len(s3.search("张三 公示", site="tsinghua.edu.cn")) == 1
+            engines = [r["body"]["search_engine"] for r in srv.requests]
+            assert engines == ["search_std", "search_pro"], f"升级顺序不对：{engines}"
+
+        # 兜底开着，但便宜档有结果 → 不该白花那 0.03
+        with FakeZhipuSearch(by_engine={"search_std": hit, "search_pro": hit}) as srv:
+            s4 = ZhipuSearcher(api_key="sk-test",
+                               endpoint=f"http://127.0.0.1:{srv.port}/web_search")
+            assert len(s4.search("张三 公示", site="tsinghua.edu.cn")) == 1
+            assert len(srv.requests) == 1, "便宜档已经搜到了，不该再打贵的"
+
+        # 裸查询仍旧走搜狗：只有它返回 link
+        with FakeZhipuSearch(by_engine={"search_pro_sogou": hit}) as srv:
+            s5 = ZhipuSearcher(api_key="sk-test",
+                               endpoint=f"http://127.0.0.1:{srv.port}/web_search")
+            assert len(s5.search("某大学 官网")) == 1
+            assert srv.requests[0]["body"]["search_engine"] == "search_pro_sogou"
+            assert "search_domain_filter" not in srv.requests[0]["body"]
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
 
 
 # ══════════════════════════════════════════════════════════════════════

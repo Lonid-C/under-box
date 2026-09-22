@@ -7,6 +7,23 @@
 产品底线不随版本改变：**只核验可证伪的陈述，不给候选人打分、不做排名、不给录用建议；
 判定归规则，理解归模型。**
 
+## [Unreleased]
+
+### 修复 Fixed
+- **模型返回类型不合 schema，导致整次核验失败**：模型把 `identity_conflicts` 写成单个
+  字符串（如 `"学院不同：页面为X仪器工程研究所"`）时，`Evidence` 抛 `ValidationError`；
+  而 `collect.extract_evidence` 当时**没有兜底**，一个字段类型不对就让整份报告跑不出来。
+  现在 `schema` 统一做类型收敛（`str → [str]`、数字 → 字符串、`{"field":..,"diff":..}` →
+  `"field：diff"`）。
+  **关键：是收敛不是丢弃**——`identity_conflicts` 是「同名一票否决」的唯一依据，
+  丢掉会把本该判 `who` 的条目误升为「已证实」，等于把同名他人的记录算到候选人头上。
+- **`supports` 为字符串时被逐字符迭代吃掉**：`[s for s in "某要素" if ...]` 会静默得到
+  空列表——不报错，但证据全丢。改为先收敛、再按 `elements` 过滤。
+- **单条证据构造失败不再拖垮整份报告**：`Evidence` 构造加 `try/except` 兜底，与
+  `split.split_claims` 对 `Claim` 的处理保持一致。
+- 新增回归用例 `test_30`，锁死「字符串收敛、内容不丢、矛盾仍判 `who`」三条语义。
+  规则层验收 **29/29 通过**。
+
 ## [0.2.0] - 2026-09-21
 
 围绕「查得更准、判得更公道、跑得更快」三条线改进检索与判定。
@@ -46,4 +63,5 @@
   策略引擎生成三轮查询 → 检索 + 整页回读 → 逐要素判定 → 澄清问题；
   界面上的流式核验状态窗、流式问答、来源分级面板、逐条检索计划、报告导出；dsh 插件 6 工具。
 
+[Unreleased]: https://github.com/Lonid-C/under-box/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Lonid-C/under-box/releases/tag/v0.2.0

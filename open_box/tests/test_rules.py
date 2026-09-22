@@ -24,7 +24,7 @@ from app.llm import (LLMUnavailable, OpenAICompatLLM, StubLLM,     # noqa: E402
                       build_llm, NullLLM)
 from app.parse import detect_injection, parse_document             # noqa: E402
 from app.pipeline import run_pipeline                              # noqa: E402
-from app.schema import Claim, Evidence, Report                     # noqa: E402
+from app.schema import Claim, Evidence, Report, as_str_list        # noqa: E402
 from app.plan import Query, WECHAT_HOST, plan_queries, provided_urls  # noqa: E402
 from app.search import (FixtureSearcher, NullSearcher, PageFetcher,  # noqa: E402
                         SearchHit, SearchUnavailable, ZhipuSearcher, build_searcher)
@@ -948,6 +948,74 @@ def test_28_search_balance_error_is_not_reported_as_zero_results():
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 30. 模型不守 schema：该给数组的地方给了字符串
+# ══════════════════════════════════════════════════════════════════════
+
+def test_30_model_string_instead_of_list_is_recovered_not_crashed():
+    """模型把 list 字段写成单个字符串时不能崩，且内容必须保住。
+
+    线上真实报错（截图）：Evidence.identity_conflicts 收到 str
+    → ValidationError，而 collect.py 当时没有 try/except 兜底，整次核验直接失败。
+
+    这里锁死四条：
+      1) 收敛为单元素列表（**不是丢弃**——丢了就会把同名他人的记录算到候选人头上）；
+      2) 字符串形式的 supports 不能被逐字符迭代吃掉；
+      3) 规则层照常重算，有身份矛盾仍然判 who；
+      4) 其余字段类型不对（如 published_at 给了数字）也不再拖垮整份报告。
+    """
+    # 收敛规则本身
+    assert as_str_list("学院不同：X研究所") == ["学院不同：X研究所"]
+    assert as_str_list(["a", "", " b "]) == ["a", "b"]
+    assert as_str_list(None) == [] and as_str_list("") == []
+    assert as_str_list(2025) == ["2025"]
+    assert as_str_list({"field": "学院", "diff": "不同"}) == ["学院：不同"]
+
+    # 直接构造：修复前这里抛 ValidationError
+    raw_ev = Evidence(url="https://x.edu/a.html", title="获奖名单公示", publisher="某大学",
+                      source_tier="B", snippet="页面原文",
+                      identity_signals="学校一致", identity_conflicts="学院不同：X研究所",
+                      supports="赛事=某省赛", contradicts="")
+    assert raw_ev.identity_conflicts == ["学院不同：X研究所"], "矛盾内容不能丢"
+    assert raw_ev.identity_signals == ["学校一致"]
+    assert raw_ev.supports == ["赛事=某省赛"]
+
+    ev = judge.score_evidence(raw_ev)       # 分数一律由规则重算
+    assert ev.identity_score == -3, "学校一致(2) + 身份矛盾(-5)"
+
+    # 安全语义不变：有身份矛盾一律 who
+    assert judge.decide(mk_claim(["赛事=某省赛"]), [ev]) == "who"
+
+    # 端到端：模型全程不守 schema，证据仍应被采信
+    class FakeFetcher:
+        def get(self, url):
+            return "二等奖　某候选人　某大学　赛事获奖名单。"
+
+    claim = mk_claim(["赛事=某省赛", "奖项=二等奖"])
+    claim.entities = {"org": "某大学", "provided_urls": ["https://x.edu/a.html"]}
+    llm = StubLLM([{
+        "snippet": "二等奖　某候选人　某大学　赛事获奖名单。",
+        "identity_signals": "学校一致",        # ← 该给数组，给了字符串
+        "identity_conflicts": "",              # ← 该给数组，给了空字符串
+        "supports": "赛事=某省赛",             # ← 该给数组，给了字符串
+        "contradicts": "",
+        "publisher": "某大学",
+        "published_at": 2025,                  # ← 该给字符串，给了数字
+        "origin_url": None,
+    }])
+    evidences, _ = collect_for_claim(
+        claim, "某候选人", FixtureSearcher(table={}), llm,
+        budget=Budget(max_searches=0, max_page_reads=2), fetcher=FakeFetcher())
+
+    assert len(evidences) == 1, "脏字段不应导致整条证据被丢弃"
+    got = evidences[0]
+    assert "学校一致" in got.identity_signals
+    assert got.identity_conflicts == []
+    assert got.supports == ["赛事=某省赛"], "字符串形式的 supports 不能被逐字符迭代吃掉"
+    assert got.published_at == "2025", "数字年份应收敛为字符串"
+
+
+# ══════════════════════════════════════════════════════════════════════
+
 
 def _main() -> int:
     tests = [(n, f) for n, f in sorted(globals().items())

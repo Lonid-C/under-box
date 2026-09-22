@@ -214,6 +214,7 @@ def cmd_judge(payload: dict) -> dict:
       3. supports 只认 claim.elements 里真实存在的要素，模型自造的要素被丢弃
     """
     judge, default_next_step, Claim, Evidence = _load()
+    from app.schema import as_str, as_str_list, as_str_or_none
 
     claim = _build_claim(_require(payload, "claim"))
     raw_evs = _require(payload, "evidences")
@@ -227,35 +228,42 @@ def cmd_judge(payload: dict) -> dict:
         if not raw.get("url"):
             dropped.append(f"第 {i + 1} 条证据缺少 url，已丢弃")
             continue
+        # 模型常把数组写成字符串、把字符串写成数字。下面 classify_tier 与要素过滤
+        # 都发生在**构造 Evidence 之前**，模型层的 validator 拦不住它们，必须先收敛。
+        # 关键：是**收敛**不是丢弃——identity_conflicts 是「同名一票否决」的唯一依据，
+        # 静默丢成 [] 会把本该判 who 的条目误升为已证实。
+        raw["title"] = as_str(raw.get("title"))
+        raw["publisher"] = as_str(raw.get("publisher"))
+        raw["snippet"] = as_str(raw.get("snippet"))
         # 模型给的身份分与来源等级都不可信，全部重算。
         # is_repost 与 collect.py 口径一致：填了 origin_url 就是转载，转载不算 A 级公示。
         raw.pop("identity_score", None)
         raw["source_tier"] = judge.classify_tier(
             raw["url"],
-            raw.get("title", ""),
-            raw.get("publisher", ""),
-            raw.get("snippet", ""),
+            raw["title"],
+            raw["publisher"],
+            raw["snippet"],
             organizer_hosts=organizer_hosts,
-            wechat_verified_subject=raw.pop("wechat_verified_subject", None),
+            wechat_verified_subject=as_str_or_none(raw.pop("wechat_verified_subject", None)),
             authoritative_media=bool(raw.pop("authoritative_media", False)),
             is_repost=bool(raw.pop("is_repost", False)) or bool(raw.get("origin_url")),
         )
-        signals = list(raw.get("identity_signals") or [])
+        # list("学校一致") 会裂成 ['学','校','一','致'] 四个垃圾身份信号，必须先收敛
+        signals = as_str_list(raw.get("identity_signals"))
         if raw.pop("candidate_provided", False) and "候选人自提供该链接" not in signals:
             signals.append("候选人自提供该链接")
         raw["identity_signals"] = signals
 
-        # 自造要素一律丢弃
-        invented = [s for s in (raw.get("supports") or []) if s not in valid_elements]
+        # 自造要素一律丢弃。supports 若是字符串，按字符迭代会**静默清空**证据，先收敛。
+        supports = as_str_list(raw.get("supports"))
+        invented = [s for s in supports if s not in valid_elements]
         if invented:
             dropped.append(f"第 {i + 1} 条证据引用了不存在的要素，已丢弃：{invented}")
-        raw["supports"] = [s for s in (raw.get("supports") or []) if s in valid_elements]
-        raw.setdefault("title", "")
-        raw.setdefault("publisher", "")
-        raw.setdefault("snippet", "")
-        raw.setdefault("contradicts", [])
-        raw.setdefault("identity_conflicts", [])
-        raw.setdefault("accessed_at", "")
+        raw["supports"] = [s for s in supports if s in valid_elements]
+
+        raw["contradicts"] = as_str_list(raw.get("contradicts"))
+        raw["identity_conflicts"] = as_str_list(raw.get("identity_conflicts"))
+        raw["accessed_at"] = as_str(raw.get("accessed_at"))
         try:
             evidences.append(Evidence(**raw))
         except Exception as exc:

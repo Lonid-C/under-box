@@ -23,7 +23,7 @@ from .llm import LLM
 from .parse import extract_main_text, wrap_untrusted
 from .plan import (MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, Query,
                    plan_queries, provided_urls, school_domain)
-from .schema import Claim, Evidence
+from .schema import Claim, Evidence, as_str_list
 from .search import github_hits, PageFetcher, SearchHit, Searcher
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
@@ -122,8 +122,13 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         return None
 
     snippet = (got.get("snippet") or "").strip()
-    supports = got.get("supports") or []
-    conflicts = got.get("identity_conflicts") or []
+    # 模型该给数组的地方经常给单个字符串。必须**先收敛再判断**：
+    # 否则下面 `[s for s in supports if ...]` 会逐字符迭代，supports 静默变成空列表——
+    # 不报错，但证据全丢。identity_conflicts 更要保住：它是"同名一票否决"的唯一依据。
+    supports = as_str_list(got.get("supports"))
+    conflicts = as_str_list(got.get("identity_conflicts"))
+    signals = as_str_list(got.get("identity_signals"))
+    contradicts = as_str_list(got.get("contradicts"))
     # 页面里什么都没摘到，且既不支持也不矛盾 → 不构成证据，直接丢弃
     if not snippet and not supports and not conflicts:
         return None
@@ -151,20 +156,25 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         is_repost=bool(origin_url),
     )
 
-    signals = got.get("identity_signals") or []
     # "候选人自提供该链接"是我们自己知道的事实，不该交给模型判断——按规则补，并去重
     if candidate_provided and "候选人自提供该链接" not in signals:
         signals = [*signals, "候选人自提供该链接"]
 
-    ev = Evidence(
-        url=hit.url, title=title, publisher=publisher, source_tier=tier, snippet=snippet,
-        published_at=got.get("published_at"), accessed_at=_now(),
-        identity_signals=signals,
-        identity_conflicts=conflicts,
-        supports=supports,
-        contradicts=got.get("contradicts") or [],
-        origin_url=origin_url,
-    )
+    try:
+        ev = Evidence(
+            url=hit.url, title=title, publisher=publisher, source_tier=tier, snippet=snippet,
+            published_at=got.get("published_at"), accessed_at=_now(),
+            identity_signals=signals,
+            identity_conflicts=conflicts,
+            supports=supports,
+            contradicts=contradicts,
+            origin_url=origin_url,
+        )
+    except Exception:
+        # 兜底：单条证据不合规就丢弃，不让一个脏字段毁掉整份报告。
+        # split.py 对 Claim 早就是这么做的，这里原先漏了——
+        # 一个字符串类型的 identity_conflicts 就能让整次核验直接失败。
+        return None
     return judge.score_evidence(ev)
 
 

@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .schema import Claim
@@ -38,15 +39,51 @@ def _load_schools() -> list[dict]:
         return []
 
 
-def school_domain(name: str | None) -> str | None:
-    """学校名 → 主域名。查不到就返回 None，退化为不带 site: 的普通查询。"""
+_AMBIGUOUS_ALIASES = {"交大", "中大", "南大", "科大", "东大", "山大", "工大", "师大"}
+
+
+def _school_record(name: str | None) -> dict | None:
+    """先认全称，再认无歧义简称；院系/学生组织后缀不影响学校识别。"""
     if not name:
         return None
-    for s in _load_schools():
-        names = [s["name"]] + list(s.get("aliases", []))
-        if any(n and n in name for n in names):
-            return s.get("domain")
+    name = name.strip()
+    schools = _load_schools()
+    # 优先匹配最长的机构全称，避免先命中另一个学校的短别名。
+    matches = [s for s in schools if name.startswith(s["name"])]
+    if matches:
+        return max(matches, key=lambda s: len(s["name"]))
+    aliases = [(a, s) for s in schools for a in s.get("aliases", [])
+               if a and a not in _AMBIGUOUS_ALIASES and name.startswith(a)
+               and (name == a or re.search(r"学院|学部|系|学生会|研究院|书院|校区", name[len(a):]))]
+    if aliases:
+        longest = max(len(a) for a, _ in aliases)
+        matches = [s for a, s in aliases if len(a) == longest]
+        return matches[0] if len({s.get("domain") for s in matches}) == 1 else None
     return None
+
+
+def school_name(name: str | None) -> str:
+    """规范学校名；未知中文学校保留本名供官网发现，不猜域名。"""
+    record = _school_record(name)
+    if record:
+        return record["name"]
+    value = (name or "").strip()
+    match = re.match(r"^([^\s,，;；]{2,}?(?:大学|学院))", value)
+    return match.group(1) if match else ""
+
+
+def school_domain(name: str | None) -> str | None:
+    record = _school_record(name)
+    return record.get("domain") if record else None
+
+
+def claim_school(claim: Claim) -> str:
+    """只用本条陈述明确给出的学校，不把赛事主办方或其他经历的学校移植过来。"""
+    entities = claim.entities or {}
+    elements = dict(e.split("=", 1) for e in claim.elements or [] if "=" in e)
+    values = [entities.get("school"), entities.get("university"), elements.get("学校"),
+              entities.get("org"), *(elements.get(k) for k in ("任职组织", "机构", "授予单位", "单位"))]
+    return next((s for v in values if isinstance(v, str) and (s := school_name(v))), "")
 
 
 def plan_queries(claim: Claim, candidate_name: str,

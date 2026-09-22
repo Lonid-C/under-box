@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .llm import LLMUnavailable, NullLLM, build_llm
 from .pipeline import load_mock_report, run_pipeline
-from .search import NullSearcher, build_searcher
+from .search import NullSearcher, SearchUnavailable, build_searcher
 from .schema import STATUS_LABEL, Report
 
 
@@ -25,7 +25,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 report_id=args.report_id,
                 progress=lambda m: print(m, file=sys.stderr),
             )
-        except LLMUnavailable as exc:
+        except (LLMUnavailable, SearchUnavailable) as exc:
             print(f"\nlive 模式跑不起来：{exc}", file=sys.stderr)
             print("离线演示用 `make demo`，不需要任何 key。", file=sys.stderr)
             return 2

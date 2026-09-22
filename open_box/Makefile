@@ -15,6 +15,7 @@ serve:
 ## 第 11 节验收
 test:
 	@$(PY) -m tests.test_rules
+	@$(PY) -m unittest tests.test_search_recall tests.test_school_search -v
 
 ## 重新生成内置 fixture（状态由 app/judge.py 的规则算出）
 fixture:

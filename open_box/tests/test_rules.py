@@ -27,7 +27,8 @@ from app.pipeline import run_pipeline                              # noqa: E402
 from app.schema import Claim, Evidence, Report, as_str_list        # noqa: E402
 from app.plan import Query, WECHAT_HOST, plan_queries, provided_urls  # noqa: E402
 from app.search import (FixtureSearcher, NullSearcher, PageFetcher,  # noqa: E402
-                        SearchHit, SearchUnavailable, ZhipuSearcher, build_searcher)
+                        rephrase_variants, SearchFiltered, SearchHit,
+                        SearchUnavailable, ZhipuSearcher, build_searcher)
 from app.strategy import ResumeProfile                             # noqa: E402
 
 FIXTURE = ROOT / "fixtures" / "report_lin.json"
@@ -820,7 +821,7 @@ def test_23_user_agent_must_be_latin1_encodable():
 
     # 真发一次请求，确认不会 UnicodeEncodeError
     with FakeZhipuSearch() as srv:
-        assert len(srv.client().search("测试中文查询", site="x.edu.cn")) == 1
+        assert len(srv.client().search("测试中文查询", site="tsinghua.edu.cn")) == 1
 
 
 def test_24_query_variants_and_project_fallback_are_searchable():
@@ -839,32 +840,47 @@ def test_24_query_variants_and_project_fallback_are_searchable():
     assert all("{" not in t and "}" not in t for t in texts)
 
 
-def test_25_unknown_school_domain_is_discovered_and_reused():
-    """学校表没有收录时，首次宽搜识别官网，后续查询应自动加域限定。"""
-    from app import collect as C
+def test_25_school_domain_hint_is_discovered_then_scoped_to_one_claim():
+    """未知学校：先发一条「官网」发现查询（计入预算），随后原查询限定到发现的域。
 
-    C._domain_cache.pop("未知大学", None)
-    claim = mk_claim(["学校=未知大学", "奖项=一等奖"], cat="校内荣誉")
-    claim.entities = {"org": "未知大学", "award": "一等奖"}
-    calls = []
+    而且这个域提示**只对本条陈述有效**：不再有跨陈述的全局缓存——别校的一篇合作
+    新闻曾经会把后续所有查询锁死在错误域上，所以缓存被移除。这里两次独立收集，
+    第二次必须重新发现，不能复用第一次的结果。
+    """
+    def make_claim():
+        c = mk_claim(["学校=未知大学", "奖项=一等奖"], cat="校内荣誉")
+        c.entities = {"org": "未知大学", "award": "一等奖"}
+        return c
 
     class Searcher:
-        def search(self, query, site=None):
-            calls.append((query, site))
-            return [SearchHit(
-                url="https://news.unknown.edu.cn/notice/1",
-                title="未知大学评奖公示", snippet="未知大学一等奖公示")]
+        def __init__(self):
+            self.calls = []
 
-    queries = [
-        Query("未知大学 一等奖", site="school", weight=100),
-        Query("未知大学 一等奖 张三", site="school", weight=90),
-    ]
-    collect_for_claim(
-        claim, "张三", Searcher(), StubLLM([]), queries=queries,
-        budget=Budget(max_searches=2, max_page_reads=0),
-    )
-    assert calls[0][1] is None, "首次未知域应先宽搜"
-    assert calls[1][1] == "unknown.edu.cn", "发现的学校主域应复用于后续查询"
+        def search(self, query, site=None):
+            self.calls.append((query, site))
+            if site is None and "官网" in query:
+                return [SearchHit(url="https://www.unknown.edu.cn/",
+                                  title="未知大学", publisher="未知大学")]
+            return [SearchHit(url="https://xsc.unknown.edu.cn/notice/1",
+                              title="未知大学 一等奖 公示", snippet="一等奖公示")]
+
+    q = Query("未知大学 一等奖 张三", site="school", source="school:official", weight=100)
+
+    first = Searcher()
+    budget = Budget(max_searches=3, max_page_reads=0)
+    collect_for_claim(make_claim(), "张三", first, StubLLM([]), queries=[q], budget=budget)
+    assert first.calls[0][1] is None and "官网" in first.calls[0][0], \
+        f"未知学校应先发官网发现查询，实际 {first.calls[0]}"
+    assert first.calls[1] == (q.text, "unknown.edu.cn"), \
+        f"发现官网后原查询应限定到该域，实际 {first.calls[1]}"
+    assert budget.searches == 2, "官网发现也必须计入搜索预算"
+
+    # 换一条陈述重新收集：不得复用上一条发现的域（没有跨陈述的全局缓存）
+    second = Searcher()
+    collect_for_claim(make_claim(), "张三", second, StubLLM([]), queries=[q],
+                      budget=Budget(max_searches=3, max_page_reads=0))
+    assert second.calls[0][1] is None and "官网" in second.calls[0][0], \
+        "域提示不得跨陈述泄漏：新的一条陈述应重新做官网发现"
 
 
 def test_26_page_budget_is_shared_across_queries_and_fetches_are_parallel():
@@ -947,6 +963,25 @@ def test_28_search_balance_error_is_not_reported_as_zero_results():
             raise AssertionError("余额不足应抛出 SearchUnavailable")
 
 
+def test_29_search_unavailable_is_not_swallowed_as_none():
+    """检索不可用（余额/网络/鉴权）必须上抛，不能被吞成 0 结果、伪装成「未找到」。"""
+    claim = mk_claim(["赛事=某赛事", "奖项=一等奖"])
+
+    class DownSearcher:
+        def search(self, query, site=None):
+            raise SearchUnavailable("智谱搜索不可用：余额不足或无可用资源包")
+
+    try:
+        collect_for_claim(
+            claim, "某候选人", DownSearcher(), StubLLM([]),
+            queries=[Query("某赛事 获奖名单", weight=100)],
+            budget=Budget(max_searches=2, max_page_reads=2))
+    except SearchUnavailable as exc:
+        assert "余额不足" in str(exc)
+    else:
+        raise AssertionError("检索不可用应抛出 SearchUnavailable，而不是返回空证据当成「未找到」")
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 30. 模型不守 schema：该给数组的地方给了字符串
 # ══════════════════════════════════════════════════════════════════════
@@ -1015,7 +1050,80 @@ def test_30_model_string_instead_of_list_is_recovered_not_crashed():
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 31. 内容审核误伤：只跳过这一条查询，不中止整条流水线
+# ══════════════════════════════════════════════════════════════════════
 
+def test_31_content_filtered_query_is_skipped_not_fatal():
+    """线上真实故障：某条查询被智谱内容审核误拦（HTTP 400 / code 1301），
+    原实现抛 SearchUnavailable 直接终结整次核验——跑到 500 多秒、8/11 条陈述时全废。
+
+    审核判决是**概率性误伤**（同一串换词序就过；同一时段连续 70 次请求全部 200，
+    所以与限流无关），因此正确处理是：改述重试 → 仍不过就跳过这一条，其余照跑。
+    """
+    # ① 改述只做字面变换，实体词一个不少——否则就不是"绕过误判"而是"换了一条查询"
+    variants = rephrase_variants('"qingchuan-scheduler" "林昱和"', "晴川大学")
+    assert variants, "被拦的查询必须能给出改述"
+    for v in variants:
+        for term in ("qingchuan-scheduler", "林昱和"):
+            assert term in v, f"改述丢了实体词：{v}"
+    assert variants[0] == '"林昱和" "qingchuan-scheduler"', "首选改述应是词序轮转"
+    assert rephrase_variants("单一名词") == [], "无变换空间时不要硬造改述"
+
+    # ② 400 + code 1301 必须认得出来，且不重发同一串
+    with FakeZhipuSearch(status=400, error={
+            "code": "1301",
+            "message": "系统检测到输入或生成内容可能包含不安全或敏感内容，请您避免输入易产生敏感内容的提示语"}) as srv:
+        try:
+            srv.client().search("某赛事 某候选人")
+        except SearchFiltered as exc:
+            assert isinstance(exc, SearchUnavailable), "仍要能被既有的 SearchUnavailable 兜住"
+            assert exc.query == "某赛事 某候选人"
+        else:
+            raise AssertionError("内容审核拒绝必须抛 SearchFiltered")
+        assert len(srv.requests) == 1, "审核判决不是抖动，不该对同一串重发"
+
+    # ③ 端到端：首条查询被拦、改述后命中 → 不能抛错，证据要拿到
+    class FlakySearcher:
+        def __init__(self):
+            self.calls = []
+
+        def search(self, query, site=None):
+            self.calls.append(query)
+            if query == '"某赛事" "某候选人"':
+                raise SearchFiltered("被审核拒绝", query=query)
+            return [SearchHit(url="https://school.example/list",
+                              title="某候选人 某赛事获奖名单")]
+
+    class Fetcher:
+        def get(self, url):
+            return "某候选人　某大学　某赛事　一等奖"
+
+    logs = []
+    found, _ = collect_for_claim(
+        mk_claim(["赛事=某赛事", "奖项=一等奖"]), "某候选人", FlakySearcher(), StubLLM([{
+            "snippet": "某候选人　某赛事　一等奖",
+            "supports": ["赛事=某赛事", "奖项=一等奖"],
+            "identity_signals": ["学校一致"], "publisher": "某大学"}]),
+        fetcher=Fetcher(), queries=[Query('"某赛事" "某候选人"')],
+        budget=Budget(max_searches=3, max_page_reads=2), progress=logs.append)
+    assert found, "改述通过后应正常取到证据"
+    assert any("改述后取回" in m for m in logs), "日志应说明改述救回了这条查询"
+
+    # ④ 每条查询都被拦也不许抛错——只是没有证据，日志要如实说是"被拦"
+    class AllBlocked:
+        def search(self, query, site=None):
+            raise SearchFiltered("被审核拒绝", query=query)
+
+    logs = []
+    found, _ = collect_for_claim(
+        mk_claim(["赛事=某赛事"]), "某候选人", AllBlocked(), StubLLM([]),
+        queries=[Query('"某赛事" "某候选人"'), Query("某赛事 获奖名单")],
+        budget=Budget(max_searches=3, max_page_reads=2), progress=logs.append)
+    assert found == [], "被拦的查询不该产出证据"
+    assert sum("误拦" in m for m in logs) >= 2, "每条被拦的查询都要留一条日志"
+
+
+# ══════════════════════════════════════════════════════════════════════
 
 def _main() -> int:
     tests = [(n, f) for n, f in sorted(globals().items())

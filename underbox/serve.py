@@ -33,7 +33,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT", "/Users/a1234/Desktop/open_box"))
+# 默认指向同仓库的 ../open_box。旧版写死了某台开发机的绝对路径，
+# 换机器后会变成"页面能开、一上传简历就报找不到模块"。
+OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT") or (HERE.parent / "open_box"))
 if str(OPEN_BOX) not in sys.path:
     sys.path.insert(0, str(OPEN_BOX))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -135,6 +137,20 @@ def _llm_ready() -> bool:
     try:
         import app                                    # noqa: PLC0415
         return bool(os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("LLM_API_KEY"))
+    except Exception:
+        return False
+
+
+def _pipeline_ready() -> bool:
+    """核验流水线真的能导入吗？
+
+    原先这个字段写死 True，于是"解释器缺 pydantic / httpx"这类问题在健康检查里
+    完全看不出来——页面显示「LIVE · 真实核验」，用户拖进简历那一刻才炸
+    ModuleNotFoundError。真探一次的代价只是一次导入。
+    """
+    try:
+        from app.pipeline import run_pipeline        # noqa: F401, PLC0415
+        return True
     except Exception:
         return False
 
@@ -418,7 +434,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             return self._json({
                 "ok": True,
-                "verify": True,
+                "verify": _pipeline_ready(),
                 "chat": True,
                 "llmConfigured": _llm_ready(),
                 "searchConfigured": _search_configured(),

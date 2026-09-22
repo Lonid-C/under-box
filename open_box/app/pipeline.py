@@ -100,7 +100,7 @@ def run_pipeline(
             )
         evidences, exhausted = collect_for_claim(
             claim, name, searcher, llm,
-            budget=budget, fetcher=fetcher, queries=plan.queries,
+            budget=budget, fetcher=fetcher, queries=plan.queries, progress=say,
         )
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)

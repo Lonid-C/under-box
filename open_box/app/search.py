@@ -40,6 +40,75 @@ class SearchUnavailable(RuntimeError):
     """鉴权失败 / 余额不足 / 被拒。不重试，直接报给调用方。"""
 
 
+class SearchFiltered(SearchUnavailable):
+    """**这一条查询串**被内容审核拒了（HTTP 400 / code 1301 / contentFilter）。
+
+    必须和 SearchUnavailable 分开：不是服务挂了、也不是余额不足，是审核对这一串字面
+    动了手。实测（2026-09-22）它是**概率性误伤**——`"qingchuan-scheduler" "林昱和"`
+    被拦，但换词序 `"林昱和" "qingchuan-scheduler"`、去引号、或追加一个上下文词都能过；
+    同一串反复打也是时通时不通。同一时间 70 次连续请求全部 200，所以和限流无关。
+
+    把它当 SearchUnavailable 一路抛到界面，一条被误伤的查询就会让整次核验跑到一半失败。
+    调用方应当先用 rephrase_variants 改述重试，仍不过就**只跳过这一条**查询。
+    """
+
+    def __init__(self, message: str = "", *, query: str = "", site: str | None = None):
+        super().__init__(message)
+        self.query = query
+        self.site = site
+
+
+_CONTENT_FILTER_CODES = frozenset({"1301"})
+
+
+def is_content_filtered(response) -> bool:
+    """识别智谱的内容审核误拦。响应长这样（HTTP 400）：
+
+        {"contentFilter": [{"level": 1, "role": "search"}],
+         "error": {"code": "1301", "message": "系统检测到输入或生成内容可能包含…"}}
+
+    只认 400 上的这两个标记。其它 400（参数写错、引擎名不对）不算，仍按普通失败重试——
+    误判成审核会让真正的调用错误被静默跳过。
+    """
+    if getattr(response, "status_code", None) != 400:
+        return False
+    try:
+        data = response.json()
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+    if data.get("contentFilter"):
+        return True
+    error = data.get("error")
+    return isinstance(error, dict) and str(error.get("code") or "") in _CONTENT_FILTER_CODES
+
+
+def rephrase_variants(query: str, extra: str = "") -> list[str]:
+    """为被审核误拦的查询生成**同义**改述，按实测命中率排序。
+
+    只做字面变换（词序轮转 / 去引号 / 补一个上下文词），绝不增删实体词——
+    否则就不是"绕过误判"，而是"换了一条查询"，检索意图会变，召回结论不再可信。
+    顺序来自实测：词序轮转最有效，其次轮转+去引号，再次单独去引号，最后补机构名。
+    """
+    tokens = [t for t in (query or "").split() if t]
+    variants: list[str] = []
+
+    def add(candidate: str) -> None:
+        candidate = " ".join(candidate.split())
+        if candidate and candidate != query and candidate not in variants:
+            variants.append(candidate)
+
+    unquoted = [t.strip('"').strip("'") for t in tokens]
+    if len(tokens) >= 2:
+        add(" ".join(tokens[1:] + tokens[:1]))
+        add(" ".join(unquoted[1:] + unquoted[:1]))
+    add(" ".join(unquoted))                      # 无引号时等于原串，会被 add 跳过
+    if extra and extra not in tokens:
+        add(" ".join(tokens + [extra]))
+    return variants
+
+
 @dataclass
 class SearchHit:
     url: str
@@ -76,6 +145,15 @@ class FixtureSearcher:
             if key in q:
                 return list(hits)
         return []
+
+
+def url_in_domain(url: str, domain: str) -> bool:
+    """供应商过滤之外再校验主机边界，允许根域及学院子域。"""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    domain = domain.strip().lower().rstrip(".")
+    return parsed.scheme in ("http", "https") and bool(domain) and (
+        host == domain or host.endswith("." + domain))
 
 
 class ZhipuSearcher:
@@ -135,11 +213,12 @@ class ZhipuSearcher:
         if not self.api_key:
             return []
         import httpx
-        body: dict = {"search_query": query}
+        body: dict = {"search_query": query, "search_intent": False}
         if site:
             # 一等参数，比把 site: 拼进查询串稳
             body["search_domain_filter"] = site
-            body["search_engine"] = self.engine
+            # 官方仅为 std/pro/sogou 声明域过滤支持；夸克配置不能使官网限定失效。
+            body["search_engine"] = self.engine if self.engine != "search_pro_quark" else "search_pro"
         else:
             # 裸查询必须换引擎：search_std/search_pro 的裸结果没有 link（见 __init__）
             body["search_engine"] = self.engine_open
@@ -167,13 +246,21 @@ class ZhipuSearcher:
                         code = ""
                     if code == "1113" or any(x in message for x in ("余额不足", "资源包", "充值")):
                         raise SearchUnavailable(f"智谱搜索不可用：{message}")
+                if is_content_filtered(r):
+                    # 不重发同一串：审核判决不是网络抖动，一模一样的字面重试毫无意义，
+                    # 只会白烧时间。改述是调用方的决定（它才知道这条查询值不值得救）。
+                    raise SearchFiltered(
+                        f"查询被内容审核拒绝（code 1301）：{query[:80]}", query=query, site=site)
                 r.raise_for_status()
-                return self._parse(r.json())
+                hits = self._parse(r.json())
+                return [h for h in hits if url_in_domain(h.url, site)] if site else hits
             except SearchUnavailable:
                 raise
-            except Exception:
+            except Exception as exc:
                 if attempt >= MAX_RETRIES:
-                    return []
+                    raise SearchUnavailable(
+                        f"智谱搜索请求失败（{type(exc).__name__}），已重试 {MAX_RETRIES} 次"
+                    ) from exc
                 time.sleep(0.5 * (attempt + 1))
         return []
 
@@ -237,9 +324,11 @@ class HTTPSearcher:
                 return self._parse(r.json())
             except SearchUnavailable:
                 raise
-            except Exception:
+            except Exception as exc:
                 if attempt >= MAX_RETRIES:
-                    return []
+                    raise SearchUnavailable(
+                        f"搜索请求失败（{type(exc).__name__}），已重试 {MAX_RETRIES} 次"
+                    ) from exc
                 time.sleep(0.5 * (attempt + 1))
         return []
 

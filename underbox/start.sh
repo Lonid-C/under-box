@@ -10,7 +10,11 @@ cd "$(dirname "$0")"
 
 PORT="${1:-8787}"
 ROOT="${OPEN_BOX_ROOT:-$(cd .. && pwd)/open_box}"
-[ -d "$ROOT" ] || ROOT="/Users/a1234/Desktop/open_box"
+if [ ! -d "$ROOT" ]; then
+  echo "找不到 open_box 代码目录：$ROOT" >&2
+  echo "用 OPEN_BOX_ROOT=/path/to/open_box ./start.sh 指定。" >&2
+  exit 1
+fi
 export OPEN_BOX_ROOT="$ROOT"
 
 # 端口被占用 → 多半是上一次的 serve.py 还挂在后台。自动结束它再启动，
@@ -22,9 +26,25 @@ if [ -n "$PIDS" ]; then
   sleep 1.5
 fi
 
-# 优先用带依赖的虚拟环境（httpx / pydantic 装在那里），没有就退回系统 python3
-PY="$HOME/.workbuddy/binaries/python/envs/default/bin/python"
-[ -x "$PY" ] || PY="$(command -v python3)"
+# 解释器必须真的装了 httpx / pydantic 并就地验一遍。
+# serve.py 是在**进程内** `from app.pipeline import run_pipeline` 的，选错解释器不会
+# 立刻报错——页面照常打开、健康检查照常通过，等到上传简历那一刻才炸
+# `ModuleNotFoundError`。所以这里逐个候选真跑一次 import，不只是看文件在不在。
+# 顺序：项目自带 venv → WorkBuddy 内置环境 → 系统 python3。
+PY=""
+for c in "$(cd .. && pwd)/.venv/bin/python" \
+         "$HOME/.workbuddy/binaries/python/envs/default/bin/python" \
+         "$(command -v python3 || true)"; do
+  if [ -n "$c" ] && [ -x "$c" ] && "$c" -c 'import httpx, pydantic' >/dev/null 2>&1; then
+    PY="$c"
+    break
+  fi
+done
+if [ -z "$PY" ]; then
+  echo "找不到装了 httpx / pydantic 的 Python。先建一个：" >&2
+  echo "  cd $(cd .. && pwd) && python3 -m venv .venv && .venv/bin/pip install -U pydantic httpx pypdf" >&2
+  exit 1
+fi
 
 echo "underbox  http://127.0.0.1:$PORT/"
 echo "  open_box $ROOT"

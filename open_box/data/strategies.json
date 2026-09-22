@@ -593,6 +593,10 @@
   ],
   "categories": {
     "学历": {
+      "official_forms": [
+        {"tpl": "\"{name}\"", "site": "school", "round": 1, "weight": 110, "always": true,
+         "purpose": "优先查学校官网及院系子站的人名线索；报道不等于学历证明"}
+      ],
       "never_search": true,
       "search_if_terms": [
         "保研",
@@ -668,13 +672,17 @@
         }
       ],
       "notes": [
-        "默认不检索：普通学历靠学信网核验，不做自动化，直接 none + 授权补证。",
+        "普通学历只探查学校官网和已收录的学校公众号公开线索，不自动化访问学信网；报道不等于学籍或学位证明。",
         "例外：命中「保研/保送/推免/推荐免试/夏令营」等词时恢复检索——这类有公开的推免公示 / 拟录取名单 / 优秀营员名单，通常发在学校研究生院官网，所以 site 限定学校域是第一手段。",
         "推免公示可能由本科学校（推荐方）或录取学校（接收方）任一方发布；{org} 取简历该条写明的学校，查不到域名时退化为普通查询。",
         "仍然只核验「是否出现在公开名单」这一可证伪事实，不对录取结果或排名做任何评价。"
       ]
     },
     "校内荣誉": {
+      "official_forms": [
+        {"tpl": "\"{name}\" \"{award}\"", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网按姓名与荣誉短词取证"},
+        {"tpl": "\"{name}\"", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网按姓名查公开荣誉线索"}
+      ],
       "elements": [
         "授予单位={org}",
         "荣誉={dept}"
@@ -741,6 +749,10 @@
       ]
     },
     "奖学金": {
+      "official_forms": [
+        {"tpl": "\"{name}\" \"{award}\"", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网按姓名与奖项短词取证"},
+        {"tpl": "\"{name}\" 奖学金", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网奖学金名单线索"}
+      ],
       "elements": [
         "授予单位={org}",
         "奖项={dept}"
@@ -799,6 +811,10 @@
       ]
     },
     "学生工作": {
+      "official_forms": [
+        {"tpl": "\"{name}\" \"{role}\"", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网按姓名与职务查询，避免拼接完整组织名"},
+        {"tpl": "\"{name}\" 学生会", "site": "school", "round": 1, "weight": 110, "purpose": "学校官网学生组织公示线索"}
+      ],
       "elements": [
         "任职组织={org}",
         "职务={dept}",
@@ -854,6 +870,10 @@
       ]
     },
     "竞赛": {
+      "official_forms": [
+        {"tpl": "\"{name}\" \"{contest}\"", "site": "school", "round": 1, "weight": 110, "purpose": "简历明确所属学校时，优先查学校及院系官网获奖报道"},
+        {"tpl": "\"{name}\" 获奖", "site": "school", "round": 1, "weight": 110, "purpose": "所属学校官网获奖线索"}
+      ],
       "elements": [
         "赛事={contest}",
         "奖项={award}",

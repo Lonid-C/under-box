@@ -58,6 +58,7 @@ class Query:
     weight: int = 0                    # 同轮内排序用，越大越先发
     source: str = ""                   # 来自哪个档案/类别，便于排查
     expect_tier: str | None = None     # 预期能拿到什么等级的来源
+    variant: bool = False              # 扩展写法不挤掉原计划的检索渠道
 
 
 @dataclass
@@ -277,6 +278,8 @@ def _context(claim, candidate_name: str, terms: list[str],
         return _from_elements(claim, list(emap.get(field) or []))
 
     org = pick("org", "org")
+    from .plan import claim_school
+    school = claim_school(claim)
     dept = pick("dept", "dept")
     title = pick("title", "title")
     project = pick("project", "project") or title
@@ -300,6 +303,7 @@ def _context(claim, candidate_name: str, terms: list[str],
         "name2": nvar[1] if len(nvar) > 1 else "",
         "period": period,
         "org": org,
+        "school": school,
         "dept": dept,
         "role": pick("role", "role"),
         "orgname": _qualify(org, dept),         # 组织全称，学生工作/竞赛用它当主搜索词
@@ -344,7 +348,7 @@ def _resolve_site(token: str | None, claim, ctx: dict[str, str] | None = None) -
     if token == "school":
         # 未知学校保留语义代号，交给执行层做一次动态域名发现。此前这里直接变成
         # None，collect.py 永远看不到 "school"，所谓动态发现实际上从未运行。
-        org = (ctx or {}).get("org") or (claim.entities or {}).get("org")
+        org = (ctx or {}).get("school") or (ctx or {}).get("org") or (claim.entities or {}).get("org")
         return _school_domain(org) or "school"
     if token == "organizer":
         return (claim.entities or {}).get("organizer_domain") or None
@@ -426,7 +430,7 @@ def build_plan(
     # never_search 类别：默认零检索；命中 search_if_terms 例外则放开全部表单；
     # 都不命中时，只放行标了 always 的**合规轻探针**（如学历的公众号「学校+姓名」粗检）。
     only_always = never and not exception
-    _all_forms = (cat.get("anchor_forms") or []) + (cat.get("forms") or [])
+    _all_forms = (cat.get("official_forms") or []) + (cat.get("anchor_forms") or []) + (cat.get("forms") or [])
     if only_always and not any(f.get("always") for f in _all_forms):
         # 零预算是**有语义的**：这条陈述按设计不去检索。不能留空 dict——
         # 消费方（如 dsh 工具的输出 schema）要求 budget 三个字段都在。
@@ -444,6 +448,15 @@ def build_plan(
 
     # 组装候选表单：类别锚点 → 类别取证 → 档案追加
     forms: list[tuple[dict, str]] = []
+    # 官网先用最短的可用查询。学校已经由域名限定，不再重复完整院系组织名。
+    # 每条陈述只加一条首选探针，空结果的渐进回退由 collect 在同一预算内处理。
+    if ctx.get("school"):
+        for f in cat.get("official_forms") or []:
+            if only_always and not f.get("always"):
+                continue
+            if _usable(f.get("tpl", ""), ctx)[0]:
+                forms.append((f, f"school:{claim.category}"))
+                break
     for f in cat.get("anchor_forms") or []:
         if only_always and not f.get("always"):
             continue
@@ -522,6 +535,7 @@ def build_plan(
                 weight=int(form.get("weight") or 0) - variant_index * 3,
                 source=source,
                 expect_tier=form.get("expect_tier"),
+                variant=bool(variant_index),
             ))
 
     # 预算：档案说了算，但被硬天花板夹住；collect 的默认值只作兜底
@@ -537,9 +551,9 @@ def build_plan(
     budget["reads"] = max(1, min(budget["reads"], CEILING_PAGE_READS))
     budget["seconds"] = max(5.0, min(budget["seconds"], CEILING_SECONDS))
 
-    # 排序规则：**先轮次、再权重、再把 site 限定的排前面**——
-    # 同样权重下，能限定到权威域的查询命中率显著更高，先花预算在它上面。
-    queries.sort(key=lambda q: (q.round, -q.weight, 0 if q.site else 1, q.text))
+    # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
+    queries.sort(key=lambda q: (q.variant, not q.source.startswith("school:"),
+                                q.round, -q.weight, 0 if q.site else 1, q.text))
 
     cap = budget["searches"]
     dropped = [q.text for q in queries[cap:]]

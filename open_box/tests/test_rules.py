@@ -20,8 +20,8 @@ sys.path.insert(0, str(ROOT))
 
 from app import judge                                              # noqa: E402
 from app.collect import Budget, collect_for_claim                  # noqa: E402
-from app.llm import (LLMUnavailable, OpenAICompatLLM, StubLLM,     # noqa: E402
-                      build_llm, NullLLM)
+from app.llm import (LLMTransient, LLMUnavailable, OpenAICompatLLM,  # noqa: E402
+                      StubLLM, build_llm, NullLLM)
 from app.parse import detect_injection, parse_document             # noqa: E402
 from app.pipeline import run_pipeline                              # noqa: E402
 from app.schema import Claim, Evidence, Report, as_str_list        # noqa: E402
@@ -501,7 +501,10 @@ class FakeDeepSeek:
                 step = outer.script.pop(0) if outer.script else {"content": "{}"}
 
                 if "status" in step:
-                    payload = json.dumps({"error": {"message": step.get("msg", "")}}).encode()
+                    err = {"message": step.get("msg", "")}
+                    if step.get("code"):
+                        err["code"] = step["code"]        # 智谱式错误码，如 1113 余额不足
+                    payload = json.dumps({"error": err}).encode()
                     self.send_response(step["status"])
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(payload)))
@@ -650,7 +653,8 @@ def test_18_full_live_pipeline_over_deepseek_wire():
 def test_19_deepseek_is_the_default_provider():
     """不显式指定时就走 DeepSeek，端点与模型名用官方当前值。"""
     saved = {k: os.environ.get(k) for k in
-             ("DEEPSEEK_API_KEY", "LLM_API_KEY", "LLM_MODEL", "LLM_ENDPOINT", "LLM_PROVIDER")}
+             ("DEEPSEEK_API_KEY", "LLM_API_KEY", "ZHIPU_API_KEY", "LLM_MODEL",
+              "LLM_ENDPOINT", "LLM_PROVIDER")}
     try:
         for k in saved:
             os.environ.pop(k, None)
@@ -665,6 +669,17 @@ def test_19_deepseek_is_the_default_provider():
 
         os.environ["LLM_MODEL"] = "deepseek-v4-pro"
         assert build_llm().model == "deepseek-v4-pro"
+
+        # 换智谱只要一行 LLM_PROVIDER=zhipu：端点和模型名都在预设里，不用手抄
+        os.environ.pop("LLM_MODEL", None)
+        os.environ["LLM_PROVIDER"] = "zhipu"
+        os.environ["LLM_API_KEY"] = "sk-zhipu"
+        llm = build_llm()
+        assert llm.provider == "zhipu"
+        assert llm.endpoint == "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        assert llm.model == "glm-4.7-flash"
+        # 思考默认关掉：开着会把 max_tokens 吃光，content 返回空串
+        assert llm.thinking == "disabled"
     finally:
         for k, v in saved.items():
             os.environ.pop(k, None)
@@ -1121,6 +1136,48 @@ def test_31_content_filtered_query_is_skipped_not_fatal():
         budget=Budget(max_searches=3, max_page_reads=2), progress=logs.append)
     assert found == [], "被拦的查询不该产出证据"
     assert sum("误拦" in m for m in logs) >= 2, "每条被拦的查询都要留一条日志"
+
+
+def test_32_llm_balance_error_under_429_is_fatal():
+    """429 不等于限流：余额/资源包耗尽也走 429，必须当场报出原话，不许退避重试。
+
+    搜索侧早就做了这个区分（test_28），LLM 侧此前没有——智谱把余额不足塞进 429，
+    客户端老老实实退避三次，最后只抛一句"连续 3 次未成功：返回 429"。
+    用户看到的是"限流了，等等再试"，真实原因是账户没钱，等多久都不会好。
+    """
+    # 带错误码：智谱 1113
+    with FakeDeepSeek([{"status": 429, "code": "1113",
+                        "msg": "您的资源包余额不足，请充值后重试"}]) as srv:
+        try:
+            srv.client(max_retries=3).complete_json("s", "u json")
+            raise AssertionError("余额不足应该抛 LLMUnavailable")
+        except LLMUnavailable as exc:
+            assert "资源包余额不足" in str(exc), f"没把供应商原话带出来：{exc}"
+        assert len(srv.requests) == 1, "余额不足不该重试"
+
+    # 没有错误码，只有文案：同样要认出来
+    with FakeDeepSeek([{"status": 429, "msg": "Insufficient balance for this account"}]) as srv:
+        try:
+            srv.client(max_retries=3).complete_json("s", "u json")
+            raise AssertionError("余额不足应该抛 LLMUnavailable")
+        except LLMUnavailable as exc:
+            assert "Insufficient balance" in str(exc)
+        assert len(srv.requests) == 1
+
+    # 真·限流仍然退避重试，别把 429 一刀切成致命
+    with FakeDeepSeek([{"status": 429, "msg": "Rate limit reached, please slow down"},
+                       {"content": {"ok": 1}}]) as srv:
+        assert srv.client(max_retries=3).complete_json("s", "u json") == {"ok": 1}
+        assert len(srv.requests) == 2, "普通限流应该重试一次就成功"
+
+    # 退不掉的限流，错误信息里要留下供应商原文，否则排障时无从下手
+    with FakeDeepSeek([{"status": 429, "msg": "Rate limit reached"},
+                       {"status": 429, "msg": "Rate limit reached"}]) as srv:
+        try:
+            srv.client(max_retries=2).complete_json("s", "u json")
+            raise AssertionError("连续限流应该抛 LLMTransient")
+        except LLMTransient as exc:
+            assert "Rate limit reached" in str(exc), f"丢掉了供应商原文：{exc}"
 
 
 # ══════════════════════════════════════════════════════════════════════

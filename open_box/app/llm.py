@@ -47,6 +47,18 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         # 所以默认关掉思考。要开就用 LLM_THINKING=enabled。
         "thinking": "disabled",
     },
+    # 智谱 BigModel（docs.bigmodel.cn）。glm-4.7-flash 是免费档，做结构化抽取足够用，
+    # 而且和搜索侧的 web_search 共用同一把 key——换过来只要一行 LLM_PROVIDER=zhipu。
+    # thinking 的报文形状（{"type": "enabled"|"disabled"}）本来就是智谱这边的设计，
+    # 和 DeepSeek 那套通用；这里同样默认关掉：核验要的是确定性，不是推理过程，
+    # 而且开着思考会把 max_tokens 吃光、content 返回空串（见上面 deepseek 的注释）。
+    "zhipu": {
+        "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        "model": "glm-4.7-flash",
+        "key_envs": ("ZHIPU_API_KEY", "LLM_API_KEY", "SEARCH_API_KEY"),
+        "json_mode": True,
+        "thinking": "disabled",
+    },
     "openai-compatible": {
         "endpoint": "",
         "model": "",
@@ -63,6 +75,35 @@ JSON_HINT = '\n\n以 json 格式输出，例如：{"question": "……？"} 或 
 RETRY_STATUS = {429, 500, 502, 503, 504}
 FATAL_STATUS = {400: "请求体格式不合法", 401: "API key 无效或未授权",
                 402: "账户余额不足", 422: "请求参数不合法"}
+
+# 有些供应商（智谱 open.bigmodel.cn 就是一例）把「余额不足 / 无资源包」也塞在 429 下，
+# 而不是规规矩矩地用 402。它不是稍后重试就会恢复的限流：退避三次只会把真正的原因
+# 拖成一句"连续 3 次未成功"，界面上看起来像网络抖动，实际是账户没钱了。
+BALANCE_CODES = {"1113"}
+BALANCE_HINTS = ("余额不足", "资源包", "充值", "欠费",
+                 "insufficient balance", "insufficient_quota",
+                 "exceeded your current quota")
+
+
+def balance_error(response) -> str:
+    """429 里夹带的「额度/余额」类硬错误 → 返回供应商原话；不是就返回空串。
+
+    判据取两条：错误码在 BALANCE_CODES 里，或文案里出现 BALANCE_HINTS 之一。
+    返回原话而不是我们自己的措辞——"账户余额不足"这种翻译会把
+    "资源包已用尽，请购买" 这类可操作的信息抹掉。
+    """
+    message = (getattr(response, "text", "") or "")[:300]
+    code = ""
+    try:
+        err = response.json().get("error") or {}
+        code = str(err.get("code") or "")
+        message = str(err.get("message") or message)
+    except Exception:
+        pass
+    low = message.lower()
+    if code in BALANCE_CODES or any(h in message or h in low for h in BALANCE_HINTS):
+        return message
+    return ""
 
 
 def extract_json(text: str) -> Any:
@@ -181,8 +222,14 @@ class OpenAICompatLLM:
                 raise LLMUnavailable(
                     f"{self.provider} 返回 {r.status_code}：{FATAL_STATUS[r.status_code]}。"
                     f"{r.text[:200]}")
+            if r.status_code == 429:
+                fatal = balance_error(r)
+                if fatal:
+                    raise LLMUnavailable(f"{self.provider} 不可用：{fatal}")
             if r.status_code in RETRY_STATUS:
-                last_exc = LLMTransient(f"{self.provider} 返回 {r.status_code}")
+                # 带上 r.text：没有它，限流和"模型名写错被网关拒了"在日志里长得一模一样。
+                last_exc = LLMTransient(
+                    f"{self.provider} 返回 {r.status_code}：{r.text[:200]}")
                 time.sleep(min(2 ** attempt, 8))
                 continue
             if r.status_code >= 400:
@@ -248,7 +295,7 @@ def build_llm(provider: str | None = None) -> LLM:
     DEEPSEEK_API_KEY=sk-...            # 或 LLM_API_KEY
     LLM_MODEL=deepseek-flash           # 可选，默认 deepseek-flash
     LLM_ENDPOINT=...                   # 可选，自建/代理网关时覆盖
-    LLM_PROVIDER=deepseek              # 可选
+    LLM_PROVIDER=deepseek              # 可选，另有 zhipu / openai-compatible
     LLM_THINKING=disabled              # 可选，默认按供应商（deepseek 默认 disabled）
     """
     name = (provider or os.environ.get("LLM_PROVIDER") or "deepseek").lower()

@@ -185,26 +185,6 @@ def _school_domain(org: str | None) -> str | None:
     return school_domain(org)
 
 
-def _qualify(org: str, dept: str) -> str:
-    """把"组织 + 部门"拼成全称。
-
-    原版这里是 `dept or org`——当 dept 只是**部门**时（c05 的 org='晴川大学校学生会'、
-    dept='科技部'），它会用"科技部"整个替掉组织名，搜出来的第一条查询是
-    `"科技部" 换届 2024`，组织没了。拼全称才是对的：
-    '晴川大学校学生会' + '科技部' → '晴川大学校学生会科技部'。
-
-    中文组织名不加空格（"晴川大学计算机学院学生会技术部"），加了反而不像机构全称。
-    """
-    org, dept = (org or "").strip(), (dept or "").strip()
-    if not dept:
-        return org
-    if not org or dept in org:
-        return org or dept
-    if org in dept:
-        return dept
-    return f"{org}{dept}"
-
-
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
 
@@ -264,6 +244,24 @@ def _paren_variants(value: str) -> list[str]:
     return [x for x in out if len(x) >= 2]
 
 
+def _name_variants(value: str) -> list[str]:
+    """把中英文混写姓名拆成搜索引擎更容易命中的独立写法。
+
+    简历常写 ``林昱和 Leon Y. Lin``。把整个字符串放进一对引号，网页必须原样连续
+    出现才会命中，召回率很低。这里保留中文名和英文名两把钥匙；只有单一语言时仍
+    使用原词，不擅自交换英文姓与名。
+    """
+    value = (value or "").strip()
+    if not value:
+        return []
+    chinese = "".join(re.findall(r"[\u3400-\u9fff]{2,}", value))
+    latin_parts = re.findall(r"[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)*", value)
+    latin = " ".join(" ".join(latin_parts).split()).strip(" ./|")
+    if chinese and latin:
+        return list(dict.fromkeys([chinese, latin]))
+    return [value]
+
+
 def _context(claim, candidate_name: str, terms: list[str],
              emap: dict | None = None, profile: ResumeProfile | None = None) -> dict[str, str]:
     """占位符取值表。**entities 优先、elements 兜底**——
@@ -281,7 +279,9 @@ def _context(claim, candidate_name: str, terms: list[str],
     org = pick("org", "org")
     dept = pick("dept", "dept")
     title = pick("title", "title")
+    project = pick("project", "project") or title
     year = (claim.date_start or claim.date_label or "")[:4]
+    nvar = _name_variants(candidate_name)
 
     # 变体钥匙：同一事物的不同写法各给一个占位符。
     # 「疑罪从有」的姿态就落在这里——搜不到时先换把钥匙，而不是收工。
@@ -296,7 +296,8 @@ def _context(claim, candidate_name: str, terms: list[str],
     period = m.group(1).replace(" ", "") if m else (claim.date_label or "").strip()
 
     return {
-        "name": candidate_name or "",
+        "name": nvar[0] if nvar else "",
+        "name2": nvar[1] if len(nvar) > 1 else "",
         "period": period,
         "org": org,
         "dept": dept,
@@ -314,6 +315,7 @@ def _context(claim, candidate_name: str, terms: list[str],
         "paper": title,
         "title": tvar[0] if tvar else title,
         "title2": tvar[1] if len(tvar) > 1 else "",
+        "project": project,
         "repo": pick("repo", "repo"),
         "year": year,
         "term": terms[0] if terms else "",
@@ -331,7 +333,7 @@ def _usable(tpl: str, ctx: dict[str, str]) -> tuple[bool, list[str]]:
     return (not missing), missing
 
 
-def _resolve_site(token: str | None, claim) -> str | None:
+def _resolve_site(token: str | None, claim, ctx: dict[str, str] | None = None) -> str | None:
     """站点代号 → 真实域限定。
 
     `gov` / `platform` 这类**语义代号没有单一域可填**，退回不限定，靠查询词里的
@@ -340,7 +342,10 @@ def _resolve_site(token: str | None, claim) -> str | None:
     if not token:
         return None
     if token == "school":
-        return _school_domain((claim.entities or {}).get("org"))
+        # 未知学校保留语义代号，交给执行层做一次动态域名发现。此前这里直接变成
+        # None，collect.py 永远看不到 "school"，所谓动态发现实际上从未运行。
+        org = (ctx or {}).get("org") or (claim.entities or {}).get("org")
+        return _school_domain(org) or "school"
     if token == "organizer":
         return (claim.entities or {}).get("organizer_domain") or None
     if token == "wechat":
@@ -381,6 +386,23 @@ def _targets(form: dict, claim) -> list[str]:
 
 # ── 展开成查询计划 ───────────────────────────────────────────────────────
 
+def _search_exception(cat: dict, claim) -> bool:
+    """never_search 类别的例外：命中 search_if_terms 里的词就恢复检索。
+
+    用于「学历」里的保研/推免——普通学历不检索，但推免/保送有公开的推免公示、
+    拟录取名单、夏令营优秀营员名单（多在学校官网），这类应当去查。判断只看
+    简历原文与实体/要素里的原词，纯规则，不进模型。"""
+    terms = cat.get("search_if_terms") or []
+    if not terms:
+        return False
+    blob = claim.raw_text or ""
+    for v in (claim.entities or {}).values():
+        if isinstance(v, str):
+            blob += " " + v
+    blob += " " + " ".join(claim.elements or [])
+    return any(t in blob for t in terms)
+
+
 def build_plan(
     claim,
     candidate_name: str,
@@ -399,7 +421,13 @@ def build_plan(
     prof = profile or ResumeProfile()
 
     cat = (doc["categories"].get(claim.category) or {})
-    if cat.get("never_search"):
+    never = bool(cat.get("never_search"))
+    exception = _search_exception(cat, claim) if never else False
+    # never_search 类别：默认零检索；命中 search_if_terms 例外则放开全部表单；
+    # 都不命中时，只放行标了 always 的**合规轻探针**（如学历的公众号「学校+姓名」粗检）。
+    only_always = never and not exception
+    _all_forms = (cat.get("anchor_forms") or []) + (cat.get("forms") or [])
+    if only_always and not any(f.get("always") for f in _all_forms):
         # 零预算是**有语义的**：这条陈述按设计不去检索。不能留空 dict——
         # 消费方（如 dsh 工具的输出 schema）要求 budget 三个字段都在。
         return Plan(
@@ -417,10 +445,14 @@ def build_plan(
     # 组装候选表单：类别锚点 → 类别取证 → 档案追加
     forms: list[tuple[dict, str]] = []
     for f in cat.get("anchor_forms") or []:
+        if only_always and not f.get("always"):
+            continue
         forms.append((f, f"category:{claim.category}"))
     for f in cat.get("forms") or []:
+        if only_always and not f.get("always"):
+            continue
         forms.append((f, f"category:{claim.category}"))
-    for p in profiles:
+    for p in ([] if only_always else profiles):
         # 档案的追加查询只发给它**管得着**的类别。
         # categories_any 在这里是第二个用途：简历级匹配时它回答"这份简历像不像在校生"，
         # 到这里它回答"这条陈述值不值得用该档案的追加查询"。
@@ -449,37 +481,48 @@ def build_plan(
             # 和"搜了没找到"是两回事，不该混为一谈。
             skipped.append((tpl, missing))
             continue
-        text = _fill(tpl, ctx)
-        if not text:
-            skipped.append((tpl, ["（展开后为空）"]))
-            continue
-        site = _resolve_site(form.get("site"), claim)
-        # 「没有域就别发」：有的模板（如赛事组委会的 `{year} 获奖`）本身几乎不含信息，
-        # 精确性**完全靠 site 限定**。域拿不到时它退化成"2023 获奖"这种烂查询，
-        # 发出去只会烧预算。表单显式写 requires_site 来声明这一点。
-        if form.get("requires_site") and not site:
-            skipped.append((tpl, [str(form.get("site")) + " 域名"]))
-            continue
-        kind = form.get("kind") or "web"
-        # GitHub 检索只对真正的仓库路径（user/repo）有意义。简历里常见"只有项目名没有
-        # 仓库"，那种情况该走 web 的 {project} 查询——把中文项目名塞给 GitHub 搜索
-        # 只会得到 0 结果，还白花一次检索。
-        if kind == "github" and ("/" not in text or " " in text.strip('"')):
-            kind = "web"
-        key = (text, site, kind)
-        if key in seen:
-            continue
-        seen.add(key)
-        els = _targets(form, claim)
-        queries.append(Query(
-            text=text, site=site, kind=kind,
-            element=els[0] if len(els) == 1 else None,
-            purpose=form.get("purpose", ""),
-            round=int(form.get("round") or 2),
-            weight=int(form.get("weight") or 0),
-            source=source,
-            expect_tier=form.get("expect_tier"),
-        ))
+        # 同一事实的中英文名/括号缩写分开检索。搜索供应商对复杂 OR 查询的支持并不
+        # 稳定，两个短而精确的查询比一条长查询更可控；预算排序会保留最重要的变体。
+        contexts = [ctx]
+        variant_key = next((k for k in ("name", "contest", "award", "title")
+                            if "{" + k + "}" in tpl and ctx.get(k + "2")), None)
+        if variant_key:
+            alt = dict(ctx)
+            alt[variant_key] = ctx[variant_key + "2"]
+            contexts.append(alt)
+
+        for variant_index, variant_ctx in enumerate(contexts):
+            text = _fill(tpl, variant_ctx)
+            if not text:
+                skipped.append((tpl, ["（展开后为空）"]))
+                continue
+            site = _resolve_site(form.get("site"), claim, variant_ctx)
+            # 「没有域就别发」：有的模板（如赛事组委会的 `{year} 获奖`）本身几乎不含信息，
+            # 精确性**完全靠 site 限定**。域拿不到时它退化成"2023 获奖"这种烂查询，
+            # 发出去只会烧预算。动态学校域用 "school" 代号，仍算可解析的域。
+            if form.get("requires_site") and not site:
+                skipped.append((tpl, [str(form.get("site")) + " 域名"]))
+                continue
+            kind = form.get("kind") or "web"
+            # GitHub 检索只对真正的仓库路径（user/repo）有意义。简历里常见"只有项目名没有
+            # 仓库"，那种情况该走 web 的 {project} 查询——把中文项目名塞给 GitHub 搜索
+            # 只会得到 0 结果，还白花一次检索。
+            if kind == "github" and ("/" not in text or " " in text.strip('"')):
+                kind = "web"
+            key = (text, site, kind)
+            if key in seen:
+                continue
+            seen.add(key)
+            els = _targets(form, claim)
+            queries.append(Query(
+                text=text, site=site, kind=kind,
+                element=els[0] if len(els) == 1 else None,
+                purpose=form.get("purpose", ""),
+                round=int(form.get("round") or 2),
+                weight=int(form.get("weight") or 0) - variant_index * 3,
+                source=source,
+                expect_tier=form.get("expect_tier"),
+            ))
 
     # 预算：档案说了算，但被硬天花板夹住；collect 的默认值只作兜底
     pb = head.get("budget") or {}

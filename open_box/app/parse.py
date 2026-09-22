@@ -171,13 +171,38 @@ def _read_pdf(path: Path) -> str:
 
 
 def _read_docx(path: Path) -> str:
-    import docx
+    try:
+        import docx
+    except ImportError:
+        return _read_docx_stdlib(path)
     d = docx.Document(str(path))
     parts = [p.text for p in d.paragraphs]
     for table in d.tables:
         for row in table.rows:
             parts.append("\t".join(c.text for c in row.cells))
     return "\n".join(parts)
+
+
+def _read_docx_stdlib(path: Path) -> str:
+    """python-docx 缺失时的纯标准库兜底：.docx 是 zip，正文在 word/document.xml。"""
+    import zipfile
+    from xml.etree import ElementTree as ET
+    W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    with zipfile.ZipFile(str(path)) as z:
+        xml = z.read("word/document.xml")
+    root = ET.fromstring(xml)
+    lines = []
+    for para in root.iter(f"{W}p"):
+        buf = []
+        for node in para.iter():
+            if node.tag == f"{W}t":
+                buf.append(node.text or "")
+            elif node.tag == f"{W}tab":
+                buf.append("\t")
+            elif node.tag in (f"{W}br", f"{W}cr"):
+                buf.append("\n")
+        lines.append("".join(buf))
+    return "\n".join(lines)
 
 
 def extract_main_text(html: str) -> str:

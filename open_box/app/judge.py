@@ -16,6 +16,8 @@ from .schema import Claim, Evidence, Status, VerifiedClaim
 
 WEIGHTS: dict[str, int] = {
     "学校一致": 2,
+    "时间吻合": 1,            # 文章发布时间落在陈述时段内（规则派生，非模型）
+    "发布方为相关机构": 1,    # 发布方/作者为陈述所涉机构（规则派生，非模型）
     "学院一致": 2,
     "专业一致": 1,
     "年级一致": 1,
@@ -24,6 +26,10 @@ WEIGHTS: dict[str, int] = {
     "账号由候选人提供": 2,
 }
 CONFLICT_PENALTY = -5
+
+# 规则派生的弱佐证信号（时间/发布方）：能把证据从 who 抬到部分证实，
+# 但**不能单独把状态推到「证实(ok)」**——那一步要求真正的内容身份锚点。
+CORROBORATION_SIGNALS = frozenset({"时间吻合", "发布方为相关机构"})
 
 # identity_score 落在这个闭区间 → 必须人工复核
 HUMAN_REVIEW_RANGE = (2, 3)
@@ -48,10 +54,57 @@ def identity_verdict(score: int, conflicts: list[str]) -> str:
     return "who"
 
 
+def _has_identity_anchor(ev) -> bool:
+    """这条证据有没有**真实的内容身份锚点**（学校/学院/专业/队友/自提供等），
+    而不只是时间/发布方这类弱佐证。用来决定它能否把状态推到「证实」。"""
+    content = identity_score([s for s in ev.identity_signals
+                              if s not in CORROBORATION_SIGNALS], [])
+    return content >= 2 or ev.identity_score >= 4
+
+
 def score_evidence(ev: Evidence) -> Evidence:
     """按规则重算 identity_score，覆盖模型给出的任何数值。"""
     ev.identity_score = identity_score(ev.identity_signals, ev.identity_conflicts)
     return ev
+
+
+def _year(v: str | None) -> int | None:
+    if not v:
+        return None
+    m = re.search(r"(19|20)\d{2}", v)
+    return int(m.group(0)) if m else None
+
+
+def corroboration_signals(claim, ev) -> list[str]:
+    """规则派生的**弱佐证**：文章时间与陈述时段吻合、发布方/作者为陈述所涉机构。
+
+    只把「在权威语境里、时间对得上、且提到本人」的证据从 who 抬到部分证实
+    （仍在 2–3 分的人工复核带内），**不足以单独认定本人**——要配合内容锚点
+    （学校/学院一致等）才到 self。冲突仍是硬否决，这里不参与。
+    """
+    out: list[str] = []
+    py = _year(getattr(ev, "published_at", None))
+    if py is not None:
+        ys = _year(getattr(claim, "date_start", None)) or _year(getattr(claim, "date_label", None))
+        ye = _year(getattr(claim, "date_end", None)) or _year(getattr(claim, "date_label", None)) or ys
+        if ys and ye and (min(ys, ye) - 1) <= py <= (max(ys, ye) + 1):
+            out.append("时间吻合")
+    org = (getattr(claim, "entities", None) or {}).get("org") or ""
+    host = _host(ev.url)
+    pub = ev.publisher or ""
+    dom = None
+    if org:
+        try:
+            from .plan import school_domain
+            dom = school_domain(org)
+        except Exception:
+            dom = None
+    on_org_domain = bool(dom) and (host == dom or host.endswith("." + dom))
+    publisher_names_org = bool(org) and len(org) >= 3 and org in pub
+    if on_org_domain or publisher_names_org:
+        out.append("发布方为相关机构")
+    return out
+
 
 
 # --------------------------------------------------------------------------
@@ -182,7 +235,10 @@ def decide(claim: Claim, evidences: list[Evidence]) -> Status:
     if not proved:
         return "none"
     best = min(e.source_tier for e in valid)
-    if proved >= set(claim.elements) and best in ("A", "B"):
+    # 「证实」还要求至少一条有效证据带真实内容锚点——纯时间/发布方佐证
+    # 只能到「部分证实(转人工)」，不冒认同名同校的人。
+    if (proved >= set(claim.elements) and best in ("A", "B")
+            and any(_has_identity_anchor(e) for e in valid)):
         return "ok"
     return "part"
 
@@ -226,6 +282,9 @@ def assess(
     """
     if rescore:
         for ev in evidences:
+            for sig in corroboration_signals(claim, ev):
+                if sig not in ev.identity_signals:
+                    ev.identity_signals.append(sig)
             score_evidence(ev)
 
     status: Status = "none" if search_exhausted and not evidences else decide(claim, evidences)

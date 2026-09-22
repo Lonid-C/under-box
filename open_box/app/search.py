@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import os
+import re
+import threading
 import time
 import urllib.robotparser as robotparser
 from dataclasses import dataclass, field
@@ -44,6 +46,9 @@ class SearchHit:
     title: str = ""
     snippet: str = ""
     publisher: str = ""
+    # 结构化数据源（Crossref / GitHub API）已经返回了可引用的正文时放这里。
+    # collect 层可直接抽取，避免再下载一个经常依赖 JS 或会拦截机器访问的展示页。
+    content: str = ""
 
 
 class Searcher(Protocol):
@@ -150,6 +155,18 @@ class ZhipuSearcher:
                 )
                 if r.status_code in (401, 402, 403):
                     raise SearchUnavailable(f"智谱搜索返回 {r.status_code}：{r.text[:200]}")
+                if r.status_code == 429:
+                    # 智谱把「余额不足 / 无资源包」也放在 429 下。它不是稍后重试就会
+                    # 恢复的限流；此前这里连续重试后返回 []，界面只表现为“什么都搜不到”。
+                    message = r.text[:300]
+                    try:
+                        err = r.json().get("error") or {}
+                        code = str(err.get("code") or "")
+                        message = str(err.get("message") or message)
+                    except Exception:
+                        code = ""
+                    if code == "1113" or any(x in message for x in ("余额不足", "资源包", "充值")):
+                        raise SearchUnavailable(f"智谱搜索不可用：{message}")
                 r.raise_for_status()
                 return self._parse(r.json())
             except SearchUnavailable:
@@ -214,8 +231,12 @@ class HTTPSearcher:
                     headers={"User-Agent": UA, "Authorization": f"Bearer {self.api_key}"},
                     timeout=self.timeout,
                 )
+                if r.status_code in (401, 402, 403):
+                    raise SearchUnavailable(f"搜索服务返回 {r.status_code}：{r.text[:200]}")
                 r.raise_for_status()
                 return self._parse(r.json())
+            except SearchUnavailable:
+                raise
             except Exception:
                 if attempt >= MAX_RETRIES:
                     return []
@@ -265,28 +286,102 @@ def github_hits(entities: dict, limit: int = 4) -> list[SearchHit]:
                           headers=headers, timeout=15.0)
             if r.status_code == 200:
                 u = r.json()
+                snippet = (f"GitHub 用户：{u.get('login', '')}；"
+                           f"姓名：{u.get('name') or '（未填写）'}；"
+                           f"公开仓库：{u.get('public_repos', 0)} 个；"
+                           f"简介：{u.get('bio') or '（无）'}；"
+                           f"注册于：{(u.get('created_at') or '')[:10]}")
                 out.append(SearchHit(
                     url=u.get("html_url", ""),
                     title=f"GitHub 主页 · {u.get('login', '')}",
-                    snippet=f"公开仓库 {u.get('public_repos', 0)} 个；"
-                            f"简介：{u.get('bio') or '（无）'}；"
-                            f"注册于 {(u.get('created_at') or '')[:10]}",
-                    publisher="github.com"))
+                    snippet=snippet, publisher="github.com", content=snippet))
         if repo and "/" in repo:
             r = httpx.get(f"https://api.github.com/repos/{repo}",
                           headers=headers, timeout=15.0)
             if r.status_code == 200:
                 u = r.json()
+                snippet = (f"GitHub 仓库：{u.get('full_name', '')}；"
+                           f"描述：{u.get('description') or '（无描述）'}；"
+                           f"主要语言：{u.get('language') or '—'}；"
+                           f"Stars：{u.get('stargazers_count', 0)}；"
+                           f"更新于：{(u.get('pushed_at') or '')[:10]}")
                 out.append(SearchHit(
                     url=u.get("html_url", ""),
                     title=f"GitHub 仓库 · {u.get('full_name', '')}",
-                    snippet=f"{u.get('description') or '（无描述）'}"
-                            f"（语言 {u.get('language') or '—'}，★{u.get('stargazers_count', 0)}，"
-                            f"更新于 {(u.get('pushed_at') or '')[:10]}）",
-                    publisher="github.com"))
+                    snippet=snippet, publisher="github.com", content=snippet))
     except Exception:
         return out
     return out[:limit]
+
+
+def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
+    """按论文标题查 Crossref，并把结构化元数据直接交给证据抽取层。
+
+    原先策略把查询标成 ``kind=crossref``，执行层却仍然调用普通网页搜索，kind
+    完全没有生效。直连公开 API 后，论文标题、作者顺序、期刊和 DOI 都能稳定取回。
+    """
+    import httpx
+    from difflib import SequenceMatcher
+
+    query = (title or "").strip().strip('"').strip()
+    if not query:
+        return []
+    headers = {"User-Agent": UA, "Accept": "application/json"}
+    try:
+        r = httpx.get(
+            "https://api.crossref.org/works",
+            params={
+                "query.title": query,
+                # 多取一点再在本地按标题相似度重排，避免同名扩展标题挤掉精确匹配。
+                "rows": max(10, min(int(limit) * 2, 20)),
+                "select": "DOI,title,author,published,container-title,publisher,type",
+            },
+            headers=headers,
+            timeout=20.0,
+        )
+        r.raise_for_status()
+        items = ((r.json().get("message") or {}).get("items") or [])
+    except Exception:
+        return []
+
+    def norm(value: str) -> str:
+        return "".join(re.findall(r"[a-z0-9\u3400-\u9fff]+", (value or "").lower()))
+
+    wanted = norm(query)
+    items.sort(
+        key=lambda it: (
+            norm(" ".join(it.get("title") or [])) != wanted,
+            -SequenceMatcher(None, wanted, norm(" ".join(it.get("title") or []))).ratio(),
+        )
+    )
+
+    out: list[SearchHit] = []
+    for it in items:
+        paper_title = " ".join(it.get("title") or []).strip()
+        doi = (it.get("DOI") or "").strip()
+        if not paper_title or not doi:
+            continue
+        authors = []
+        for a in it.get("author") or []:
+            name = " ".join(x for x in (a.get("given"), a.get("family")) if x).strip()
+            if name:
+                authors.append(name)
+        venue = " ".join(it.get("container-title") or []).strip()
+        parts = ((it.get("published") or {}).get("date-parts") or [[]])[0]
+        published = "-".join(str(x) for x in parts) if parts else ""
+        content = (
+            f"Crossref 元数据\n题名：{paper_title}\n"
+            f"作者（按元数据顺序）：{'; '.join(authors) or '（未提供）'}\n"
+            f"刊物或会议：{venue or '（未提供）'}\n"
+            f"出版方：{it.get('publisher') or '（未提供）'}\n"
+            f"发表日期：{published or '（未提供）'}\nDOI：{doi}"
+        )
+        out.append(SearchHit(
+            url=f"https://doi.org/{doi}", title=paper_title,
+            snippet=content.replace("\n", "；"),
+            publisher=it.get("publisher") or "Crossref", content=content,
+        ))
+    return out[:max(1, int(limit))]
 
 
 class PageFetcher:
@@ -295,6 +390,12 @@ class PageFetcher:
     def __init__(self, timeout: float = 20.0):
         self.timeout = timeout
         self._last: dict[str, float] = {}
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _host_lock(self, host: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._locks.setdefault(host, threading.Lock())
 
     def _throttle(self, host: str) -> None:
         wait = RATE_LIMIT_SECONDS - (time.monotonic() - self._last.get(host, 0.0))
@@ -303,20 +404,24 @@ class PageFetcher:
         self._last[host] = time.monotonic()
 
     def get(self, url: str) -> str | None:
-        if not robots_allows(url):
-            return None
         import httpx
         host = urlparse(url).hostname or ""
-        self._throttle(host)
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                r = httpx.get(url, headers={"User-Agent": UA}, timeout=self.timeout, follow_redirects=True)
-                r.raise_for_status()
-                return r.text
-            except Exception:
-                if attempt >= MAX_RETRIES:
-                    return None
-                time.sleep(0.5 * (attempt + 1))
+        # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
+        # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
+        with self._host_lock(host):
+            if not robots_allows(url):
+                return None
+            self._throttle(host)
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    r = httpx.get(url, headers={"User-Agent": UA}, timeout=self.timeout,
+                                  follow_redirects=True)
+                    r.raise_for_status()
+                    return r.text
+                except Exception:
+                    if attempt >= MAX_RETRIES:
+                        return None
+                    time.sleep(0.5 * (attempt + 1))
         return None
 
 

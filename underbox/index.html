@@ -1616,6 +1616,7 @@ async function runFlow(file) {
       StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('画像完成'));
     });
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
+    if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');
     steps.forEach(s => s.className = 'step done');
     steps[3].querySelector('.t').textContent =
       `逐条判定 · ${doneEv.report.claims.length} 条 · ${doneEv.seconds}s`;

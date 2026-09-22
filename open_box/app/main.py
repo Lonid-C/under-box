@@ -87,9 +87,12 @@ def _build_app():
     except ImportError:
         pass
 
-    from starlette.applications import Starlette
-    from starlette.responses import JSONResponse, Response
-    from starlette.routing import Route
+    try:
+        from starlette.applications import Starlette
+        from starlette.responses import JSONResponse, Response
+        from starlette.routing import Route
+    except ImportError:
+        return None
 
     async def index(request):
         got = _asset("report.html")
@@ -165,6 +168,8 @@ def serve_stdlib(host: str = "127.0.0.1", port: int = 8000) -> None:
 def main() -> None:
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8000"))
+    if app is None:
+        return serve_stdlib(host, port)
     try:
         import uvicorn
     except ImportError:

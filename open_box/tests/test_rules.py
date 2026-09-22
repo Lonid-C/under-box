@@ -10,6 +10,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -24,9 +25,10 @@ from app.llm import (LLMUnavailable, OpenAICompatLLM, StubLLM,     # noqa: E402
 from app.parse import detect_injection, parse_document             # noqa: E402
 from app.pipeline import run_pipeline                              # noqa: E402
 from app.schema import Claim, Evidence, Report                     # noqa: E402
-from app.plan import WECHAT_HOST, plan_queries, provided_urls      # noqa: E402
+from app.plan import Query, WECHAT_HOST, plan_queries, provided_urls  # noqa: E402
 from app.search import (FixtureSearcher, NullSearcher, PageFetcher,  # noqa: E402
-                        SearchHit, ZhipuSearcher, build_searcher)
+                        SearchHit, SearchUnavailable, ZhipuSearcher, build_searcher)
+from app.strategy import ResumeProfile                             # noqa: E402
 
 FIXTURE = ROOT / "fixtures" / "report_lin.json"
 RESUME = ROOT / "fixtures" / "resume_lin.md"
@@ -676,11 +678,14 @@ def test_19_deepseek_is_the_default_provider():
 class FakeZhipuSearch:
     """复刻智谱 Web Search 的请求校验与响应形状。"""
 
-    def __init__(self, hits: list[dict] | None = None):
+    def __init__(self, hits: list[dict] | None = None, *, status: int = 200,
+                 error: dict | None = None):
         self.hits = hits if hits is not None else [
             {"link": "https://xsc.tsinghua.edu.cn/tzgg/1.html", "title": "获奖名单公示",
              "content": "片段", "media": "学生工作部"}]
         self.requests: list[dict] = []
+        self.status = status
+        self.error = error
         self.port = _free_port()
         self._srv = None
 
@@ -695,8 +700,9 @@ class FakeZhipuSearch:
             def do_POST(self):  # noqa: N802
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 outer.requests.append({"auth": self.headers.get("Authorization"), "body": body})
-                payload = json.dumps({"search_result": outer.hits}).encode()
-                self.send_response(200)
+                data = {"error": outer.error} if outer.error else {"search_result": outer.hits}
+                payload = json.dumps(data, ensure_ascii=False).encode()
+                self.send_response(outer.status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
@@ -815,6 +821,130 @@ def test_23_user_agent_must_be_latin1_encodable():
     # 真发一次请求，确认不会 UnicodeEncodeError
     with FakeZhipuSearch() as srv:
         assert len(srv.client().search("测试中文查询", site="x.edu.cn")) == 1
+
+
+def test_24_query_variants_and_project_fallback_are_searchable():
+    """中英文姓名要分开搜；只有项目名、没有 repo 时仍应产出有效查询。"""
+    claim = Claim(
+        id="c24", raw_text="开发星海检索引擎", raw_locator="第1页", category="开源项目",
+        date_label="2025", elements=["项目名称=星海检索引擎"],
+        entities={"title": "星海检索引擎"},
+    )
+    profile = ResumeProfile(identity="professional", industries=["software"], level="mid")
+    qs = plan_queries(claim, "张三 Leon Zhang", profile)
+    texts = [q.text for q in qs]
+    assert any('"星海检索引擎"' == t for t in texts), "project 占位符应回退到项目 title"
+    assert any('"张三"' in t for t in texts)
+    assert any('"Leon Zhang"' in t for t in texts)
+    assert all("{" not in t and "}" not in t for t in texts)
+
+
+def test_25_unknown_school_domain_is_discovered_and_reused():
+    """学校表没有收录时，首次宽搜识别官网，后续查询应自动加域限定。"""
+    from app import collect as C
+
+    C._domain_cache.pop("未知大学", None)
+    claim = mk_claim(["学校=未知大学", "奖项=一等奖"], cat="校内荣誉")
+    claim.entities = {"org": "未知大学", "award": "一等奖"}
+    calls = []
+
+    class Searcher:
+        def search(self, query, site=None):
+            calls.append((query, site))
+            return [SearchHit(
+                url="https://news.unknown.edu.cn/notice/1",
+                title="未知大学评奖公示", snippet="未知大学一等奖公示")]
+
+    queries = [
+        Query("未知大学 一等奖", site="school", weight=100),
+        Query("未知大学 一等奖 张三", site="school", weight=90),
+    ]
+    collect_for_claim(
+        claim, "张三", Searcher(), StubLLM([]), queries=queries,
+        budget=Budget(max_searches=2, max_page_reads=0),
+    )
+    assert calls[0][1] is None, "首次未知域应先宽搜"
+    assert calls[1][1] == "unknown.edu.cn", "发现的学校主域应复用于后续查询"
+
+
+def test_26_page_budget_is_shared_across_queries_and_fetches_are_parallel():
+    """第一页结果不能垄断读取预算；不同域的页面应并发回读。"""
+    claim = mk_claim(["赛事=某赛事", "奖项=一等奖"])
+
+    class Searcher:
+        def search(self, query, site=None):
+            host = "a.example" if query == "角度一" else "b.example"
+            return [SearchHit(url=f"https://{host}/1", title=f"某候选人 {query}"),
+                    SearchHit(url=f"https://{host}/2", title=f"次要 {query}")]
+
+    class Fetcher:
+        def __init__(self):
+            self.got = []
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+
+        def get(self, url):
+            with self.lock:
+                self.got.append(url)
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.08)
+            with self.lock:
+                self.active -= 1
+            return f"某候选人参加某赛事并获得一等奖。来源：{url}"
+
+    class LLM:
+        def complete_json(self, system, user, *, max_tokens=4096):
+            return {"snippet": "某候选人参加某赛事并获得一等奖。",
+                    "identity_signals": [], "identity_conflicts": [],
+                    "supports": ["赛事=某赛事", "奖项=一等奖"], "contradicts": [],
+                    "publisher": "测试来源", "published_at": None, "origin_url": None}
+
+    fetcher = Fetcher()
+    evidences, _ = collect_for_claim(
+        claim, "某候选人", Searcher(), LLM(), fetcher=fetcher,
+        queries=[Query("角度一", weight=100), Query("角度二", weight=90)],
+        budget=Budget(max_searches=2, max_page_reads=2),
+    )
+    assert {url.split("/")[2] for url in fetcher.got} == {"a.example", "b.example"}
+    assert fetcher.max_active >= 2, "不同域页面应同时回读"
+    assert len(evidences) == 2
+
+
+def test_27_relevance_ranking_beats_provider_order():
+    """供应商第一条是噪音时，相关标题应优先占用有限的页面预算。"""
+    claim = mk_claim(["赛事=某赛事"])
+
+    class Searcher:
+        def search(self, query, site=None):
+            return [
+                SearchHit(url="https://noise.example/1", title="无关新闻"),
+                SearchHit(url="https://good.example/1", title="某候选人 某赛事获奖名单"),
+            ]
+
+    class Fetcher:
+        def __init__(self): self.got = []
+        def get(self, url): self.got.append(url); return "页面正文"
+
+    fetcher = Fetcher()
+    collect_for_claim(
+        claim, "某候选人", Searcher(), StubLLM([{}]), fetcher=fetcher,
+        queries=[Query("某赛事 获奖", weight=100)],
+        budget=Budget(max_searches=1, max_page_reads=1),
+    )
+    assert fetcher.got == ["https://good.example/1"]
+
+
+def test_28_search_balance_error_is_not_reported_as_zero_results():
+    """供应商余额不足必须显式报错，不能重试后伪装成“搜索到 0 条”。"""
+    with FakeZhipuSearch(status=429, error={"code": "1113", "message": "余额不足或无可用资源包"}) as srv:
+        try:
+            srv.client().search("测试")
+        except SearchUnavailable as exc:
+            assert "余额不足" in str(exc)
+        else:
+            raise AssertionError("余额不足应抛出 SearchUnavailable")
 
 
 # ══════════════════════════════════════════════════════════════════════

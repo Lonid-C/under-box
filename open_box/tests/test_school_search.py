@@ -137,6 +137,18 @@ class OfficialCollectionTests(unittest.TestCase):
         self.assertEqual(searcher.calls[1], (q.text, "xinxiao.edu.cn"))
         self.assertEqual(budget.searches, 2, "官网发现也必须计入搜索预算")
 
+    def test_confirmed_domain_can_be_reused_by_the_next_claim(self):
+        cache = {"新校大学": "xinxiao.edu.cn"}
+        searcher = RecordingSearcher(lambda query, site: [
+            SearchHit("https://xsc.xinxiao.edu.cn/notice/2", title="张三 获奖")])
+        c = school_claim(entities={"org": "新校大学计算机学院"})
+        q = Query('"张三" 获奖', site="school", source="school:official")
+        budget = Budget(max_searches=1, max_page_reads=0, max_seconds=30)
+        with patch("app.collect.github_hits", return_value=[]):
+            collect_for_claim(c, "张三", searcher, NoModelCalls(), queries=[q],
+                              fetcher=NoPageReads(), budget=budget, school_domains=cache)
+        self.assertEqual(searcher.calls, [(q.text, "xinxiao.edu.cn")])
+
     def test_discovery_cannot_overrun_the_search_budget(self):
         searcher = RecordingSearcher(lambda query, site: [
             SearchHit("https://www.xinxiao.edu.cn/", title="新校大学", publisher="新校大学")])

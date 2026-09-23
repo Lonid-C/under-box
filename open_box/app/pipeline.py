@@ -82,6 +82,9 @@ def run_pipeline(
     name = candidate_name or profile.name or (claims[0].entities.get("name", "") if claims else "")
 
     verified = []
+    # 同一份简历里常有多条来自同一所学校的陈述。未知学校的官网一旦确认，后续陈述
+    # 直接复用，避免重复跑“学校名 + 官网”发现查询，既省时间也省搜索额度。
+    school_domains: dict[str, str] = {}
     # 档案匹配要用整份简历的类别集合，不能只看当前这一条——见 strategy._matches
     resume_categories = [c.category for c in claims]
     for i, claim in enumerate(claims, start=1):
@@ -101,6 +104,7 @@ def run_pipeline(
         evidences, exhausted = collect_for_claim(
             claim, name, searcher, llm,
             budget=budget, fetcher=fetcher, queries=plan.queries, progress=say,
+            school_domains=school_domains,
         )
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)

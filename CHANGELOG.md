@@ -7,7 +7,16 @@
 产品底线不随版本改变：**只核验可证伪的陈述，不给候选人打分、不做排名、不给录用建议；
 判定归规则，理解归模型。**
 
-## [Unreleased]
+## [0.3.0] - 2026-09-22
+
+这一版的主题是**让失败说真话，让每一次检索都花得值**。
+v0.2.0 之后暴露出来的问题几乎都是同一类：错误被伪装成了别的样子——
+余额不足显示成限流、检索不可用显示成"未找到公开记录"、模型字段类型不对
+让整份报告跑不出来。所以这一版先把这些遮挡拆掉，再谈省钱。
+
+验收：`tests/test_rules.py` **33/33**，
+`test_search_recall` + `test_school_search` **32/32**。
+
 
 ### 新增 Added
 - **智谱 GLM 成为一等供应商**：`PROVIDERS["zhipu"]` 内置端点与 `glm-4.7-flash`
@@ -33,6 +42,9 @@
   可选兜底 `SEARCH_ENGINE_FALLBACK=search_pro`：std 空结果时再确认一次，
   **默认关闭**——期望单价 = 0.01 + p(空) × 0.03，窄域查询 p(空) 超过 2/3 反而更贵，
   开不开取决于你的实际空率。
+- **同一份简历内复用已确认的学校官网域**：校内荣誉、保研、学历往往指向同一所学校，
+  原先每条陈述各自重跑一遍「学校名 + 官网」发现查询。现在确认过的域贯穿整份简历，
+  省下的既是时间也是额度。
 - **裸查询仍走 `search_pro_sogou`**：不是没注意到它最贵（0.05/次），而是实测只有它
   返回 `link`，std/pro 的裸结果连 URL 都没有。想复验就跑上面那个脚本。
 
@@ -44,7 +56,19 @@
   没有它，限流和「模型名写错被网关拒了」在日志里长得一模一样。搜索侧早有这个区分
   （`test_28`），LLM 侧此前没有。
 
-### 修复（早前）Fixed
+- **检索不可用被当成「未找到公开记录」**：`collect` 里一个
+  `except Exception: hits = []` 把 `SearchUnavailable` 一起吞了，于是搜索额度耗尽时，
+  界面上每一条陈述都显示"未找到公开记录"——看起来像认真查过且查无此人，
+  实际一次都没查成。这是这套系统最不能犯的错：把"没查成"说成"不存在"。
+  现在异常照常抛出，并新增 `test_29` 锁死这条语义。
+- **查询被内容审核误拦时整条流水线中止**：改为只跳过那一条查询并留下日志
+  （"被拦"而不是"0 条"），其余渠道继续（`test_31`）。
+- **未知学校的官网域发现会串条**：发现结果原先缓存在全局字典里，一条陈述查出来的域
+  会渗到另一条陈述上。改为按次收集、随调用传递（`test_25`）。
+- **启动时选错解释器，故障还被健康检查盖住**：`start.sh` 原先偏好一个缺依赖的
+  python，`from app.pipeline import run_pipeline` 直接 `ModuleNotFoundError`，
+  而健康检查把 `"verify"` 写死成 `True`，前端只看到一句 `Load failed`。
+  现在 `start.sh` 真的去 `import httpx, pydantic` 验一遍再选，健康检查如实反映流水线能否加载。
 - **模型返回类型不合 schema，导致整次核验失败**：模型把 `identity_conflicts` 写成单个
   字符串（如 `"学院不同：页面为X仪器工程研究所"`）时，`Evidence` 抛 `ValidationError`；
   而 `collect.extract_evidence` 当时**没有兜底**，一个字段类型不对就让整份报告跑不出来。
@@ -58,6 +82,17 @@
   `split.split_claims` 对 `Claim` 的处理保持一致。
 - 新增回归用例 `test_30`，锁死「字符串收敛、内容不丢、矛盾仍判 `who`」三条语义。
   规则层验收 **33/33 通过**，检索与学校域两套合计 **31/31 通过**。
+
+### 升级说明 Upgrade notes
+- **想省钱**：`.env` 不用动就已经是便宜档了（带域限定的查询走 `search_std`）。
+  召回觉得不够再打开 `SEARCH_ENGINE_FALLBACK=search_pro`。
+- **想换免费模型**：`.env` 里一行 `LLM_PROVIDER=zhipu`，key 用 `ZHIPU_API_KEY`
+  或复用 `SEARCH_API_KEY`；端点和 `glm-4.7-flash` 都在预设里，不用手填。
+  原来手写的 `LLM_ENDPOINT` / `LLM_MODEL` 要删掉，否则会盖过预设。
+- **注意搜索仍然收费**：GLM-4.7-Flash 免费的是**模型调用**，`web_search` 是另一套
+  按次计费的服务，跟模型选哪个无关。
+- **复验引擎结论**：`python3 search-strategy/probe_engines.py "<查询>"`，
+  约 0.09 元，用来确认"裸查询只有搜狗返回 link"这条实测是否仍然成立。
 
 ## [0.2.0] - 2026-09-21
 
@@ -99,4 +134,5 @@
   界面上的流式核验状态窗、流式问答、来源分级面板、逐条检索计划、报告导出；dsh 插件 6 工具。
 
 [Unreleased]: https://github.com/Lonid-C/under-box/compare/v0.2.0...HEAD
+[0.3.0]: https://github.com/Lonid-C/under-box/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Lonid-C/under-box/releases/tag/v0.2.0

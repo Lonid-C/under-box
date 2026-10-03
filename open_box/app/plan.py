@@ -81,8 +81,15 @@ def claim_school(claim: Claim) -> str:
     """只用本条陈述明确给出的学校，不把赛事主办方或其他经历的学校移植过来。"""
     entities = claim.entities or {}
     elements = dict(e.split("=", 1) for e in claim.elements or [] if "=" in e)
-    values = [entities.get("school"), entities.get("university"), elements.get("学校"),
-              entities.get("org"), *(elements.get(k) for k in ("任职组织", "机构", "授予单位", "单位"))]
+    # 显式标为学校的字段可保留英文校名或缩写（如 UCLA/MIT）。只凭 org 字段时仍
+    # 需要学校名识别，防止把实习公司或比赛主办方当作学校。
+    for value in (entities.get("school"), entities.get("university"), elements.get("学校")):
+        if isinstance(value, str):
+            value = value.strip()
+            if 2 <= len(value) <= 120 and not re.search(r"https?://|[/<>]", value):
+                return school_name(value) or value
+    values = [entities.get("org"), *(elements.get(k) for k in
+                                     ("任职组织", "机构", "授予单位", "单位"))]
     return next((s for v in values if isinstance(v, str) and (s := school_name(v))), "")
 
 

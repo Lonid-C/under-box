@@ -135,6 +135,8 @@ WECHAT_HOSTS = {"mp.weixin.qq.com", "mp.weixin.example"}
 
 # A 级还要求页面属于公示/通知/名单类
 OFFICIAL_DOC_WORDS = ("公示", "通知", "公告", "名单", "决定", "表彰", "获奖", "录取", "授予")
+OFFICIAL_PERSON_WORDS = ("人物专访", "人物介绍", "学子风采", "青年说", "在读", "就读",
+                         "硕士研究生", "博士研究生", "研究生风采")
 
 
 def _host(url: str) -> str:
@@ -176,7 +178,11 @@ def classify_tier(
     if official_site and looks_official_doc(title, snippet) and not is_repost:
         return "A"
 
-    # B：学校／学院／主办方认证主体的公众号文章；权威媒体报道
+    # B：官网本人介绍/就读报道、认证公众号文章、权威媒体报道。
+    # 来源可信与是不是本人仍分开判断；普通机构简介保持 D。
+    if (official_site and not is_repost
+            and any(word in f"{title} {snippet}" for word in OFFICIAL_PERSON_WORDS)):
+        return "B"
     if host in WECHAT_HOSTS and wechat_verified_subject:
         return "B"
     if authoritative_media:
@@ -186,7 +192,7 @@ def classify_tier(
     if host in PLATFORM_HOSTS:
         return "C"
 
-    # 官方站点但不是公示类页面（如部门简介），降到 D 更稳
+    # 其余官方页面（如部门简介）保留为 D 级线索。
     return "D"
 
 

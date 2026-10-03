@@ -16,7 +16,7 @@ from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlunparse
 
 from . import judge
 from .llm import LLM
@@ -27,7 +27,7 @@ from .schema import Claim, Evidence, as_str_list
 from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
                      PageFetcher, rephrase_variants,
                      SearchFiltered, SearchHit, Searcher, SearchUnavailable, url_in_domain)
-from .strategy import _name_variants
+from .strategy import _name_variants, competition_site, publication_site
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
 MAX_PAGE_CHARS = 12000
@@ -64,7 +64,12 @@ EXTRACT_SYSTEM = """你在核对一条简历陈述是否有公开证据支持。
 硬规则：
 - 只写页面里真实存在的内容。页面没有的信息，宁可留空。
 - "名单里没有这个人"不等于"这个人没得过"。名单缺席不要写进 contradicts。
-- 同名不等于同一人。只要页面显示的学校、学院等与候选人不一致，必须写进 identity_conflicts。"""
+- 本科学校的推免资格/拟推荐名单只证明推荐资格，不能单独证明被目标学校以推免方式录取；接收学校的拟录取名单需逐项核对姓名、年份和招生类型。
+- 接收方证据不限于招生名单。学校/学院官网及公众号的人物介绍、在读研究生记录、总师班和奖学金名单，若本人条目明确显示学校、学院、专业、年级或硕士身份，可支持相应就读要素。没有推免关键词也应保留相关证据；仅在校活动中出现同名或仅作为校外合作者，不能据发布学校推定本人就读。
+- 本科最终推免资格加接收方在读佐证，可以作为两环节的间接佐证；就读记录本身不能支持入学方式=推免/保送等要素。公众号或官网人物报道若明确写明本人通过推免/保送进入该校，也可支持入学方式，不强制来源必须是招生公示。
+- 保留名单的阶段和本人行的状态：拟推荐不等于最终资格；候补/备选/递补/是否推荐=否不能当作已获资格；预推免/复试/优秀营员不等于拟录取，拟录取不等于已入学。不能用表中其他人的“推荐/录取”状态替代本人状态。
+- 统考和推免可能出现在同一个硕士拟录取公告的不同附件中。只根据本人所在附件的标题、表头和行内容确认招生类型，不能据公告含“推免”就把统考名单中的人当成推免生。
+- 同名不等于同一人。只要页面显示的学校、学院等与候选人不一致，必须写进 identity_conflicts。教育经历须按本科来源学校与研究生接收学校分别匹配，不把这两个阶段的学校不同当作身份冲突。"""
 
 
 @dataclass
@@ -186,13 +191,9 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     publisher = (got.get("publisher") or hit.publisher or "").strip()
     origin_url = got.get("origin_url") or None
 
-    # 公众号作者/发布方判断：模型没给认证主体时，若发布方名称含陈述机构名，
-    # 视作该机构官方号，允许升到 B（合规路径不变，仍是搜索引擎已收录的文章）。
+    # 公众号名称含学校名不等于学校认证。没有原文认证主体时保留为线索，
+    # 不凭发布方名称替模型补一个不存在的认证信息。
     wvs = got.get("wechat_verified_subject")
-    if not wvs and _host_of(hit.url) in judge.WECHAT_HOSTS:
-        _org = (claim.entities or {}).get("org") or ""
-        if _org and len(_org) >= 3 and _org in (publisher or ""):
-            wvs = _org
 
     tier = judge.classify_tier(
         hit.url, title, publisher, snippet,
@@ -266,7 +267,16 @@ def _discover_school_domain(org: str, hits: list[SearchHit], *, homepage: bool =
             # 官网发现要比普通结果复用更严格：合作新闻不等于学校首页。
             title = re.sub(r"\s+", "", title)
             tail = title.removeprefix(org).strip(" -—_|·：:")
-            matched = title.startswith(org) and tail in ("", "首页", "官网", "官方网站", "欢迎您", "主页")
+            matched = title.startswith(org) and (tail in
+                      ("", "首页", "官网", "官方网站", "欢迎您", "主页") or
+                      bool(re.search(r"\b(?:University|College|Institute|School)\b", tail, re.I)))
+            # 英文校名/缩写在首页标题里常放在末尾，如「A World Leader | UCLA」。
+            # 只在 URL 确为学校根域首页时接受，新闻或合作报道不能借此锁定别校。
+            root_home = urlparse(h.url).path.strip("/").lower() in ("", "index.html")
+            if not matched and root_home and _host_of(h.url).removeprefix("www.") == base:
+                wanted = re.sub(r"[^a-z0-9\u3400-\u9fff]", "", org.lower())
+                actual = re.sub(r"[^a-z0-9\u3400-\u9fff]", "", title.lower())
+                matched = len(wanted) >= 3 and wanted in actual
         else:
             matched = title.startswith(org) or h.publisher.strip() == org
         if matched:
@@ -274,6 +284,40 @@ def _discover_school_domain(org: str, hits: list[SearchHit], *, homepage: bool =
     if len(votes) != 1:
         return None
     return next(iter(votes))
+
+
+_UNOFFICIAL_HOSTS = ("doi.org", "openalex.org", "crossref.org", "researchgate.net",
+                     "arxiv.org", "semanticscholar.org", "baidu.com", "zhihu.com",
+                     "wikipedia.org", "weixin.qq.com", "sohu.com", "163.com",
+                     "sina.com.cn", "bilibili.com", "cnki.net", "wanfangdata.com.cn")
+
+
+def _official_host(url: str) -> str:
+    host = _host_of(url).removeprefix("www.")
+    if not host or "." not in host or any(
+            host == suffix or host.endswith("." + suffix) for suffix in _UNOFFICIAL_HOSTS):
+        return ""
+    return host
+
+
+def _discover_official_domain(label: str, hits: list[SearchHit]) -> str | None:
+    """只把明确标为赛事/期刊官网的首页作为域提示；普通报道不算。"""
+    wanted = re.sub(r"[^a-z0-9\u3400-\u9fff]", "", (label or "").lower())
+    if len(wanted) < 3:
+        return None
+    votes: set[str] = set()
+    for hit in hits:
+        host = _official_host(hit.url)
+        if not host:
+            continue
+        title = re.sub(r"[^a-z0-9\u3400-\u9fff]", "", hit.title.lower())
+        path = urlparse(hit.url).path.lower().strip("/")
+        homepage = path in ("", "index", "index.html", "home")
+        official_label = any(word in title for word in ("官方网站", "官网", "officialsite",
+                                                        "officialwebsite", "组委会", "期刊官网"))
+        if wanted in title and (official_label or homepage and title.startswith(wanted)):
+            votes.add(host)
+    return next(iter(votes)) if len(votes) == 1 else None
 
 
 # ── 相关性排序：让有限的读页预算先花在最像目标的页面上 ──────────────────────
@@ -296,12 +340,101 @@ def _relevance(hit: SearchHit, candidate_name: str, claim: Claim) -> int:
             score += 1
     if any(w in blob for w in ("公示", "名单", "获奖", "通知", "公告", "录取", "授予", "表彰")):
         score += 1
+    if _is_push_claim(claim) and any(w in blob for w in ("名单", "公示")):
+        score += 4 if any(w in blob for w in ("推免", "免试", "拟录取")) else 0
+        year = (claim.date_start or claim.date_label or "")[:4]
+        if year.isdigit() and year in blob:
+            score += 4
     return score
+
+
+def _is_push_claim(claim: Claim) -> bool:
+    blob = " ".join([claim.raw_text or "", *claim.elements,
+                     *(v for v in (claim.entities or {}).values() if isinstance(v, str))])
+    return claim.category == "学历" and any(term in blob for term in
+        ("保研", "保送", "推免", "推荐免试", "免试攻读", "免试研究生"))
+
+
+def _roster_document(url: str, label: str) -> bool:
+    """VSB 的 download.jsp、无扩展名下载链接也要从附件标签识别。"""
+    parsed = urlparse(url)
+    return bool(re.search(r"\.(?:pdf|docx?|xlsx?)(?:$|[\s?#&()（）])",
+                          unquote(parsed.path + "?" + parsed.query) + " " + label, re.I)
+                or ("download.jsp" in parsed.path.lower()
+                    or "virtual_attach_file.vsb" in parsed.path.lower())
+                and any(term in label for term in ("名单", "附件", "公示")))
+
+
+def _official_roster_links(html: str, page: SearchHit, claim: Claim,
+                           school_domains: dict[str, str] | None = None) -> list[SearchHit]:
+    """从官方栏目页/公告取相关名单链接；先附件，再匹配年度的公告。"""
+    if claim.category != "学历" or "<" not in html[:2000]:
+        return []
+    if not _is_push_claim(claim):
+        return []
+    if not any(term in f"{page.title} {html}" for term in
+               ("推免", "推荐免试", "免试攻读", "拟推荐", "资格名单")):
+        return []
+    from bs4 import BeautifulSoup
+    schools = [(claim.entities or {}).get("source_school_hint"), claim_school(claim)]
+    domains = [school_domain(school) or (school_domains or {}).get(school) for school in schools]
+    official = next((d for d in domains if d and url_in_domain(page.url, d)), None)
+    if not official:
+        return []
+    found: list[tuple[int, SearchHit]] = []
+    seen: set[str] = set()
+    roster_notice = "名单" in page.title or "名单见附件" in html
+    year_match = re.search(r"\b\d{4}\b", claim.date_start or claim.date_label or "")
+    year = year_match.group() if year_match else ""
+    notice_year = str(int(year) - 1) if year else ""
+    # 部分高校 WebPlus 公示只有 PDF 播放器，附件地址放在 pdfsrc 中，
+    # 正文和 a[href] 都是空的；仍沿用官方域、名单筛选和读页预算。
+    for anchor in BeautifulSoup(html, "lxml").select("a[href], [pdfsrc]"):
+        embedded_pdf = anchor.has_attr("pdfsrc")
+        url = urljoin(page.url, anchor.get("pdfsrc") if embedded_pdf else anchor.get("href", ""))
+        if urlparse(url).scheme not in ("https", "http") or not url_in_domain(url, official):
+            continue
+        label = anchor.get_text(" ", strip=True)
+        title = anchor.get("title", "")
+        if len(title) > len(label):
+            label = title
+        if embedded_pdf and not label:
+            label = "内嵌PDF附件"
+        document = _roster_document(url, label)
+        if embedded_pdf and not document:
+            continue
+        if document:
+            if not roster_notice and not any(term in label for term in
+                                             ("名单", "公示", "附件", "资格", "推免", "推荐")):
+                continue
+        else:
+            # 栏目页中普通导航、招生办法和其他年度名单不占后续读页预算。
+            push_title = any(term in label for term in ("推免", "免试", "拟推荐"))
+            combined_title = "硕士" in label and "拟录取" in label
+            years = set(re.findall(r"\d{4}", label))
+            if (not any(term in label for term in ("名单", "公示"))
+                    or not (push_title or combined_title)
+                    or not year or not years.intersection({year, notice_year})):
+                continue
+        key = _url_key(url)
+        if key in seen or key == _url_key(page.url):
+            continue
+        seen.add(key)
+        rank = 20 if document else 0
+        rank += 8 * any(term in label for term in ("推免", "免试", "拟推荐"))
+        rank += sum(2 if term in label else 0 for term in ("名单", "资格", "拟录取"))
+        rank += 6 if year and year in label else 0
+        rank -= 10 if "统考" in label else 0
+        found.append((rank, SearchHit(url=url, title=f"{page.title} · {label}" if document else label,
+                                      publisher=page.publisher)))
+    return [hit for _, hit in sorted(found, key=lambda pair: -pair[0])[:2]]
 
 
 def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM,
                       organizer_hosts: set[str], *, candidate_name: str = "",
-                      budget: Budget | None = None, progress=None) -> list[Evidence]:
+                      budget: Budget | None = None, progress=None,
+                      seen_urls: set[str] | None = None,
+                      school_domains: dict[str, str] | None = None) -> list[Evidence]:
     """把已选中的页面**按域分组并发回读**（同域串行由 fetcher 的按域锁保证），
     再逐页交给模型逐字摘录。抓取可以并行，模型抽取仍是串行，保持确定性。"""
     if not selected:
@@ -338,18 +471,54 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     # 下载按域并发；提取始终按选页顺序，避免域分组改变有序模型桩或证据展示顺序。
     order = {hit.url: i for i, hit in enumerate(selected)}
     fetched.sort(key=lambda pair: order[pair[0].url])
-    for hit, html in fetched:
+    seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
+    follow_budget = budget or Budget(max_searches=0, max_page_reads=4)
+    followed = 0
+    failures = 0
+    queue = deque((hit, html, 0) for hit, html in fetched)
+    while queue:
+        hit, html, depth = queue.popleft()
         if budget and budget.elapsed() >= budget.max_seconds:
             budget.exhausted = True
             break
-        text = extract_main_text(html) if "<" in html[:2000] else html
-        ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
-                              candidate_name=candidate_name)
-        if ev:
-            evidences.append(ev)
+        text = extract_main_text(html, preserve_tables=_is_push_claim(claim)) if "<" in html[:2000] else html
+        links = _official_roster_links(html, hit, claim, school_domains) if depth < 2 else []
+        compact_text = re.sub(r"\s+", "", text)
+        has_name = any(name.replace(" ", "") in compact_text
+                       for name in _name_variants(candidate_name))
+        # 仅作为附件目录的公示页不必再花一次模型调用抽取个人证据。
+        if has_name or (not links and not _is_push_claim(claim)):
+            ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
+                                  candidate_name=candidate_name)
+            if ev:
+                evidences.append(ev)
+        # 栏目 → 当年公告 → 附件，最多两层、每页两个链接，共用原读页预算。
+        children = []
+        for linked in links:
+            key = _url_key(linked.url)
+            if not follow_budget.can_read():
+                break
+            if key in seen_urls:
+                continue
+            seen_urls.add(key)
+            follow_budget.note_read()
+            followed += 1
+            try:
+                roster = fetcher.get(linked.url)
+            except Exception:
+                roster = None
+            if not roster:
+                failures += 1
+                if progress:
+                    reason = getattr(fetcher, "failures", {}).get(linked.url, "暂时无法读取")
+                    progress(f"    名单链接未能回读：{linked.url}（{reason}；不视为姓名缺席）")
+                continue
+            children.append((linked, roster, depth + 1))
+        queue.extendleft(reversed(children))
     if progress:
         progress(f"    回读 {len(selected)} 页：成功 {len(fetched)}，失败/未完成 "
-                 f"{len(selected) - len(fetched)}；提取证据 {len(evidences)} 条")
+                 f"{len(selected) - len(fetched)}；跟进名单链接 {followed} 个、失败 {failures}；"
+                 f"提取证据 {len(evidences)} 条")
     return evidences
 
 
@@ -382,7 +551,9 @@ def _search_resilient(text: str, site: str | None, searcher: Searcher, org: str,
 def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm: LLM,
                       *, budget: Budget | None = None, fetcher: PageFetcher | None = None,
                       queries: list[Query] | None = None, progress=None,
-                      school_domains: dict[str, str] | None = None) -> tuple[list[Evidence], bool]:
+                      school_domains: dict[str, str] | None = None,
+                      organizer_domains: dict[str, str] | None = None,
+                      publisher_domains: dict[str, str] | None = None) -> tuple[list[Evidence], bool]:
     """返回 (证据列表, search_exhausted)。预算用完就停，绝不无限搜索。
 
     每两次查询回读一小批结果，留出后续查询的读页名额；不再等所有搜索完成才取证。
@@ -392,7 +563,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     fetcher = fetcher or PageFetcher()
     queries = queries if queries is not None else plan_queries(claim, candidate_name)
     say = progress or (lambda message: None)
-    organizer_hosts = {claim.entities.get("organizer_domain")} - {None} if claim.entities else set()
+    # 简历或模型自述的域名只是检索提示，不能单凭它把页面提升为 A 级官方证据。
+    organizer_hosts: set[str] = set()
 
     evidences: list[Evidence] = []
     seen_urls: set[str] = set()
@@ -421,12 +593,31 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         (e.split("=", 1)[1].strip() for e in claim.elements
          if "=" in e and e.split("=", 1)[0].strip() in ("学校", "机构", "授予单位")), "")
     school = claim_school(claim)
+    entities = claim.entities or {}
+    contest = (entities.get("contest") or next(
+        (e.split("=", 1)[1].strip() for e in claim.elements
+         if e.startswith(("赛事=", "比赛=", "竞赛="))), ""))
+    venue = entities.get("venue") or next(
+        (e.split("=", 1)[1].strip() for e in claim.elements
+         if e.startswith(("刊物=", "期刊=", "会议="))), "")
     # 只复用本次流水线内通过官网发现的成功结果，不跨报告持久化，也不缓存失败。
     school_domains = school_domains if school_domains is not None else {}
     school_site = school_domain(school) or school_domains.get(school)
+    source_school = entities.get("source_school_hint") or ""
+    source_site = school_domain(source_school) or school_domains.get(source_school)
+    organizer_domains = organizer_domains if organizer_domains is not None else {}
+    publisher_domains = publisher_domains if publisher_domains is not None else {}
+    organizer_site = organizer_domains.get(contest) or competition_site(contest) or _official_host(
+        "https://" + str(entities.get("organizer_domain") or "").removeprefix("https://").removeprefix("http://"))
+    publisher_site = publisher_domains.get(venue) or publication_site(venue) or _official_host(
+        "https://" + str(entities.get("venue_domain") or "").removeprefix("https://").removeprefix("http://"))
     discovery_attempted = False
+    source_discovery_attempted = False
+    organizer_discovery_attempted = False
+    publisher_discovery_attempted = False
     new_queries = 0
     total_hits = 0
+    prefetched: dict[tuple[str, str | None, str], list[SearchHit] | Exception] = {}
 
     def add_hits(hits):
         nonlocal total_hits
@@ -459,7 +650,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 selected.append(hit)
         evidences.extend(_read_and_extract(
             claim, selected, fetcher, llm, organizer_hosts, candidate_name=candidate_name,
-            budget=budget, progress=say))
+            budget=budget, progress=say, seen_urls=seen_urls, school_domains=school_domains))
 
     # 直接链接的 API 元数据不依赖是否生成了通用查询，也不重新抓展示页。
     if budget.can_read():
@@ -470,24 +661,54 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
 
     while pending and budget.can_search():
         q = pending.popleft()
-        site = school_site if q.site == "school" else q.site
+        site = ({"school": school_site, "source_school": source_site, "organizer": organizer_site,
+                 "publisher": publisher_site}.get(q.site) if q.site in
+                ("school", "source_school", "organizer", "publisher") else q.site)
+        site = site or None
         if q.kind == "patent" and not site:
             # 裸搜专利等于最贵的引擎配最差的精度（见 search.PATENT_SITE 的说明）。
             # 先在专利域里找；找不到再退回裸搜，退回逻辑在下面的空结果分支里。
             site = PATENT_SITE
         discovery = False
-        if q.source.startswith("school:") and q.site == "school" and not site:
-            if not school:
+        if (q.site == "source_school" or q.site == "school" and
+                q.source.startswith("school:")) and not site:
+            is_source = q.site == "source_school"
+            label = source_school if is_source else school
+            attempted_discovery = source_discovery_attempted if is_source else discovery_attempted
+            if not label:
                 say("    跳过官网探针：本条未提供可识别的学校")
                 continue
-            if not discovery_attempted:
+            if not attempted_discovery:
                 discovery = True
-                discovery_attempted = True
+                if is_source:
+                    source_discovery_attempted = True
+                else:
+                    discovery_attempted = True
                 original = q
-                q = replace(q, text=f'"{school}" 官网', site=None)
+                q = replace(q, text=f'"{label}" 官网', site=None)
             else:
                 # 未确认官网时，必须保留学校名，禁止把裸姓名放到全网。
-                q = replace(q, text=f'"{school}" {q.text}', site=None, source="fallback:school")
+                q = replace(q, text=f'"{label}" {q.text}', site=None, source="fallback:school")
+        elif q.site == "school" and not site and discovery_attempted:
+            q = replace(q, text=f'"{school}" {q.text}', site=None, source="fallback:school")
+        elif q.source.startswith(("organizer:", "publisher:")) and not site:
+            is_contest = q.source.startswith("organizer:")
+            label = contest if is_contest else venue
+            attempted_discovery = (organizer_discovery_attempted if is_contest
+                                   else publisher_discovery_attempted)
+            if not label:
+                continue
+            if not attempted_discovery:
+                discovery = True
+                original = q
+                q = replace(q, text=f'"{label}" 官方网站', site=None)
+                if is_contest:
+                    organizer_discovery_attempted = True
+                else:
+                    publisher_discovery_attempted = True
+            else:
+                q = replace(q, text=f'"{label}" {q.text}', site=None,
+                            source="fallback:official")
         key = (q.text, site, q.kind)
         if key in attempted:
             continue
@@ -496,8 +717,56 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         try:
             # crossref 这个 kind 名字是历史遗留，实际走 Crossref + OpenAlex 两个
             # 免费公开 API，一次都不消耗搜索额度。
-            hits = (paper_hits(q.text) if q.kind == "crossref"
-                    else _search_resilient(q.text, site, searcher, org, say))
+            if key in prefetched:
+                outcome = prefetched.pop(key)
+                if isinstance(outcome, Exception):
+                    raise outcome
+                hits = outcome
+            elif q.kind == "crossref":
+                hits = paper_hits(q.text, author=candidate_name, venue=venue,
+                                  year=claim.date_label)
+            else:
+                # 只预取下一条独立查询：已知官网域或普通网页查询。
+                # 需要先发现域名的查询必须串行，预算不足时也不额外发请求。
+                next_q = pending[0] if pending else None
+                next_site = None
+                if next_q:
+                    next_site = ({"school": school_site, "source_school": source_site,
+                                  "organizer": organizer_site,
+                                  "publisher": publisher_site}.get(next_q.site)
+                                 if next_q.site in ("school", "source_school", "organizer", "publisher")
+                                 else next_q.site)
+                    if next_q.kind == "patent" and not next_site:
+                        next_site = PATENT_SITE
+                next_key = ((next_q.text, next_site, next_q.kind) if next_q else None)
+                can_parallel = (
+                    not discovery and not q.source.startswith("school:")
+                    and next_q is not None and q.kind == "web"
+                    and next_q.kind == "web" and next_key not in attempted
+                    and next_key not in prefetched and next_key != key
+                    and (next_q.site not in ("school", "source_school", "organizer", "publisher") or next_site)
+                    and budget.searches + 2 <= budget.max_searches
+                    and budget.max_page_reads - budget.page_reads >= 2
+                    and new_queries == 0 and budget.elapsed() < budget.max_seconds * 0.4
+                )
+                if can_parallel:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        first = pool.submit(_search_resilient, q.text, site, searcher, org, say)
+                        second = pool.submit(_search_resilient, next_q.text, next_site,
+                                             searcher, org, say)
+                        try:
+                            hits = first.result()
+                            first_error = None
+                        except Exception as exc:
+                            first_error = exc
+                        try:
+                            prefetched[next_key] = second.result()
+                        except Exception as exc:
+                            prefetched[next_key] = exc
+                    if first_error:
+                        raise first_error
+                else:
+                    hits = _search_resilient(q.text, site, searcher, org, say)
         except SearchFiltered:
             # 审核误伤，改述也没过：**只跳过这一条查询**，不中止整条流水线。
             # 一条被误伤的查询不值得毁掉十分钟的核验。日志明说是"被拦"而不是"0 条"——
@@ -516,15 +785,69 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             f"{(' · ' + site) if site else ''} → {len(hits)} 条，"
             f"{time.monotonic() - started:.1f} 秒")
         if discovery:
-            school_site = _discover_school_domain(school, hits, homepage=True)
-            if school_site:
-                school_domains[school] = school_site
-                say(f"    官网域名：{school} → {school_site}（包含院系子域，继续检索原陈述）")
+            if original.site in ("school", "source_school"):
+                label = source_school if original.site == "source_school" else school
+                found_site = _discover_school_domain(label, hits, homepage=True)
+                if original.site == "source_school":
+                    source_site = found_site
+                else:
+                    school_site = found_site
+                if found_site:
+                    school_domains[label] = found_site
+                    say(f"    官网域名：{label} → {found_site}（包含院系子域，继续检索原陈述）")
+                else:
+                    say(f"    未确认唯一学校官网：{label}，后续查询保留学校名")
             else:
-                say(f"    未确认唯一学校官网：{school}，后续查询保留学校名")
+                label = contest if original.source.startswith("organizer:") else venue
+                found_site = _discover_official_domain(label, hits)
+                if original.source.startswith("organizer:"):
+                    organizer_site = found_site or ""
+                    if found_site:
+                        organizer_domains[contest] = found_site
+                else:
+                    publisher_site = found_site or ""
+                    if found_site:
+                        publisher_domains[venue] = found_site
+                say(f"    {'找到候选' if found_site else '未找到唯一'} {label} 官网"
+                    f"{('：' + found_site) if found_site else '；后续查询保留名称'}")
             pending.appendleft(original)
-            # 学校首页是定位线索，不当成简历陈述的证据，也不占读页名额。
+            # 官网发现结果只是域名线索，不是简历经历的证据。
             continue
+        if q.kind == "crossref" and claim.category == "论文":
+            # 登记机构给出的原文页面直接回读；同域再检索题名+作者，覆盖未被
+            # Crossref/OpenAlex 的单条记录完整收录的期刊页面。
+            from difflib import SequenceMatcher
+            wanted = re.sub(r"\W", "", q.text).lower()
+            official_pages: list[SearchHit] = []
+            for hit in hits:
+                host = _official_host(hit.official_url)
+                actual = re.sub(r"\W", "", hit.title).lower()
+                if not host or not actual or SequenceMatcher(None, wanted, actual).ratio() < 0.82:
+                    continue
+                archive = publication_site(venue)
+                if archive and host != archive and not host.endswith("." + archive):
+                    continue
+                # 同题、同年也可能是另一位作者的作品；不拿它的落地页锁定官网。
+                if candidate_name and hit.authors:
+                    author_blob = re.sub(r"[^a-z0-9\u3400-\u9fff]", "",
+                                         " ".join(hit.authors).lower())
+                    variants = [re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", v.lower())
+                                for v in _name_variants(candidate_name)]
+                    if not any(parts and all(len(part) >= 2 and part in author_blob
+                                             for part in parts) for parts in variants):
+                        continue
+                # 登记机构返回的原文页比简历里自述的域名更可信。
+                publisher_site = host
+                if venue:
+                    publisher_domains[venue] = publisher_site
+                official_pages.append(SearchHit(url=hit.official_url, title=hit.title,
+                                                publisher=hit.publisher))
+            if official_pages:
+                hits = [*hits, *official_pages]
+                if not any(x.source.startswith("publisher:") for x in pending):
+                    pending.appendleft(Query(text=f'"{q.text}" "{candidate_name}"',
+                                             site=publisher_site, source="publisher:论文",
+                                             purpose="期刊/出版社官网按题名及作者复查"))
         add_hits(hits)
         new_queries += 1
         if q.site == "school" and not school_site:
@@ -533,11 +856,13 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         # 不把复杂引号表达式或未知域变成硬门槛。只对空结果追加一次渐进放宽，
         # 每一次实际搜索都计入同一预算；先执行其余原始渠道，再尝试变体。
         if not hits:
-            official = q.source.startswith("school:")
+            official = q.source.startswith("school:") or bool(
+                site and site in (school_site, source_site))
+            label = source_school if source_site and site == source_site else school
             if official and site and '"' in q.text:
                 fallback = replace(q, text=" ".join(q.text.replace('"', " ").split()))
             elif official and site:
-                fallback = replace(q, text=f'"{school}" {q.text}', site=None, source="fallback:school")
+                fallback = replace(q, text=f'"{label}" {q.text}', site=None, source="fallback:school")
             elif q.kind == "crossref":
                 fallback = replace(q, kind="web", site=None)
             elif q.kind == "patent" and site == PATENT_SITE:
@@ -553,7 +878,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             if fallback and (fallback.text, fallback.site, fallback.kind) not in attempted:
                 # 原渠道优先于备用拼写，防止预算里只剩同一个查询的不同版本。
                 # 官网先尝试去引号、保留域名；其他回退仍排在原渠道后。
-                insert_at = 0 if official and fallback.site else next(
+                insert_at = 0 if official and fallback.site and not _is_push_claim(claim) else next(
                     (i for i, x in enumerate(pending) if x.variant), len(pending))
                 pending.insert(insert_at, fallback)
 

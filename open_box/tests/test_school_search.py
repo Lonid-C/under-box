@@ -6,7 +6,7 @@ from app import plan, search
 from app.collect import Budget, collect_for_claim
 from app.schema import Claim
 from app.search import SearchHit, ZhipuSearcher
-from app.strategy import Query, ResumeProfile, build_plan
+from app.strategy import Query, ResumeProfile, add_admission_source_hints, build_plan
 
 
 def school_claim(category="奖学金", *, entities=None, elements=None):
@@ -38,6 +38,18 @@ class RecordingSearcher:
 
 
 class SchoolResolutionTests(unittest.TestCase):
+    def test_renamed_joint_university_keeps_full_name_and_current_official_domain(self):
+        school = "北京师范大学-香港浸会大学联合国际学院"
+        self.assertEqual(plan.school_name(school), school)
+        self.assertEqual(plan.school_domain(school), "bnbu.edu.cn")
+        self.assertEqual(plan.school_name("北师香港浸会大学数据科学学院"), school)
+        self.assertEqual(plan.school_domain("北师港浸大"), "bnbu.edu.cn")
+        claim = school_claim("学历", entities={"org": school, "major": "数据科学"},
+                             elements=[f"学校={school}", "专业=数据科学"])
+        first = build_plan(claim, "张三").queries[0]
+        self.assertEqual(first.site, "bnbu.edu.cn")
+        self.assertEqual(first.text, '"张三"')
+
     def test_alias_with_department_resolves_to_official_school(self):
         self.assertEqual(plan.school_name("北大计算机学院学生会"), "北京大学")
         self.assertEqual(plan.school_domain("北大计算机学院学生会"), "pku.edu.cn")
@@ -73,6 +85,88 @@ class SchoolResolutionTests(unittest.TestCase):
 
 
 class OfficialPlanTests(unittest.TestCase):
+    def test_push_admission_queries_both_schools_without_summer_camp_noise(self):
+        undergraduate = Claim(
+            id="undergrad", raw_text="2019.09—2023.06 哈尔滨工程大学 计算机科学与技术",
+            raw_locator="教育经历", category="学历", date_label="2019.09—2023.06",
+            date_start="2019-09", date_end=None,
+            elements=["学校=哈尔滨工程大学", "专业=计算机科学与技术"],
+            entities={"org": "哈尔滨工程大学", "major": "计算机科学与技术"},
+        )
+        graduate = Claim(
+            id="graduate", raw_text="2023.09 哈尔滨工业大学（保送） 仪器科学与技术",
+            raw_locator="教育经历", category="学历", date_label="2023.09",
+            date_start="2023-09", elements=["学校=哈尔滨工业大学", "入学方式=保送"],
+            entities={"org": "哈尔滨工业大学", "major": "仪器科学与技术"},
+        )
+        enriched = add_admission_source_hints([undergraduate, graduate])
+        self.assertEqual(enriched[1].entities["source_school_hint"], "哈尔滨工程大学")
+        self.assertEqual(enriched[1].entities["source_field_hint"], "计算机科学与技术")
+        self.assertEqual(graduate.entities, {"org": "哈尔滨工业大学", "major": "仪器科学与技术"})
+        queries = build_plan(enriched[1], "李四", ResumeProfile(identity="student")).queries
+        self.assertEqual(len(queries), 8)
+        self.assertEqual(queries[0].site, "hit.edu.cn")
+        self.assertEqual(queries[0].text, '"李四"')
+        self.assertTrue(any(q.site == "mp.weixin.qq.com" and q.text ==
+                            '"哈尔滨工业大学" "李四"' for q in queries))
+        self.assertTrue(any(q.site == "hrbeu.edu.cn" and q.text ==
+                            "2023 免试 资格 名单" for q in queries))
+        self.assertTrue(any(q.site == "hrbeu.edu.cn" and q.text == '"李四" 推免'
+                            for q in queries))
+        self.assertTrue(any(q.site == "hrbeu.edu.cn" and q.text ==
+                            "2023 计算机科学与技术 免试 名单" for q in queries))
+        self.assertTrue(any(q.site == "hrbeu.edu.cn" and q.text ==
+                            "2022 推免 公示" for q in queries))
+        self.assertTrue(any(q.site == "hit.edu.cn" and q.text ==
+                            "2023 推免 拟录取 名单" for q in queries))
+        self.assertTrue(any(q.site == "hit.edu.cn" and q.text ==
+                            "2023 硕士 拟录取 名单" for q in queries))
+        self.assertFalse(any("夏令营" in q.text for q in queries))
+
+    def test_summer_camp_does_not_trigger_admission_rosters(self):
+        camp = Claim(
+            id="camp", raw_text="2021年 清华大学夏令营优秀营员", raw_locator="教育经历",
+            category="学历", date_label="2021", date_start="2021-06",
+            elements=["学校=清华大学", "荣誉=优秀营员"], entities={"org": "清华大学"},
+        )
+        queries = build_plan(camp, "张三", ResumeProfile(identity="student")).queries
+        self.assertTrue(any("夏令营" in q.text for q in queries))
+        self.assertFalse(any("推免" in q.text or "推荐免试" in q.text for q in queries))
+
+    def test_exam_admission_uses_exam_rosters_not_push_rosters(self):
+        exam = Claim(id="exam", raw_text="2023年考研进入哈尔滨工业大学仪器科学与技术专业",
+                     raw_locator="教育经历", category="学历", date_label="2023",
+                     date_start="2023-09", elements=["学校=哈尔滨工业大学", "入学方式=统考"],
+                     entities={"org": "哈尔滨工业大学", "major": "仪器科学与技术"})
+        queries = build_plan(exam, "张三", ResumeProfile(identity="student")).queries
+        self.assertTrue(any(q.site == "hit.edu.cn" and q.text == '"张三" 统考'
+                            for q in queries))
+        self.assertTrue(any("统考 拟录取 名单" in q.text for q in queries))
+        self.assertFalse(any("推免" in q.text or "推荐免试" in q.text for q in queries))
+
+    def test_ambiguous_undergraduate_school_does_not_infer_source(self):
+        graduate = Claim(id="graduate", raw_text="2023年保送至哈尔滨工业大学",
+                         raw_locator="教育经历", category="学历", date_label="2023",
+                         date_start="2023-09", entities={"org": "哈尔滨工业大学"})
+        priors = [Claim(id=f"prior-{i}", raw_text=f"{school}本科学习",
+                        raw_locator="教育经历", category="学历", date_label="2019-2023",
+                        date_start="2019-09", date_end="2023-06", entities={"org": school})
+                  for i, school in enumerate(("哈尔滨工程大学", "清华大学"))]
+        self.assertNotIn("source_school_hint",
+                         add_admission_source_hints([*priors, graduate])[-1].entities)
+
+    def test_source_college_precedes_major_in_notice_query(self):
+        undergraduate = Claim(id="u", raw_text="2019-2023 哈尔滨工程大学",
+                              raw_locator="简历", category="学历", date_label="2019-2023",
+                              date_start="2019-09", date_end="2023-06",
+                              entities={"org": "哈尔滨工程大学",
+                                        "dept": "计算机科学与技术学院", "major": "软件工程"})
+        graduate = Claim(id="g", raw_text="2023年保送至哈尔滨工业大学",
+                         raw_locator="简历", category="学历", date_label="2023",
+                         date_start="2023-09", entities={"org": "哈尔滨工业大学"})
+        enriched = add_admission_source_hints([undergraduate, graduate])[1]
+        self.assertEqual(enriched.entities["source_field_hint"], "计算机科学与技术学院")
+
     def test_school_facts_start_with_short_official_search(self):
         cases = [
             ("学历", {}, None),

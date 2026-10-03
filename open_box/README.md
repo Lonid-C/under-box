@@ -5,18 +5,24 @@
 
 ```bash
 make demo     # 离线演示，不需要任何 API key，打开 http://127.0.0.1:8000/
-make test     # 验收清单（19 项）
+make test     # 离线验收与回归测试
 ```
 
 接 DeepSeek 跑真实核验：
 
 ```bash
 cp .env.example .env
-export DEEPSEEK_API_KEY=sk-你的key SEARCH_API_KEY=你的搜索key
+export DEEPSEEK_API_KEY=sk-你的key SEARCH_API_KEY=你的智谱搜索key
+# 可选：配置备用搜索索引。智谱空结果或不可用时使用 Brave。
+export BRAVE_SEARCH_API_KEY=你的Brave搜索key
 make llm-check       # 验 LLM 的 key / 端点 / 模型名
 make search-check    # 验搜索的 key / 端点 / 引擎名，并确认 site 限定真的生效
 MODE=live python -m app.cli verify samples/resume_lin.pdf -o out/report.json
 ```
+
+上传文件先按内容识别 PDF、DOCX 或文本格式，再判断正文是否为个人简历。不能确认是简历时停止，不会开始公开搜索。学历线索优先在学校官网检索；赛事优先找赛事或主办方官网；论文先并行查 Crossref/OpenAlex，再按原文页或期刊官网检索。独立网页查询采用小批量并行，搜索和读页仍受每条陈述的预算限制。官网页面只能证明页面实际写明的事实，不能直接当作学籍、学位或本人身份的完整证明。
+
+推免核验同时查本科推荐资格与接收方就读记录。接收方官网、官方公众号的人物介绍、在读、总师班和奖学金记录可以提供佐证；默认8次搜索保留一次公众号查询。姓名需结合学院、专业或年级匹配，就读事实与入学方式分别证明；原文明确写明推免入学的报道也可采信。具体路径见[推免搜索说明](PUSH_ADMISSION_SEARCH.md)。
 
 演示时先点第 5 条（科技部部长 / 副部长），再看第 7、8、9 条——
 这四条展示的正是"官方发布 ≠ 本人经历为真"和"证明一条 ≠ 证明全部"。
@@ -27,7 +33,7 @@ MODE=live python -m app.cli verify samples/resume_lin.pdf -o out/report.json
 
 ### 1. 哪些数据源真正接通了
 
-**LLM 已按 DeepSeek 写实，但没在真实端点上验证过；搜索还没选供应商。**
+当前实现使用 DeepSeek 处理文本、智谱 Web Search 检索公开网页；Brave Web Search 可选作备用索引。真实服务是否可用需要在部署环境用对应 key 验证。
 
 | 层 | 现状 |
 | --- | --- |
@@ -36,9 +42,9 @@ MODE=live python -m app.cli verify samples/resume_lin.pdf -o out/report.json
 | 判定层（身份 / 来源分级 / 去重 / 状态） | ✅ **真的在跑**，纯规则、无模型参与、可复现 |
 | 报告页与报告 JSON | ✅ **真的在跑** |
 | LLM（拆分 / 证据提取 / 澄清问题） | 🟡 **已按 DeepSeek 写实**：JSON Output 模式、429/5xx 退避重试、401/402/422 立即报错、空内容补一次。报文格式用一个复刻 DeepSeek 应答的本地服务器验穿了（验收第 15–19 项）。**但没打过真实的 api.deepseek.com**——本次构建环境的出口策略拦截了该域名（代理返回 403），需要你在本机 `make llm-check` 验一次 |
-| 搜索引擎 | 🟡 **已按智谱 Web Search 写实**（`search_domain_filter` 走一等参数）。同样没打过真实端点，用 `make search-check` 验。换别家改 `SEARCH_PROVIDER` 或在 `_parse` 里改字段映射 |
-| Crossref / OpenAlex / ORCID / GitHub / 专利 | ⬜ 未接。`plan.py` 已按类别生成了对应查询（`kind=crossref/github/patent`），`collect.py` 目前统一走通用搜索路径 |
-| 学信网 | ⬜ **按设计不接**。学历一律 `none` + 授权补证，不做自动化 |
+| 搜索引擎 | ✅ 智谱 Web Search 已接；可选 Brave 备用索引。官网域名在检索参数和结果 URL 上双重限制；接口可用性需在部署环境验证 |
+| Crossref / OpenAlex / GitHub / 专利 | ✅ 论文元数据并行查询 Crossref/OpenAlex，GitHub 走公开 API；专利优先限定公开专利站点 |
+| 学信网 | ⬜ **按设计不接**。普通学历只核对学校官网公开线索，不将线索当作学籍或学位证明 |
 | LinkedIn 等职业平台 | ⬜ **按设计不接**（用户协议限制自动化访问） |
 | 微信公众号 | ⬜ 只接受"搜索引擎已收录的链接"或候选人自己提供的链接，不使用 cookie／抓包／代理池／搜狗绕行 |
 
@@ -85,6 +91,19 @@ export LLM_PROVIDER=openai-compatible LLM_ENDPOINT=... LLM_MODEL=... LLM_API_KEY
 
 成本量级：一份简历最多 11 条 × 6 次检索 = 66 次。`search_pro` 约 2 元/份，
 `search_std` 约 0.7 元/份。建议先用 `search_std` 跑通，覆盖率不够再升 `search_pro`。
+
+推免经历会按两条独立路径查证：本科推荐方的资格/拟推荐名单，以及研究生接收方的
+推免拟录取名单。计划会从同一份简历中时间相接的本科经历提取来源学校和专业线索；
+例如 2023 年入学，推荐方同时检索“2023 年推免届别”和“2022 年秋季公示”。名单
+标题不含个人姓名时，先找官网公告；从栏目页跟进对应年度公告，再在读页预算内
+打开同域 PDF、DOCX、XLSX 附件核对姓名。`download.jsp` 等无文件后缀地址会根据
+附件标签识别，并按实际文件签名解析。检索同时覆盖“推免名单”“免试名单”以及
+春季“硕士拟录取名单”总公告，避免过多关键词锁死标题。未收录的本科院校先发现
+官网域名；遇到空姓名结果，优先完成其他名单路径，再执行去引号等备用查询。
+来源学校资格名单只证明推荐资格，不能单独证明目标学校的录取方式；缺少本人名单时
+报告保留未核实状态。候补、复试、拟录取等阶段需分别核对。验证码下载、失效链接
+和无法解析的附件会记录读取失败，不能当作姓名缺席。跨学校的实查过程和限制见
+[推免名单检索记录](PUSH_ADMISSION_SEARCH.md)。
 
 #### 关于公众号
 

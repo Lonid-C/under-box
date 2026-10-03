@@ -8,6 +8,7 @@ DOCX 用 python-docx；个人主页用 httpx + trafilatura，缺失时退到 bs4
 from __future__ import annotations
 
 import re
+import zipfile
 from pathlib import Path
 
 from .schema import InputRisk
@@ -155,6 +156,38 @@ def scrub(text: str, risks: list[InputRisk]) -> str:
 # 各格式解析
 # --------------------------------------------------------------------------
 
+_PDF_MAGIC = b"%PDF-"
+_OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def detect_document_type(path: str | Path) -> str:
+    """根据文件内容识别格式；文件名和浏览器上报的 MIME 不能作为依据。"""
+    p = Path(path)
+    with p.open("rb") as stream:
+        head = stream.read(1024)
+    if not head:
+        raise ValueError("文件为空，请上传包含简历正文的 PDF、DOCX、TXT 或 MD")
+    # PDF 规范允许签名位于前 1024 字节；后续仍由 PDF 解析器验证结构。
+    if _PDF_MAGIC in head:
+        return "pdf"
+    if head.startswith(_OLE_MAGIC):
+        raise ValueError("旧版 .doc 暂不支持，请另存为 PDF 或 DOCX 后上传")
+    if zipfile.is_zipfile(p):
+        with zipfile.ZipFile(p) as archive:
+            if "word/document.xml" in archive.namelist() and "[Content_Types].xml" in archive.namelist():
+                return "docx"
+        raise ValueError("收到 ZIP 文件，但它不是可解析的 DOCX 简历")
+    if b"\x00" in head:
+        raise ValueError("文件是未知的二进制格式，请上传 PDF、DOCX、TXT 或 MD")
+    try:
+        # 文本只接受明确的纯文本后缀；错误命名的 PDF/DOCX 不会被误读成简历。
+        if p.suffix.lower() not in (".txt", ".md", ".markdown"):
+            raise ValueError("无法从文件内容识别 PDF 或 DOCX；纯文本请使用 TXT 或 MD")
+        p.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError("文本文件不是 UTF-8 编码，请转换编码后上传") from exc
+    return "text"
+
 def _read_pdf(path: Path) -> str:
     try:
         import fitz  # PyMuPDF
@@ -205,27 +238,68 @@ def _read_docx_stdlib(path: Path) -> str:
     return "\n".join(lines)
 
 
-def extract_main_text(html: str) -> str:
-    """网页正文提取：trafilatura 优先，缺失时退到 bs4。"""
+def extract_main_text(html: str, *, preserve_tables: bool = False) -> str:
+    """网页正文提取；名单可按行保留表格，避免姓名与状态被拆散。"""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "lxml")
+    context: list[str] = []
+    heading = soup.find("h1")
+    if heading:
+        text = heading.get_text(" ", strip=True)
+        if 2 <= len(text) <= 250:
+            context.append("页面标题：" + text)
+    visible_authors = soup.select_one(".paper-authors, .authors, [itemprop='author']")
+    if visible_authors:
+        text = visible_authors.get_text(" ", strip=True)
+        if 2 <= len(text) <= 800:
+            context.append("页面作者：" + text)
+    citation_authors = [tag.get("content", "").strip() for tag in
+                        soup.select('meta[name="citation_author"]')]
+    if citation_authors and not visible_authors:
+        context.append("论文作者：" + "; ".join(citation_authors[:20]))
+    for name, label in (("citation_title", "论文题名"),
+                        ("citation_journal_title", "刊物"),
+                        ("citation_conference_title", "会议"),
+                        ("citation_date", "发表日期")):
+        tag = soup.find("meta", attrs={"name": name})
+        value = (tag.get("content") or "").strip() if tag else ""
+        if value and len(value) <= 300:
+            context.append(f"{label}：{value}")
+
+    if preserve_tables:
+        for table in soup.find_all("table"):
+            if table.parent is None:
+                continue
+            rows = []
+            for row in table.find_all("tr"):
+                cells = row.find_all(["th", "td"], recursive=False)
+                if cells:
+                    rows.append(" | ".join(c.get_text(" ", strip=True) for c in cells))
+            if rows:
+                block = soup.new_tag("div")
+                block.string = "\n".join(rows)
+                table.replace_with(block)
+        html = str(soup)
+
     try:
         import trafilatura
         got = trafilatura.extract(html)
         if got:
-            return got
+            return "\n".join([*context, got]) if context else got
     except ImportError:
         pass
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, "lxml")
     for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
         tag.decompose()
-    return re.sub(r"\n{3,}", "\n\n", soup.get_text("\n", strip=True))
+    body = re.sub(r"\n{3,}", "\n\n", soup.get_text("\n", strip=True))
+    return "\n".join([*context, body]) if context else body
 
 
 class ParsedDocument:
-    def __init__(self, text: str, risks: list[InputRisk], source: str):
+    def __init__(self, text: str, risks: list[InputRisk], source: str, kind: str = "text"):
         self.raw_text = text
         self.risks = risks
         self.source = source
+        self.kind = kind
         self.safe_text = scrub(text, risks)
 
     @property
@@ -236,15 +310,18 @@ class ParsedDocument:
 def parse_document(path: str | Path) -> ParsedDocument:
     """解析 + 风险检测一次做完。返回的 safe_text 才是能送进 LLM 的内容。"""
     p = Path(path)
-    suffix = p.suffix.lower()
-    if suffix == ".pdf":
+    kind = detect_document_type(p)
+    if kind == "pdf":
         text = _read_pdf(p)
         risks = detect_pdf_visual_risks(p)
-    elif suffix in (".docx", ".doc"):
+    elif kind == "docx":
         text = _read_docx(p)
         risks = []
     else:
-        text = p.read_text(encoding="utf-8")
+        text = p.read_text(encoding="utf-8-sig")
         risks = []
     risks = risks + detect_injection(text)
-    return ParsedDocument(text, risks, str(p))
+    parsed = ParsedDocument(text, risks, str(p), kind)
+    if not parsed.safe_text.strip():
+        raise ValueError("文件没有可提取的简历正文；若是扫描版 PDF，请先进行 OCR 后再上传")
+    return parsed

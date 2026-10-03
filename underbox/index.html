@@ -416,9 +416,9 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
             </svg>
           </div>
           <b>把简历扔进来</b>
-          <span class="s" id="hint">支持 PDF / DOCX / MD · 或点击选择文件</span>
+          <span class="s" id="hint">支持 PDF / DOCX / TXT / MD · 或点击选择文件</span>
         </div>
-        <input type="file" id="file" accept=".pdf,.docx,.doc,.md,.txt" hidden>
+        <input type="file" id="file" accept=".pdf,.docx,.md,.txt" hidden>
 
         <div class="fileline" id="fileline">
           <span class="ic" id="fileKind">PDF</span>
@@ -563,7 +563,7 @@ const summaryOf = t => {
   const s = (t || '').replace(DATE_PREFIX, '').replace(DATE_SUFFIX, '').trim();
   return s || t;
 };
-const OK_EXT = ['pdf','docx','doc','md','txt'];
+const OK_EXT = ['pdf','docx','md','txt'];
 
 const $ = id => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -812,7 +812,7 @@ function runSteps() {
 
 /* ══ 投料交互 ═══════════════════════════════════ */
 let started = false;
-const HINT_DEFAULT = '支持 PDF / DOCX / MD · 或点击选择文件';
+const HINT_DEFAULT = '支持 PDF / DOCX / TXT / MD · 或点击选择文件';
 
 function reject(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
@@ -823,12 +823,24 @@ function reject(name) {
   setTimeout(() => { if (!started) $('hint').textContent = HINT_DEFAULT; }, 2600);
 }
 
-function accept(name, file = null) {
+async function accept(name, file = null) {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  if (!OK_EXT.includes(ext)) return reject(name);
+  // 浏览器的 file.type 和扩展名都可随重命名变化，先读 PDF 签名。
+  let isPdf = false;
+  if (file) {
+    try {
+      const bytes = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+      for (let i = 0; i <= bytes.length - 5; i++) {
+        if (bytes[i] === 37 && bytes[i+1] === 80 && bytes[i+2] === 68 &&
+            bytes[i+3] === 70 && bytes[i+4] === 45) { isPdf = true; break; }
+      }
+    } catch { return reject(name); }
+  }
+  if (!isPdf && !OK_EXT.includes(ext)) return reject(name);
   if (started) return;
   started = true;
   pendingFile = file && file.name === name ? file : null;
+  pendingKind = isPdf ? 'PDF' : null;  // 其他格式以服务端内容识别为准
   $('fname').textContent = name;
   $('hint').textContent = `✓ 已接收 ${name.length > 28 ? name.slice(0, 28) + '…' : name}`;
   $('hint').classList.add('ok');
@@ -844,7 +856,7 @@ function initIntake() {
   ['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('hot'); }));
   drop.addEventListener('drop', e => {
     const f = e.dataTransfer?.files?.[0];
-    accept(f ? f.name : 'resume.pdf', f || null);
+    if (f) accept(f.name, f);
   });
   file.addEventListener('change', () => { if (file.files[0]) accept(file.files[0].name, file.files[0]); });
 
@@ -853,6 +865,7 @@ function initIntake() {
     $('intake').classList.remove('has-file');
     $('fileline').classList.remove('on');
     pendingFile = null;
+    pendingKind = null;
   });
 
   $('urltoggle').addEventListener('click', () => {
@@ -876,6 +889,7 @@ function initIntake() {
       started = false;
       Viewer.clear();
       pendingFile = null;
+      pendingKind = null;
       $('intake').classList.remove('has-file');
       $('fileline').classList.remove('on');
       $('hint').textContent = HINT_DEFAULT;
@@ -1232,6 +1246,7 @@ function initChat() {
 // 脚本 / worker / cmaps 三样同源，少一个都会出问题。
 const PDFJS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
 let pendingFile = null;          // 待预览的 File（真实上传时用 blob URL）
+let pendingKind = null;          // 服务端按内容识别的真实格式
 
 const Viewer = {
   doc: null, page: 1, pages: 1, zoom: 1, url: null, _seq: 0, _task: null,
@@ -1422,8 +1437,8 @@ function openViewer() {
   card.classList.add('has-file');
   $('fileline').classList.add('on');
   const name = $('fname').textContent;
-  const isPdf = /\.pdf$/i.test(name);
-  const kind = (name.split('.').pop() || '').toUpperCase();
+  const kind = pendingKind || (name.split('.').pop() || '').toUpperCase();
+  const isPdf = kind === 'PDF';
   $('fileKind').textContent = kind;
 
   if (!isPdf) {
@@ -1435,7 +1450,7 @@ function openViewer() {
   }
   const url = pendingFile ? URL.createObjectURL(pendingFile) : 'sample-resume.pdf';
   Viewer.open(url, pendingFile
-    ? `${name} · 本地文件，未上传到任何服务器`
+    ? `${name} · 已发送至本地核验服务`
     : `${name} · 演示样本，共 3 页，内容为虚构`);
 }
 
@@ -1617,6 +1632,7 @@ async function runFlow(file) {
     });
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');
+    pendingKind = (doneEv.fileType || pendingKind || '').toUpperCase();
     steps.forEach(s => s.className = 'step done');
     steps[3].querySelector('.t').textContent =
       `逐条判定 · ${doneEv.report.claims.length} 条 · ${doneEv.seconds}s`;

@@ -129,7 +129,7 @@ def build_prompt(material: str, question: str) -> str:
 # ── 真实核验：Report → 网页端形状 ─────────────────────────────────────────
 
 def _search_configured() -> bool:
-    return bool(os.environ.get("SEARCH_API_KEY"))
+    return bool(os.environ.get("SEARCH_API_KEY") or os.environ.get("BRAVE_SEARCH_API_KEY"))
 
 
 def _llm_ready() -> bool:
@@ -213,29 +213,35 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
     from app.pipeline import run_pipeline            # noqa: PLC0415
     from app.profile import derive_profile           # noqa: PLC0415
     from app.llm import build_llm                    # noqa: PLC0415
+    from app.resume_gate import ensure_resume         # noqa: PLC0415
 
     def say(*a, **k):
         events.put({"log": " ".join(str(x) for x in a)})
 
-    suffix = Path(filename).suffix or ".pdf"
+    suffix = Path(filename).suffix or ".upload"
     tmp = Path(tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name)
     tmp.write_bytes(data)
     started = time.monotonic()
     try:
+        parsed = parse_document(tmp)
+        events.put({"log": f"识别文件格式：{parsed.kind.upper()}；正在判断是否为简历"})
+        llm = build_llm()
+        ensure_resume(parsed, llm)
+        events.put({"log": "已确认是个人简历，开始搜索准备"})
         # 画像派生是一次较慢的模型调用，前后各发一条日志让用户知道在等什么
         events.put({"log": "归纳候选人画像（身份/行业/层级）…"})
-        llm = build_llm()
-        profile = derive_profile(parse_document(str(tmp)).safe_text, llm)
+        profile = derive_profile(parsed.safe_text, llm)
         events.put({"log": f"画像完成：identity={profile.identity} level={profile.level} "
                            f"industries={profile.industries or ['—']}"})
         events.put({"stage": "profile"})
-        rep = run_pipeline(str(tmp), candidate_name="", profile=profile, progress=say)
+        rep = run_pipeline(str(tmp), candidate_name="", profile=profile,
+                           parsed_document=parsed, progress=say)
         pres = to_presentation(rep)
         holder["oby"] = rep
         holder["profile"] = profile
         events.put({"done": True, "report": pres,
                     "seconds": round(time.monotonic() - started, 1),
-                    "filename": filename})
+                    "filename": filename, "fileType": parsed.kind})
     except Exception as exc:
         events.put({"done": True, "failed": True,
                     "error": f"{type(exc).__name__}: {exc}",
@@ -562,7 +568,12 @@ def main() -> int:
 
     print(f"underbox  http://{args.host}:{args.port}/", flush=True)
     print(f"  模型     {'deepseek-flash' if _llm_ready() else '⚠ 未配置 DEEPSEEK_API_KEY'}", flush=True)
-    print(f"  检索     {'智谱 web_search' if _search_configured() else '⚠ 未配置 SEARCH_API_KEY（检索为空，结果会如实标 none）'}", flush=True)
+    provider_label = ("智谱 web_search + Brave 备用" if os.environ.get("SEARCH_API_KEY") and
+                      os.environ.get("BRAVE_SEARCH_API_KEY") else
+                      "智谱 web_search" if os.environ.get("SEARCH_API_KEY") else
+                      "Brave Web Search" if os.environ.get("BRAVE_SEARCH_API_KEY") else
+                      "⚠ 未配置搜索 key（检索为空，结果会如实标 none）")
+    print(f"  检索     {provider_label}", flush=True)
     print("  数据     无预置报告——上传简历后由真实流水线产生", flush=True)
     print("  Ctrl-C 停止", flush=True)
 

@@ -7,11 +7,16 @@
 from __future__ import annotations
 
 import os
+import posixpath
 import re
 import threading
 import time
+import zipfile
+from xml.etree import ElementTree as ET
 import urllib.robotparser as robotparser
+from io import BytesIO
 from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -34,6 +39,94 @@ _DEFAULT_UA = ("ResumeVerifyDemo/0.1 (+resume verification demo; "
 UA = _ascii_header(os.environ.get("HTTP_USER_AGENT", _DEFAULT_UA), _DEFAULT_UA)
 RATE_LIMIT_SECONDS = 1.0
 MAX_RETRIES = 2
+MAX_PUBLIC_PDF_BYTES = 12 * 1024 * 1024
+
+
+def _office_text(data: bytes) -> str | None:
+    """按 ZIP 内部结构识别官网 DOCX/XLSX 名单，保留表格的逐行关系。"""
+    if len(data) > MAX_PUBLIC_PDF_BYTES:
+        return None
+    try:
+        with zipfile.ZipFile(BytesIO(data)) as archive:
+            if sum(info.file_size for info in archive.infolist()) > 48 * 1024 * 1024:
+                return None
+            names = set(archive.namelist())
+            if "word/document.xml" in names:
+                root = ET.fromstring(archive.read("word/document.xml"))
+                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                def word_text(node):
+                    return "".join(t.text or "" for t in node.findall(".//w:t", ns))
+                lines = []
+                for node in root.findall("w:body/*", ns):
+                    if node.tag.endswith("}tbl"):
+                        for row in node.findall("w:tr", ns):
+                            lines.append(" | ".join(word_text(c) for c in row.findall("w:tc", ns)))
+                    else:
+                        lines.append(word_text(node))
+                return "\n".join(lines).strip() or None
+            if "xl/workbook.xml" not in names:
+                return None
+            ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            strings = []
+            if "xl/sharedStrings.xml" in names:
+                root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                strings = ["".join(node.itertext()) for node in root.findall("s:si", ns)]
+            # 工作表文件由 workbook 的关系标识定位，保留页面标题中使用的 sheet 名称。
+            relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+            targets = {r.attrib["Id"]: r.attrib.get("Target", "") for r in relations
+                       if r.attrib.get("TargetMode") != "External"}
+            workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+            lines = []
+            for sheet in workbook.findall("s:sheets/s:sheet", ns):
+                rid = sheet.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+                target = targets.get(rid, "")
+                path = posixpath.normpath(target.lstrip("/") if target.startswith("/") else "xl/" + target)
+                if path not in names:
+                    continue
+                lines.append("工作表：" + sheet.get("name", ""))
+                root = ET.fromstring(archive.read(path))
+                for row in root.findall("s:sheetData/s:row", ns):
+                    cells = []
+                    for cell in row.findall("s:c", ns):
+                        # 缺失的单元格要补空，姓名与“候补/录取”所在列不能发生错位。
+                        column = re.match(r"([A-Z]+)", cell.get("r", ""))
+                        index = 0
+                        if column:
+                            for letter in column.group():
+                                index = index * 26 + ord(letter) - ord("A") + 1
+                            if index > 16384:
+                                return None
+                            cells.extend([""] * max(0, index - 1 - len(cells)))
+                        value = cell.findtext("s:v", default="", namespaces=ns)
+                        if cell.get("t") == "s" and value.isdigit():
+                            value = strings[int(value)] if int(value) < len(strings) else ""
+                        elif cell.get("t") == "inlineStr":
+                            value = "".join(t.text or "" for t in cell.findall("s:is//s:t", ns))
+                        cells.append(value)
+                    if any(cells):
+                        lines.append(" | ".join(cells))
+            return "\n".join(lines) or None
+    except (KeyError, ValueError, AttributeError, zipfile.BadZipFile, ET.ParseError):
+        return None
+
+
+def _pdf_text(data: bytes) -> str | None:
+    """公开名单常是 PDF；按文件签名解析，不能把二进制当网页文字。"""
+    if not data[:1024].lstrip().startswith(b"%PDF-") or len(data) > MAX_PUBLIC_PDF_BYTES:
+        return None
+    try:
+        import pymupdf
+        with pymupdf.open(stream=data, filetype="pdf") as document:
+            text = "\n".join(page.get_text() for page in document)
+        if text.strip():
+            return text
+    except Exception:
+        pass
+    try:
+        from pdfminer.high_level import extract_text
+        return extract_text(BytesIO(data)) or None
+    except Exception:
+        return None
 
 
 class SearchUnavailable(RuntimeError):
@@ -118,6 +211,12 @@ class SearchHit:
     # 结构化数据源（Crossref / GitHub API）已经返回了可引用的正文时放这里。
     # collect 层可直接抽取，避免再下载一个经常依赖 JS 或会拦截机器访问的展示页。
     content: str = ""
+    # 由论文登记机构提供的期刊/出版社原文页面，仅作二次官网检索入口。
+    official_url: str = ""
+    # 论文检索需要结合作者、刊物和年份；单凭题名会把同名作品误并。
+    authors: tuple[str, ...] = ()
+    venue: str = ""
+    year: str = ""
 
 
 class Searcher(Protocol):
@@ -129,6 +228,20 @@ class NullSearcher:
 
     def search(self, query: str, site: str | None = None) -> list[SearchHit]:
         return []
+
+
+class CachedSearcher:
+    """只在单份报告内复用完全相同的查询；跨报告不共享个人信息或旧结果。"""
+
+    def __init__(self, inner: Searcher):
+        self.inner = inner
+        self.cache: dict[tuple[str, str | None], list[SearchHit]] = {}
+
+    def search(self, query: str, site: str | None = None) -> list[SearchHit]:
+        key = (query, site)
+        if key not in self.cache:
+            self.cache[key] = self.inner.search(query, site=site)
+        return list(self.cache[key])
 
 
 @dataclass
@@ -197,12 +310,15 @@ class ZhipuSearcher:
         self.timeout = timeout
         self.calls = 0
         self._last: dict[str, float] = {}
+        self._throttle_lock = threading.Lock()
 
     def _throttle(self, host: str) -> None:
-        wait = RATE_LIMIT_SECONDS - (time.monotonic() - self._last.get(host, 0.0))
-        if wait > 0:
-            time.sleep(wait)
-        self._last[host] = time.monotonic()
+        # 并行查询只错峰发送；HTTP 等待可以重叠，但同一搜索域仍相隔至少 1 秒。
+        with self._throttle_lock:
+            wait = RATE_LIMIT_SECONDS - (time.monotonic() - self._last.get(host, 0.0))
+            if wait > 0:
+                time.sleep(wait)
+            self._last[host] = time.monotonic()
 
     @staticmethod
     def _parse(payload: dict) -> list[SearchHit]:
@@ -302,13 +418,15 @@ class HTTPSearcher:
         self.api_key = api_key or os.environ.get("SEARCH_API_KEY", "")
         self.timeout = timeout
         self._last_call: dict[str, float] = {}
+        self._throttle_lock = threading.Lock()
 
     def _throttle(self, host: str) -> None:
-        last = self._last_call.get(host, 0.0)
-        wait = RATE_LIMIT_SECONDS - (time.monotonic() - last)
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call[host] = time.monotonic()
+        with self._throttle_lock:
+            last = self._last_call.get(host, 0.0)
+            wait = RATE_LIMIT_SECONDS - (time.monotonic() - last)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call[host] = time.monotonic()
 
     @staticmethod
     def _parse(payload: dict) -> list[SearchHit]:
@@ -353,6 +471,72 @@ class HTTPSearcher:
                     ) from exc
                 time.sleep(0.5 * (attempt + 1))
         return []
+
+
+class BraveSearcher:
+    """可选备用索引：Brave Web Search，配置 BRAVE_SEARCH_API_KEY 后启用。"""
+
+    ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+
+    def __init__(self, api_key: str = "", timeout: float = 15.0):
+        self.api_key = api_key or os.environ.get("BRAVE_SEARCH_API_KEY", "")
+        self.timeout = timeout
+        self._last = 0.0
+        self._lock = threading.Lock()
+
+    def search(self, query: str, site: str | None = None) -> list[SearchHit]:
+        if not self.api_key:
+            return []
+        import httpx
+        with self._lock:
+            wait = RATE_LIMIT_SECONDS - (time.monotonic() - self._last)
+            if wait > 0:
+                time.sleep(wait)
+            self._last = time.monotonic()
+        q = f"site:{site} {query}" if site else query
+        try:
+            response = httpx.get(
+                self.ENDPOINT,
+                params={"q": q, "count": 10},
+                headers={"X-Subscription-Token": self.api_key,
+                         "Accept": "application/json", "User-Agent": UA},
+                timeout=self.timeout,
+            )
+            if response.status_code in (401, 402, 403, 429):
+                raise SearchUnavailable(f"Brave 搜索不可用：HTTP {response.status_code}")
+            response.raise_for_status()
+            results = ((response.json().get("web") or {}).get("results") or [])
+        except SearchUnavailable:
+            raise
+        except Exception as exc:
+            raise SearchUnavailable(f"Brave 搜索请求失败（{type(exc).__name__}）") from exc
+        hits = [SearchHit(url=item.get("url") or "", title=item.get("title") or "",
+                          snippet=item.get("description") or "") for item in results]
+        return [hit for hit in hits if url_in_domain(hit.url, site)] if site else [
+            hit for hit in hits if hit.url.startswith(("https://", "http://"))]
+
+
+class FallbackSearcher:
+    """主索引空结果或不可用时使用备用索引；不把双失败伪装成零结果。"""
+
+    def __init__(self, primary: Searcher, secondary: Searcher):
+        self.primary = primary
+        self.secondary = secondary
+
+    def search(self, query: str, site: str | None = None) -> list[SearchHit]:
+        failure: SearchUnavailable | None = None
+        try:
+            hits = self.primary.search(query, site=site)
+            if hits:
+                return hits
+        except SearchUnavailable as exc:
+            failure = exc
+        try:
+            return self.secondary.search(query, site=site)
+        except SearchUnavailable:
+            if failure:
+                raise failure
+            raise
 
 
 # --------------------------------------------------------------------------
@@ -445,7 +629,7 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
                 "query.title": query,
                 # 多取一点再在本地按标题相似度重排，避免同名扩展标题挤掉精确匹配。
                 "rows": max(10, min(int(limit) * 2, 20)),
-                "select": "DOI,title,author,published,container-title,publisher,type",
+                "select": "DOI,title,author,published,container-title,publisher,type,link,resource",
             },
             headers=headers,
             timeout=20.0,
@@ -487,10 +671,16 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
             f"出版方：{it.get('publisher') or '（未提供）'}\n"
             f"发表日期：{published or '（未提供）'}\nDOI：{doi}"
         )
+        links = [((it.get("resource") or {}).get("primary") or {}).get("URL") or ""]
+        links.extend(link.get("URL") or "" for link in (it.get("link") or []))
+        official_url = next((u for u in links if u.startswith(("https://", "http://"))
+                             and not url_in_domain(u, "doi.org")), "")
         out.append(SearchHit(
             url=f"https://doi.org/{doi}", title=paper_title,
             snippet=content.replace("\n", "；"),
             publisher=it.get("publisher") or "Crossref", content=content,
+            official_url=official_url, authors=tuple(authors), venue=venue,
+            year=str(parts[0]) if parts else "",
         ))
     return out[:max(1, int(limit))]
 
@@ -552,6 +742,7 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
                 authors.append(f"{name}（{insts}）" if insts else name)
         loc = (it.get("primary_location") or {}).get("source") or {}
         venue = (loc.get("display_name") or "").strip()
+        landing = ((it.get("primary_location") or {}).get("landing_page_url") or "").strip()
         doi = (it.get("doi") or "").strip()
         url = doi or it.get("id") or ""
         content = (
@@ -565,12 +756,16 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
             continue
         out.append(SearchHit(
             url=url, title=paper_title, snippet=content.replace("\n", "；"),
-            publisher=venue or "OpenAlex", content=content))
+            publisher=venue or "OpenAlex", content=content,
+            official_url=landing if landing.startswith(("https://", "http://")) else "",
+            authors=tuple(authors), venue=venue,
+            year=str(it.get("publication_year") or "")))
     return out[:max(1, int(limit))]
 
 
-def paper_hits(title: str, limit: int = 5) -> list[SearchHit]:
-    """论文陈述的免费取证入口：Crossref + OpenAlex，按标题去重。
+def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
+               year: str = "") -> list[SearchHit]:
+    """论文陈述的免费取证入口：Crossref + OpenAlex，按 DOI 去重并结合陈述排序。
 
     两个都是公开 API，不消耗搜索额度。Crossref 排前面——它的出版方和
     DOI 更权威；OpenAlex 补上没有 DOI 的中文论文与会议论文。
@@ -579,13 +774,44 @@ def paper_hits(title: str, limit: int = 5) -> list[SearchHit]:
         return "".join(re.findall(r"[a-z0-9\u3400-\u9fff]+", (value or "").lower()))
 
     out: list[SearchHit] = []
-    seen: set[str] = set()
-    for hit in [*crossref_hits(title, limit=limit), *openalex_hits(title, limit=limit)]:
-        key = norm(hit.title) or hit.url
-        if key in seen:
+    positions: dict[str, int] = {}
+    # 两个独立的元数据站并发请求；结果仍按 Crossref → OpenAlex 固定顺序合并。
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        crossref_future = pool.submit(crossref_hits, title, limit)
+        openalex_future = pool.submit(openalex_hits, title, limit)
+        crossref = crossref_future.result()
+        openalex = openalex_future.result()
+    for hit in [*crossref, *openalex]:
+        key = hit.url.lower().rstrip("/")
+        if key in positions:
+            previous = out[positions[key]]
+            if not previous.official_url and hit.official_url:
+                previous.official_url = hit.official_url
             continue
-        seen.add(key)
+        positions[key] = len(out)
         out.append(hit)
+
+    wanted = norm(title)
+    requested_year = re.search(r"(?:19|20)\d{2}", year or "")
+    if requested_year:
+        # 明显不在简历所写年份附近的同名作品不是这条陈述的候选证据。
+        out = [hit for hit in out if not hit.year or not hit.year.isdigit()
+               or abs(int(hit.year) - int(requested_year.group())) <= 1]
+
+    author_parts = [norm(part) for part in re.split(r"\s+", author or "") if part]
+    venue_key = norm(venue)
+
+    def relevance(hit: SearchHit) -> tuple[float, int, int, int]:
+        from difflib import SequenceMatcher
+        title_score = SequenceMatcher(None, wanted, norm(hit.title)).ratio()
+        author_blob = norm(" ".join(hit.authors))
+        author_score = sum(1 for part in author_parts if len(part) >= 2 and part in author_blob)
+        known_site = 1 if hit.official_url and not url_in_domain(hit.official_url, "doi.org") else 0
+        venue_score = 1 if venue_key and venue_key in norm(hit.venue) else 0
+        return (title_score, author_score, venue_score, known_site)
+
+    out = [hit for hit in out if relevance(hit)[0] >= 0.75]
+    out.sort(key=relevance, reverse=True)
     return out[:max(1, int(limit))]
 
 
@@ -597,6 +823,7 @@ class PageFetcher:
         self._last: dict[str, float] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        self.failures: dict[str, str] = {}
 
     def _host_lock(self, host: str) -> threading.Lock:
         with self._locks_guard:
@@ -614,7 +841,9 @@ class PageFetcher:
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
         # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
         with self._host_lock(host):
+            self.failures.pop(url, None)
             if not robots_allows(url):
+                self.failures[url] = "robots.txt 不允许访问"
                 return None
             self._throttle(host)
             for attempt in range(MAX_RETRIES + 1):
@@ -622,28 +851,56 @@ class PageFetcher:
                     r = httpx.get(url, headers={"User-Agent": UA}, timeout=self.timeout,
                                   follow_redirects=True)
                     r.raise_for_status()
+                    if r.content[:1024].lstrip().startswith(b"%PDF-"):
+                        text = _pdf_text(r.content)
+                        if not text:
+                            self.failures[url] = "PDF 未提取到文本，可能是扫描件或受保护文件"
+                        return text
+                    if r.content.startswith(b"PK\x03\x04"):
+                        text = _office_text(r.content)
+                        if not text:
+                            self.failures[url] = "DOCX/XLSX 未提取到文本或文件格式不支持"
+                        return text
+                    if "application/pdf" in r.headers.get("content-type", "").lower():
+                        self.failures[url] = "返回内容不是有效 PDF"
+                        return None
+                    if r.content.startswith(b"\xd0\xcf\x11\xe0"):
+                        # 旧版 DOC/XLS 不作二进制文本解码。
+                        self.failures[url] = "暂不支持旧版 DOC/XLS 文件"
+                        return None
+                    if any(term in r.text for term in ("请输入验证码下载附件", "验证码下载",
+                                                       "请登录后下载", "您没有权限下载")):
+                        self.failures[url] = "附件下载需要验证码、登录或额外权限"
+                        return None
                     return r.text
                 except Exception:
                     if attempt >= MAX_RETRIES:
+                        self.failures[url] = "请求失败或超时"
                         return None
                     time.sleep(0.5 * (attempt + 1))
         return None
 
 
-SEARCH_PROVIDERS = {"zhipu": ZhipuSearcher, "generic": HTTPSearcher}
+SEARCH_PROVIDERS = {"zhipu": ZhipuSearcher, "generic": HTTPSearcher,
+                    "brave": BraveSearcher}
 
 
 def build_searcher(provider: str | None = None) -> Searcher:
     """按环境变量装配。默认智谱。
 
-    SEARCH_API_KEY=...                 # 必须
+    SEARCH_API_KEY=...                 # 智谱主索引
+    BRAVE_SEARCH_API_KEY=...           # 可选；主索引空结果或故障时使用
     SEARCH_ENGINE=search_std           # 可选，带域限定的查询用；默认 std（0.01/次）
     SEARCH_ENGINE_FALLBACK=search_pro  # 可选，std 空结果时再确认一次（默认关）
     SEARCH_ENGINE_OPEN=search_pro_sogou  # 可选，裸查询用；只有它返回 link
     SEARCH_ENDPOINT=...                # 可选：端点有变时覆盖
-    SEARCH_PROVIDER=zhipu|generic      # 可选
+    SEARCH_PROVIDER=zhipu|brave|generic # 可选
     """
-    if not os.environ.get("SEARCH_API_KEY"):
-        return NullSearcher()
     name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
-    return SEARCH_PROVIDERS.get(name, ZhipuSearcher)()
+    brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
+    if name == "brave":
+        return BraveSearcher() if brave_key else NullSearcher()
+    if not os.environ.get("SEARCH_API_KEY"):
+        return BraveSearcher() if brave_key else NullSearcher()
+    primary = SEARCH_PROVIDERS.get(name, ZhipuSearcher)()
+    return FallbackSearcher(primary, BraveSearcher()) if brave_key else primary

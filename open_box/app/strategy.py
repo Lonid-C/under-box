@@ -18,12 +18,33 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from pathlib import Path
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "strategies.json"
 
 WECHAT_HOST = "mp.weixin.qq.com"
+
+
+def competition_site(contest: str) -> str | None:
+    """已核对的赛事主站；子域上的官方获奖页也会纳入 site 限定。"""
+    value = (contest or "").lower()
+    if re.search(r"\bicpc\b", value) or "international collegiate programming contest" in value:
+        return "icpc.global"
+    return None
+
+
+def publication_site(venue: str) -> str | None:
+    """少量已核对的会议论文存档站；会议首页不一定存放正式论文页面。"""
+    value = re.sub(r"\s+", " ", (venue or "").lower()).strip()
+    if re.search(r"\b(?:neurips|nips)\b", value) or "neural information processing systems" in value:
+        return "proceedings.neurips.cc"
+    if re.search(r"\b(?:naacl|emnlp|acl)\b", value) or "association for computational linguistics" in value:
+        return "aclanthology.org"
+    if re.search(r"\bicml\b", value) or "international conference on machine learning" in value:
+        return "proceedings.mlr.press"
+    return None
 
 # 预算。**默认**（档案没指定时用）与**硬天花板**（任何档案都不能突破）是两回事：
 # 差异化策略的意义就在于"该多搜的简历多搜"——金融/科研类中层以上任职确有公开权威记录，
@@ -225,6 +246,13 @@ def _qualify(org: str, dept: str) -> str:
     return f"{org}{dept}"
 
 
+def _bilingual_org_parts(org: str) -> tuple[str, str]:
+    """双语社团名优先用稳定短名定锚，避免简历后缀或错字锁死检索。"""
+    latin = re.search(r"[A-Za-z]+(?:\s+[A-Za-z]+)+", org or "")
+    chinese = re.search(r"([\u3400-\u9fff]{4,12})大学生", org or "")
+    return (latin.group(0), chinese.group(1)) if latin and chinese else ("", "")
+
+
 def _paren_variants(value: str) -> list[str]:
     """从「全名（缩写）」里拆变体。**规则侧就能做，不必问模型。**
 
@@ -278,12 +306,19 @@ def _context(claim, candidate_name: str, terms: list[str],
         return _from_elements(claim, list(emap.get(field) or []))
 
     org = pick("org", "org")
+    org_latin, org_han = _bilingual_org_parts(org)
     from .plan import claim_school
     school = claim_school(claim)
+    # 来源学校仅是检索线索，不能据此认定已获推免资格。
+    source_school = e.get("source_school_hint") if isinstance(e.get("source_school_hint"), str) else ""
+    source_field = e.get("source_field_hint") if isinstance(e.get("source_field_hint"), str) else ""
     dept = pick("dept", "dept")
     title = pick("title", "title")
     project = pick("project", "project") or title
     year = (claim.date_start or claim.date_label or "")[:4]
+    # 2023 年入学/毕业的推免名单，推荐方通常在 2022 年秋季公示。
+    # 只作为公告检索年份，不能据此推定个人已获得资格。
+    notice_year = str(int(year) - 1) if claim.category == "学历" and year.isdigit() else ""
     nvar = _name_variants(candidate_name)
 
     # 变体钥匙：同一事物的不同写法各给一个占位符。
@@ -303,7 +338,12 @@ def _context(claim, candidate_name: str, terms: list[str],
         "name2": nvar[1] if len(nvar) > 1 else "",
         "period": period,
         "org": org,
+        "org_latin": org_latin,
+        "org_han": org_han,
         "school": school,
+        "source_school": source_school,
+        "source_field": source_field,
+        "notice_year": notice_year,
         "dept": dept,
         "role": pick("role", "role"),
         "orgname": _qualify(org, dept),         # 组织全称，学生工作/竞赛用它当主搜索词
@@ -350,8 +390,24 @@ def _resolve_site(token: str | None, claim, ctx: dict[str, str] | None = None) -
         # None，collect.py 永远看不到 "school"，所谓动态发现实际上从未运行。
         org = (ctx or {}).get("school") or (ctx or {}).get("org") or (claim.entities or {}).get("org")
         return _school_domain(org) or "school"
+    if token == "source_school":
+        # 未收录的本科院校也要经过官网发现，不能静默丢掉推荐方查询。
+        school = (ctx or {}).get("source_school")
+        return (_school_domain(school) or "source_school") if school else None
     if token == "organizer":
-        return (claim.entities or {}).get("organizer_domain") or None
+        known = competition_site((ctx or {}).get("contest") or (claim.entities or {}).get("contest") or "")
+        if known:
+            return known
+        raw = (claim.entities or {}).get("organizer_domain") or ""
+        host = urlparse(raw if "://" in raw else "https://" + raw).hostname
+        return host.lower() if host and "." in host else "organizer"
+    if token == "publisher":
+        known = publication_site((ctx or {}).get("venue") or (claim.entities or {}).get("venue") or "")
+        if known:
+            return known
+        raw = (claim.entities or {}).get("venue_domain") or ""
+        host = urlparse(raw if "://" in raw else "https://" + raw).hostname
+        return host.lower() if host and "." in host else "publisher"
     if token == "wechat":
         return WECHAT_HOST
     if token in ("gov", "platform"):
@@ -390,6 +446,14 @@ def _targets(form: dict, claim) -> list[str]:
 
 # ── 展开成查询计划 ───────────────────────────────────────────────────────
 
+def _claim_search_blob(claim) -> str:
+    blob = claim.raw_text or ""
+    for v in (claim.entities or {}).values():
+        if isinstance(v, str):
+            blob += " " + v
+    return blob + " " + " ".join(claim.elements or [])
+
+
 def _search_exception(cat: dict, claim) -> bool:
     """never_search 类别的例外：命中 search_if_terms 里的词就恢复检索。
 
@@ -399,12 +463,70 @@ def _search_exception(cat: dict, claim) -> bool:
     terms = cat.get("search_if_terms") or []
     if not terms:
         return False
-    blob = claim.raw_text or ""
-    for v in (claim.entities or {}).values():
-        if isinstance(v, str):
-            blob += " " + v
-    blob += " " + " ".join(claim.elements or [])
+    blob = _claim_search_blob(claim)
     return any(t in blob for t in terms)
+
+
+def add_admission_source_hints(claims: list) -> list:
+    """仅为明确的推免陈述匹配同份简历里时间相接的来源学校。
+
+    这是检索路由提示，不增加待证明要素，也不把本科经历当成推免资格证据。
+    找到多个可能的前一所学校时不猜。
+    """
+    from .plan import claim_school
+
+    def year(value: str | None) -> str:
+        match = re.search(r"(?:19|20)\d{2}", value or "")
+        return match.group(0) if match else ""
+
+    def start_year(item) -> str:
+        return year(item.date_start) or year(item.date_label) or year(item.raw_text)
+
+    def end_year(item) -> str:
+        if year(item.date_end):
+            return year(item.date_end)
+        # 拆分模型漏填 date_end 时，仅从明确写出两个年份的区间补检索提示。
+        for value in (item.date_label, item.raw_text):
+            years = re.findall(r"(?:19|20)\d{2}", value or "")
+            if len(years) >= 2:
+                return years[-1]
+        return ""
+
+    result = []
+    for claim in claims:
+        blob = _claim_search_blob(claim)
+        intake = start_year(claim)
+        if (claim.category != "学历" or not intake
+                or not any(x in blob for x in ("保研", "保送", "推免", "推荐免试"))
+                or (claim.entities or {}).get("source_school_hint")):
+            result.append(claim)
+            continue
+        receiver = claim_school(claim)
+        sources = [
+            (school, other) for other in claims
+            if other is not claim and other.category == "学历"
+            and (school := claim_school(other)) and school != receiver
+            and end_year(other) == intake
+            and start_year(other) and start_year(other) < intake
+            and not any(x in _claim_search_blob(other) for x in ("夏令营", "优秀营员"))
+        ]
+        source_schools = {school for school, _ in sources}
+        if len(source_schools) == 1:
+            hints = {"source_school_hint": next(iter(source_schools))}
+            fields = {
+                value.strip() for _, other in sources
+                if isinstance(value := ((other.entities or {}).get("dept") or
+                                        (other.entities or {}).get("major")), str)
+                and value.strip()
+            }
+            if len(fields) == 1:
+                hints["source_field_hint"] = next(iter(fields))
+            result.append(claim.model_copy(update={
+                "entities": {**(claim.entities or {}), **hints}
+            }))
+        else:
+            result.append(claim)
+    return result
 
 
 def build_plan(
@@ -430,7 +552,9 @@ def build_plan(
     # never_search 类别：默认零检索；命中 search_if_terms 例外则放开全部表单；
     # 都不命中时，只放行标了 always 的**合规轻探针**（如学历的公众号「学校+姓名」粗检）。
     only_always = never and not exception
-    _all_forms = (cat.get("official_forms") or []) + (cat.get("anchor_forms") or []) + (cat.get("forms") or [])
+    _all_forms = ((cat.get("official_forms") or []) + (cat.get("organizer_forms") or [])
+                  + (cat.get("publisher_forms") or [])
+                  + (cat.get("anchor_forms") or []) + (cat.get("forms") or []))
     if only_always and not any(f.get("always") for f in _all_forms):
         # 零预算是**有语义的**：这条陈述按设计不去检索。不能留空 dict——
         # 消费方（如 dsh 工具的输出 schema）要求 budget 三个字段都在。
@@ -457,6 +581,16 @@ def build_plan(
             if _usable(f.get("tpl", ""), ctx)[0]:
                 forms.append((f, f"school:{claim.category}"))
                 break
+    if ctx.get("contest"):
+        for f in cat.get("organizer_forms") or []:
+            if _usable(f.get("tpl", ""), ctx)[0]:
+                forms.append((f, f"organizer:{claim.category}"))
+                break
+    if ctx.get("paper") and ctx.get("venue"):
+        for f in cat.get("publisher_forms") or []:
+            if _usable(f.get("tpl", ""), ctx)[0]:
+                forms.append((f, f"publisher:{claim.category}"))
+                break
     for f in cat.get("anchor_forms") or []:
         if only_always and not f.get("always"):
             continue
@@ -482,6 +616,9 @@ def build_plan(
     skipped: list[tuple[str, list[str]]] = []
     for form, source in forms:
         tpl = form.get("tpl", "")
+        when_terms = form.get("when_terms") or []
+        if when_terms and not any(term in _claim_search_blob(claim) for term in when_terms):
+            continue
         # 表单可以声明只对哪些类别有意义（如"学年评奖公示"只对荣誉/奖学金类）。
         # 没有这层限定，给学生工作发的查询里会混进"评奖公示"——它证不了职务，
         # 只是把预算烧在一个不可能出结果的查询上。
@@ -552,8 +689,17 @@ def build_plan(
     budget["seconds"] = max(5.0, min(budget["seconds"], CEILING_SECONDS))
 
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
-    queries.sort(key=lambda q: (q.variant, not q.source.startswith("school:"),
-                                q.round, -q.weight, 0 if q.site else 1, q.text))
+    def priority(q: Query) -> int:
+        if q.source.startswith("school:"):
+            return 0
+        if q.kind == "crossref":
+            return 0
+        if q.source.startswith(("organizer:", "publisher:")):
+            return 1
+        return 2
+
+    queries.sort(key=lambda q: (q.variant, priority(q), q.round,
+                                -q.weight, 0 if q.site else 1, q.text))
 
     cap = budget["searches"]
     dropped = [q.text for q in queries[cap:]]

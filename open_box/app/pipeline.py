@@ -19,13 +19,15 @@ from pathlib import Path
 from . import judge
 from .collect import Budget, collect_for_claim
 from .llm import LLM, build_llm
-from .parse import parse_document
+from .parse import ParsedDocument, parse_document
 from .plan import MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, plan_with_notes
 from .profile import derive_profile
+from .resume_gate import ensure_resume
 from .questions import default_next_step, generate_question
 from .schema import Report
-from .search import PageFetcher, Searcher, build_searcher
+from .search import CachedSearcher, PageFetcher, Searcher, build_searcher
 from .split import split_claims
+from .strategy import add_admission_source_hints
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -48,14 +50,18 @@ def run_pipeline(
     budget_factory=None,
     fetcher: PageFetcher | None = None,
     progress=None,
+    parsed_document: ParsedDocument | None = None,
 ) -> Report:
     """live 模式。judge.assess 是唯一的判定入口，与 fixture 走的是同一套规则。
 
     profile 是简历画像（身份/行业/层级/技能），决定用哪套检索策略。
     不给就走兜底档案——预算更低，因为不知道去哪找时广撒网只换噪音。
     """
+    # 解析必须先于画像、拆分和检索；网页端已经解析过时直接复用，避免 PDF 读两遍。
+    doc = parsed_document if parsed_document is not None else parse_document(resume_path)
     llm = llm or build_llm()
-    searcher = searcher or build_searcher()
+    ensure_resume(doc, llm)
+    searcher = CachedSearcher(searcher or build_searcher())
     fetcher = fetcher or PageFetcher()
     # 调用方显式给了预算工厂，就完全照它走（验收里就是用它把预算压到 1 次来跑断路场景）；
     # 没给的话才由**检索计划自己带预算**——档案说 8 次检索、执行层却仍用默认 6 的话，
@@ -65,8 +71,7 @@ def run_pipeline(
     say = progress or (lambda *a, **k: None)
 
     # 1 解析 + 输入风险检测
-    say("[1/6] 解析与隐藏文字检测")
-    doc = parse_document(resume_path)
+    say(f"[1/6] 已识别 {doc.kind.upper()} 且确认是简历，正文解析与隐藏文字检测完成")
 
     # 2 画像：模型读简历，判断这是哪类人 → 决定用哪套检索策略
     profile = profile or derive_profile(doc.safe_text, llm)
@@ -75,7 +80,7 @@ def run_pipeline(
 
     # 3 陈述拆分（只送 scrub 过的安全文本）
     say("[2/6] 陈述拆分")
-    claims = split_claims(doc.safe_text, llm)
+    claims = add_admission_source_hints(split_claims(doc.safe_text, llm))
 
     # 姓名：调用方给的 > 画像里的（模型读的原词）> 实体里的。都空才留空——
     # 之前这里直接落到"（未标注姓名）"，导致检索计划里的 `{name}` 查询全部废掉。
@@ -85,6 +90,8 @@ def run_pipeline(
     # 同一份简历里常有多条来自同一所学校的陈述。未知学校的官网一旦确认，后续陈述
     # 直接复用，避免重复跑“学校名 + 官网”发现查询，既省时间也省搜索额度。
     school_domains: dict[str, str] = {}
+    organizer_domains: dict[str, str] = {}
+    publisher_domains: dict[str, str] = {}
     # 档案匹配要用整份简历的类别集合，不能只看当前这一条——见 strategy._matches
     resume_categories = [c.category for c in claims]
     for i, claim in enumerate(claims, start=1):
@@ -105,6 +112,8 @@ def run_pipeline(
             claim, name, searcher, llm,
             budget=budget, fetcher=fetcher, queries=plan.queries, progress=say,
             school_domains=school_domains,
+            organizer_domains=organizer_domains,
+            publisher_domains=publisher_domains,
         )
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)

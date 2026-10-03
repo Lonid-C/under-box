@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .llm import LLMUnavailable, NullLLM, build_llm
 from .pipeline import load_mock_report, run_pipeline
-from .search import NullSearcher, SearchUnavailable, build_searcher
+from .search import NullSearcher, SearchUnavailable, build_searcher, url_in_domain
 from .schema import STATUS_LABEL, Report
 
 
@@ -25,7 +25,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 report_id=args.report_id,
                 progress=lambda m: print(m, file=sys.stderr),
             )
-        except (LLMUnavailable, SearchUnavailable) as exc:
+        except (ValueError, LLMUnavailable, SearchUnavailable) as exc:
             print(f"\nlive 模式跑不起来：{exc}", file=sys.stderr)
             print("离线演示用 `make demo`，不需要任何 key。", file=sys.stderr)
             return 2
@@ -100,14 +100,14 @@ def cmd_search_check(args: argparse.Namespace) -> int:
     """一次最小检索，验证 key / 端点 / 引擎名，并确认 site 限定真的生效。"""
     s = build_searcher(args.provider)
     if isinstance(s, NullSearcher):
-        print("未检测到 SEARCH_API_KEY。", file=sys.stderr)
+        print("未检测到 SEARCH_API_KEY 或 BRAVE_SEARCH_API_KEY。", file=sys.stderr)
         return 2
 
     print(f"供应商 {type(s).__name__}\n端点   {getattr(s, 'endpoint', '')}\n"
           f"引擎   {getattr(s, 'engine', '—')}\n")
     started = time.monotonic()
     try:
-        hits = s.ping() if hasattr(s, "ping") else s.search("测试")
+        hits = s.search("清华大学 计算机系 公示", site="tsinghua.edu.cn")
     except Exception as exc:
         print(f"✗ 检索失败：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
@@ -115,7 +115,7 @@ def cmd_search_check(args: argparse.Namespace) -> int:
     print(f"✓ 调通了，耗时 {time.monotonic() - started:.1f}s，返回 {len(hits)} 条")
     for h in hits[:3]:
         print(f"    {h.url}\n      {h.title[:60]}")
-    if hits and not all(".edu.cn" in h.url for h in hits):
+    if hits and not all(url_in_domain(h.url, "tsinghua.edu.cn") for h in hits):
         print("\n注意：site 限定似乎没完全生效，结果里有站外链接。"
               "检查 search_domain_filter 的参数名是否随文档变了。")
     return 0

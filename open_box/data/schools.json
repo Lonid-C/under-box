@@ -23,6 +23,19 @@
       "fictional": true
     },
     {
+      "name": "北京师范大学-香港浸会大学联合国际学院",
+      "aliases": [
+        "北师香港浸会大学",
+        "北师港浸大",
+        "北京师范大学－香港浸会大学联合国际学院"
+      ],
+      "domain": "bnbu.edu.cn",
+      "dept_domains": [
+        "fst.bnbu.edu.cn",
+        "ar.bnbu.edu.cn"
+      ]
+    },
+    {
       "name": "清华大学",
       "aliases": [
         "清华"
@@ -266,6 +279,24 @@
       ],
       "domain": "dlut.edu.cn",
       "dept_domains": []
+    },
+    {
+      "name": "上海大学",
+      "aliases": ["上大"],
+      "domain": "shu.edu.cn",
+      "dept_domains": ["music.shu.edu.cn", "xxgk.shu.edu.cn"]
+    },
+    {
+      "name": "中南大学",
+      "aliases": [],
+      "domain": "csu.edu.cn",
+      "dept_domains": ["saa.csu.edu.cn", "cse.csu.edu.cn", "yz.csu.edu.cn"]
+    },
+    {
+      "name": "四川大学",
+      "aliases": ["川大"],
+      "domain": "scu.edu.cn",
+      "dept_domains": ["classics.scu.edu.cn", "idmr.scu.edu.cn"]
     },
     {
       "name": "西北工业大学",

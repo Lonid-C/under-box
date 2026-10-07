@@ -14,7 +14,9 @@ import os
 import sys
 from pathlib import Path
 
-OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT", "/Users/a1234/Desktop/open_box"))
+# 默认用同仓库的 ../open_box（open_box 已迁到本仓库，桌面上那份是 v0.1.x 旧快照，已退役）。
+# 要用别处的代码就用 OPEN_BOX_ROOT 覆盖。
+OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT") or (Path(__file__).resolve().parent.parent / "open_box"))
 sys.path.insert(0, str(OPEN_BOX))
 
 from app.plan import plan_with_notes                        # noqa: E402

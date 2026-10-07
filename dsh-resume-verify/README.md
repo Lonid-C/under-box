@@ -124,7 +124,7 @@ resume_classify_tier、resume_judge_claim、resume_summary　openBoxRoot=…　p
 
 看不到这行就是没装上。打开 `http://127.0.0.1:3080`，输入：
 
-> 核验 /Users/a1234/Desktop/open_box/samples/resume_lin.pdf 这份简历
+> 核验 open_box/samples/resume_lin.pdf 这份简历
 
 模型会自己走完 ingest → 拆陈述 → plan → 检索 → judge → summary。
 

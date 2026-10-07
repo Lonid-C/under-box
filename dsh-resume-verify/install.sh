@@ -17,7 +17,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OPEN_BOX_ROOT="${OPEN_BOX_ROOT:-/Users/a1234/Desktop/open_box}"
+# 默认用同仓库的 <repo>/open_box（本脚本在 dsh-resume-verify/ 下，所以 .. 就是仓库根）。
+# 桌面上那份 open_box 是 v0.1.x 旧快照，已退役；要用别处代码就显式给 OPEN_BOX_ROOT。
+OPEN_BOX_ROOT="${OPEN_BOX_ROOT:-$(cd "$HERE/.." && pwd)/open_box}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 TARGET_NAME="${TARGET_NAME:-resume-verify}"

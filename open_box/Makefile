@@ -15,7 +15,7 @@ serve:
 ## 第 11 节验收
 test:
 	@$(PY) -m tests.test_rules
-	@$(PY) -m unittest tests.test_search_recall tests.test_school_search tests.test_document_gate tests.test_official_search tests.test_push_rosters tests.test_enrollment_search tests.test_discover tests.test_competitions -v
+	@$(PY) -m unittest tests.test_search_recall tests.test_school_search tests.test_document_gate tests.test_official_search tests.test_push_rosters tests.test_enrollment_search tests.test_discover tests.test_competitions tests.test_award_routes tests.test_parallel -v
 
 ## 重新生成内置 fixture（状态由 app/judge.py 的规则算出）
 fixture:

@@ -39,12 +39,27 @@ _DEFAULT_UA = ("ResumeVerifyDemo/0.1 (+resume verification demo; "
 UA = _ascii_header(os.environ.get("HTTP_USER_AGENT", _DEFAULT_UA), _DEFAULT_UA)
 RATE_LIMIT_SECONDS = 1.0
 MAX_RETRIES = 2
-MAX_PUBLIC_PDF_BYTES = 12 * 1024 * 1024
+
+
+def search_interval() -> float:
+    """搜索 API 两次请求发出之间的最小间隔（秒）。学校官网读页仍按 RATE_LIMIT_SECONDS。
+
+    陈述并行（pipeline.CLAIM_WORKERS）以后，所有陈述共用这一个搜索出口：原来 1 秒一次，
+    十几条陈述的几十次搜索光排队就要一两分钟。默认 0.5 秒（每秒最多发出 2 个，响应可以
+    重叠等待）；遇到 429 限流会退避重试。账号限额更高可调小，被限流就调大。
+    """
+    try:
+        return max(0.0, float(os.environ.get("SEARCH_MIN_INTERVAL", "0.5")))
+    except ValueError:
+        return 0.5
+# 2025 CUMCM 正式名单约 19 MB，旧 12 MB 限制会把真实名单误报为扫描件。
+MAX_PUBLIC_PDF_BYTES = 32 * 1024 * 1024
+MAX_PUBLIC_OFFICE_BYTES = 12 * 1024 * 1024
 
 
 def _office_text(data: bytes) -> str | None:
     """按 ZIP 内部结构识别官网 DOCX/XLSX 名单，保留表格的逐行关系。"""
-    if len(data) > MAX_PUBLIC_PDF_BYTES:
+    if len(data) > MAX_PUBLIC_OFFICE_BYTES:
         return None
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
@@ -175,7 +190,9 @@ def _pdf_text(data: bytes) -> str | None:
         pass
     try:
         from pdfminer.high_level import extract_text
-        return extract_text(BytesIO(data)) or None
+        # pdfminer 对纯扫描件会返回分页符，不能把“\f\f”认作已读出名单。
+        text = extract_text(BytesIO(data))
+        return text if text and text.strip() else None
     except Exception:
         return None
 
@@ -287,12 +304,36 @@ class CachedSearcher:
     def __init__(self, inner: Searcher):
         self.inner = inner
         self.cache: dict[tuple[str, str | None], list[SearchHit]] = {}
+        self._guard = threading.Lock()
+        self._locks: dict[tuple[str, str | None], threading.Lock] = {}
+        self._confirmed: set[tuple[str, str | None]] = set()
+
+    def _key_lock(self, key):
+        with self._guard:
+            return self._locks.setdefault(key, threading.Lock())
 
     def search(self, query: str, site: str | None = None) -> list[SearchHit]:
         key = (query, site)
-        if key not in self.cache:
-            self.cache[key] = self.inner.search(query, site=site)
-        return list(self.cache[key])
+        with self._key_lock(key):
+            if key not in self.cache:
+                self.cache[key] = self.inner.search(query, site=site)
+            return list(self.cache[key])
+
+    def search_with_confirmation(self, query: str, site: str | None = None,
+                                 accept=None) -> list[SearchHit]:
+        """只对计划标记的关键名单查询补查；同一空查询并行时也最多补查一次。"""
+        key = (query, site)
+        with self._key_lock(key):
+            if key not in self.cache:
+                self.cache[key] = self.inner.search(query, site=site)
+            confirm = getattr(self.inner, "confirm_empty", None)
+            useful = any(accept(hit) for hit in self.cache[key]) if accept else bool(self.cache[key])
+            if not useful and site and key not in self._confirmed and callable(confirm):
+                self._confirmed.add(key)
+                found = confirm(query, site=site)
+                urls = {hit.url for hit in self.cache[key]}
+                self.cache[key] += [hit for hit in found if hit.url not in urls]
+            return list(self.cache[key])
 
 
 @dataclass
@@ -364,9 +405,9 @@ class ZhipuSearcher:
         self._throttle_lock = threading.Lock()
 
     def _throttle(self, host: str) -> None:
-        # 并行查询只错峰发送；HTTP 等待可以重叠，但同一搜索域仍相隔至少 1 秒。
+        # 并行查询只错峰发送；HTTP 等待可以重叠，同一搜索域相隔至少 search_interval() 秒。
         with self._throttle_lock:
-            wait = RATE_LIMIT_SECONDS - (time.monotonic() - self._last.get(host, 0.0))
+            wait = search_interval() - (time.monotonic() - self._last.get(host, 0.0))
             if wait > 0:
                 time.sleep(wait)
             self._last[host] = time.monotonic()
@@ -404,6 +445,13 @@ class ZhipuSearcher:
             hits = self._call(query, site, fallback)
         return hits
 
+    def confirm_empty(self, query: str, site: str | None = None) -> list[SearchHit]:
+        """关键整批名单的空结果用 pro 确认，不修改共享实例的默认引擎。"""
+        if (not self.api_key or not site or self.engine != "search_std"
+                or self.engine_site_fallback and self.engine_site_fallback != self.engine):
+            return []
+        return self._call(query, site, "search_pro")
+
     def _call(self, query: str, site: str | None, engine: str) -> list[SearchHit]:
         import httpx
         body: dict = {"search_query": query, "search_intent": False,
@@ -435,6 +483,10 @@ class ZhipuSearcher:
                         code = ""
                     if code == "1113" or any(x in message for x in ("余额不足", "资源包", "充值")):
                         raise SearchUnavailable(f"智谱搜索不可用：{message}")
+                    # 普通限流（多条陈述并行时可能碰到）：退避久一点再试，别马上判"搜索不可用"。
+                    if attempt < MAX_RETRIES:
+                        time.sleep(2.0 * (attempt + 1))
+                        continue
                 if is_content_filtered(r):
                     # 不重发同一串：审核判决不是网络抖动，一模一样的字面重试毫无意义，
                     # 只会白烧时间。改述是调用方的决定（它才知道这条查询值不值得救）。
@@ -474,7 +526,7 @@ class HTTPSearcher:
     def _throttle(self, host: str) -> None:
         with self._throttle_lock:
             last = self._last_call.get(host, 0.0)
-            wait = RATE_LIMIT_SECONDS - (time.monotonic() - last)
+            wait = search_interval() - (time.monotonic() - last)
             if wait > 0:
                 time.sleep(wait)
             self._last_call[host] = time.monotonic()
@@ -588,6 +640,10 @@ class FallbackSearcher:
             if failure:
                 raise failure
             raise
+
+    def confirm_empty(self, query: str, site: str | None = None) -> list[SearchHit]:
+        confirm = getattr(self.primary, "confirm_empty", None)
+        return confirm(query, site=site) if callable(confirm) else []
 
 
 # --------------------------------------------------------------------------
@@ -975,8 +1031,9 @@ class PageFetcher:
         # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
         with self._host_lock(host):
             self.failures.pop(url, None)
-            if host in self.dead_hosts:
-                self.failures[url] = f"同一站点刚才{self.dead_hosts[host]}，已跳过"
+            dead_reason = self.dead_hosts.get(host) or self.dead_hosts.get(f"{urlparse(url).scheme}://{host}")
+            if dead_reason:
+                self.failures[url] = f"同一站点刚才{dead_reason}，已跳过"
                 return None
             if not robots_allows(url):
                 self.failures[url] = "robots.txt 不允许访问"
@@ -997,6 +1054,9 @@ class PageFetcher:
                     if urlparse(resolved).scheme in ("http", "https"):
                         self.resolved_urls[url] = resolved
                     if r.content[:1024].lstrip().startswith(b"%PDF-"):
+                        if len(r.content) > MAX_PUBLIC_PDF_BYTES:
+                            self.failures[url] = "PDF 超过公开名单读取上限（32 MB）"
+                            return None
                         text = _pdf_text(r.content)
                         if not text:
                             self.failures[url] = "PDF 未提取到文本，可能是扫描件或受保护文件"
@@ -1028,6 +1088,13 @@ class PageFetcher:
                     text = str(exc)
                     reason = ("证书校验失败（SSL）" if "CERTIFICATE" in text.upper() or "SSL" in text.upper()
                               else "连接失败")
+                    if reason == "证书校验失败（SSL）":
+                        if "expired" in text.lower():
+                            reason = "网站证书已过期（SSL）"
+                        # 同次核验再访问同域的十条公告也无法修复证书；保留原因并节省等待。
+                        self.failures[url] = reason
+                        self.dead_hosts[f"https://{host}"] = reason
+                        return None
                 except httpx.HTTPStatusError as exc:
                     reason = f"HTTP {exc.response.status_code}"
                 except Exception as exc:

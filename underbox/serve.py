@@ -215,7 +215,6 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
     """
     from app.parse import parse_document             # noqa: PLC0415
     from app.pipeline import run_pipeline            # noqa: PLC0415
-    from app.profile import derive_profile           # noqa: PLC0415
     from app.llm import build_llm                    # noqa: PLC0415
     from app.resume_gate import ensure_resume         # noqa: PLC0415
 
@@ -232,17 +231,20 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
         llm = build_llm()
         ensure_resume(parsed, llm)
         events.put({"log": "已确认是个人简历，开始搜索准备"})
-        # 画像派生是一次较慢的模型调用，前后各发一条日志让用户知道在等什么
-        events.put({"log": "归纳候选人画像（身份/行业/层级）…"})
-        profile = derive_profile(parsed.safe_text, llm)
-        events.put({"log": f"画像完成：identity={profile.identity} level={profile.level} "
-                           f"industries={profile.industries or ['—']}"})
-        events.put({"stage": "profile"})
-        rep = run_pipeline(str(tmp), candidate_name="", profile=profile,
-                           parsed_document=parsed, progress=say)
+        # 画像派生是一次较慢的模型调用；现在和陈述拆分同时发出（见 run_pipeline），
+        # 画像一出来就通过 on_profile 回调推一条日志，前端据此推进阶段。
+        events.put({"log": "归纳候选人画像（身份/行业/层级），同时拆分陈述…"})
+
+        def on_profile(profile):
+            holder["profile"] = profile
+            events.put({"log": f"画像完成：identity={profile.identity} level={profile.level} "
+                               f"industries={profile.industries or ['—']}"})
+            events.put({"stage": "profile"})
+
+        rep = run_pipeline(str(tmp), candidate_name="", parsed_document=parsed,
+                           llm=llm, progress=say, on_profile=on_profile)
         pres = to_presentation(rep)
         holder["oby"] = rep
-        holder["profile"] = profile
         events.put({"done": True, "report": pres,
                     "seconds": round(time.monotonic() - started, 1),
                     "filename": filename, "fileType": parsed.kind})

@@ -19,7 +19,8 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlunparse
 
 from . import judge
-from .competitions import claim_year, competition_for_claim, roster_links, seed_pages
+from .competitions import (claim_year, competition_for_claim, competition_page_mismatch,
+                           roster_links, seed_pages, useful_roster_hit)
 from .llm import LLM
 from .parse import extract_main_text, wrap_untrusted
 from .plan import (MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, Query,
@@ -171,6 +172,8 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
                      *, organizer_hosts: set[str] | None = None,
                      candidate_provided: bool = False, candidate_name: str = "") -> Evidence | None:
     """让模型逐字摘录，然后由规则定级和打身份分。模型不参与任何判定。"""
+    if competition_for_claim(claim) and competition_page_mismatch(claim, hit.title or ""):
+        return None
     system = EXTRACT_SYSTEM.format(
         raw_text=claim.raw_text, elements=claim.elements, entities=claim.entities)
     if candidate_name:
@@ -203,15 +206,20 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     supports = [s for s in supports if s in valid_elements]
 
     if competition_for_claim(claim):
+        if competition_page_mismatch(claim, snippet):
+            return None
         # 官网目录不能替代实际页面。已知赛事的摘录必须在本次读取内容中确实出现。
         quoted = re.sub(r"\s+", "", snippet).casefold()
         source_text = re.sub(r"\s+", "", original_page_text).casefold()
         if not quoted or quoted not in source_text:
             return None
         target_year = claim_year(claim)
-        snippet_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", snippet)}
+        year_text = re.sub(r"(?<!\d)(?:19|20)\d{2}年?(?:出生|生人)", "", snippet)
+        year_text = re.sub(r"(?:出生(?:于)?|\bborn(?:\s+in)?)\s*(?:19|20)\d{2}", "", year_text, flags=re.I)
+        snippet_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", year_text)}
         title_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", hit.title or "")}
-        if target_year and (snippet_years or title_years) and target_year not in (snippet_years | title_years):
+        observed_years = snippet_years or title_years
+        if target_year and observed_years and target_year not in observed_years:
             # 其他年度同名获奖不构成这条自述的矛盾，也不能支持当前年度。
             supports = []
             contradicts = []
@@ -388,6 +396,8 @@ def _relevance(hit: SearchHit, candidate_name: str, claim: Claim) -> int:
     if any(w in blob for w in ("公示", "名单", "获奖", "通知", "公告", "录取", "授予", "表彰")):
         score += 1
     if competition_for_claim(claim):
+        if competition_page_mismatch(claim, hit.title or ""):
+            score -= 40
         target_year = claim_year(claim)
         title_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", hit.title or "")}
         if target_year and str(target_year) in blob:
@@ -656,7 +666,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
 
 
 def _search_resilient(text: str, site: str | None, searcher: Searcher, org: str,
-                      say) -> list[SearchHit]:
+                      say, confirm_empty: bool = False, claim: Claim | None = None) -> list[SearchHit]:
     """执行一次检索；被内容审核误拦时用同义改述重试，仍不过就抛 SearchFiltered。
 
     实测（2026-09-22）：智谱的 code 1301 是**概率性误伤**，同一查询串换个词序就能过，
@@ -665,7 +675,19 @@ def _search_resilient(text: str, site: str | None, searcher: Searcher, org: str,
     改述的代价只有几次 1 秒限流，换来的是前面十几次搜索的结果不白费。
     """
     try:
-        return searcher.search(text, site=site)
+        hits = searcher.search(text, site=site)
+        accept = (lambda hit: useful_roster_hit(claim, hit)) if claim else None
+        useful = any(accept(hit) for hit in hits) if accept else bool(hits)
+        if not useful and site and confirm_empty:
+            confirm = getattr(searcher, "search_with_confirmation", None)
+            if callable(confirm):
+                say("    关键官网名单查询未返回有效名单，执行一次补查（同一查询缓存复用）")
+                return confirm(text, site=site, accept=accept)
+            confirm = getattr(searcher, "confirm_empty", None)
+            if callable(confirm):
+                say("    关键官网名单查询未返回有效名单，执行一次补查")
+                return hits + confirm(text, site=site)
+        return hits
     except SearchFiltered as blocked:
         for variant in rephrase_variants(text, org)[:3]:
             try:
@@ -747,7 +769,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     source_site = school_domain(source_school) or school_domains.get(source_school)
     organizer_domains = organizer_domains if organizer_domains is not None else {}
     publisher_domains = publisher_domains if publisher_domains is not None else {}
-    organizer_site = organizer_domains.get(contest) or competition_site(contest) or _official_host(
+    known_organizer = (competition or {}).get("official_domains") or []
+    organizer_site = organizer_domains.get(contest) or (known_organizer[0] if known_organizer else None) or competition_site(contest) or _official_host(
         "https://" + str(entities.get("organizer_domain") or "").removeprefix("https://").removeprefix("http://"))
     publisher_site = publisher_domains.get(venue) or publication_site(venue) or _official_host(
         "https://" + str(entities.get("venue_domain") or "").removeprefix("https://").removeprefix("http://"))
@@ -762,6 +785,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     def add_hits(hits):
         nonlocal total_hits
         usable = [h for h in hits if h.url.startswith(("https://", "http://"))]
+        if competition:
+            usable = [h for h in usable if not competition_page_mismatch(claim, h.title or "")]
         total_hits += len(usable)
         per_query.append(sorted(usable, key=lambda h: -_relevance(h, candidate_name, claim)))
 
@@ -939,9 +964,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 )
                 if can_parallel:
                     with ThreadPoolExecutor(max_workers=2) as pool:
-                        first = pool.submit(_search_resilient, q.text, site, searcher, org, say)
+                        first = pool.submit(_search_resilient, q.text, site, searcher, org, say, q.confirm_empty, claim)
                         second = pool.submit(_search_resilient, next_q.text, next_site,
-                                             searcher, org, say)
+                                             searcher, org, say, next_q.confirm_empty, claim)
                         try:
                             hits = first.result()
                             first_error = None
@@ -954,7 +979,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                     if first_error:
                         raise first_error
                 else:
-                    hits = _search_resilient(q.text, site, searcher, org, say)
+                    hits = _search_resilient(q.text, site, searcher, org, say, q.confirm_empty, claim)
         except SearchFiltered:
             # 审核误伤，改述也没过：**只跳过这一条查询**，不中止整条流水线。
             # 一条被误伤的查询不值得毁掉十分钟的核验。日志明说是"被拦"而不是"0 条"——
@@ -1076,6 +1101,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 # 学历只走学校官网和公众号两类渠道。退到全网后返回的是同名百科、
                 # 招聘、新闻转载，实测 50 条里没有一条能作学历佐证，还占满读页预算。
                 fallback = None
+            if fallback:
+                # 名单补查只由两条原始整批查询触发，不能随放宽引号/全网回退不断升级。
+                fallback = replace(fallback, confirm_empty=False)
             if fallback and (fallback.text, fallback.site, fallback.kind) not in attempted:
                 # 原渠道优先于备用拼写，防止预算里只剩同一个查询的不同版本。
                 # 官网先尝试去引号、保留域名；其他回退仍排在原渠道后。

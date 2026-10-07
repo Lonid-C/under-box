@@ -1636,9 +1636,12 @@ async function runFlow(file) {
       if (L.includes('[2/6]')) { StatusDock.setStage(1, 'doing'); steps[1].className = 'step doing'; }
       if (L.includes('[3-5/6]')) { StatusDock.setStage(0, 'done'); StatusDock.setStage(1, 'done'); StatusDock.setStage(2, 'doing'); steps[1].className = 'step done'; steps[2].className = 'step doing'; }
       if (L.includes('[6/6]')) { StatusDock.setStage(2, 'done'); StatusDock.setStage(3, 'doing'); steps[2].className = 'step done'; steps[3].className = 'step doing'; }
-      const m = L.match(/\((\d+)\/(\d+)\)/);
+      // 各条陈述同时开始检索：「[3-5/6] N 条陈述同时开始检索」给出总数，每完成一条推一行「✓ (k/N)」
+      const m0 = L.match(/\[3-5\/6\] (\d+) 条陈述/);
+      if (m0) StatusDock.progress(0, m0[1]);
+      const m = L.match(/(?:✓ |\[3-5\/6\] )\((\d+)\/(\d+)\)/);
       if (m) StatusDock.progress(m[1], m[2]);
-      StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('画像完成'));
+      StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('画像完成') || L.includes('✓ ('));
     });
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');

@@ -567,6 +567,11 @@
     ],
     "office_checked": true,
     "fetches": 20
+   },
+   "colleges": {
+    "checked_at": "2026-10-07T12:20:04+00:00",
+    "archives": [],
+    "colleges": []
    }
   },
   "清华大学": {
@@ -1296,6 +1301,141 @@
     ],
     "domain": "hrbeu.edu.cn",
     "fetches": 6
+   },
+   "colleges": {
+    "checked_at": "2026-10-07T12:18:52+00:00",
+    "archives": [],
+    "colleges": [
+     [
+      "国际合作教育学院",
+      "https://heucice.hrbeu.edu.cn"
+     ],
+     [
+      "船舶工程学院",
+      "http://sec.hrbeu.edu.cn/"
+     ],
+     [
+      "航空航天学院",
+      "http://cec.hrbeu.edu.cn/"
+     ],
+     [
+      "动力与能源工程学院",
+      "http://pnec.hrbeu.edu.cn/"
+     ],
+     [
+      "智能科学与工程学院",
+      "http://cisse.hrbeu.edu.cn/"
+     ],
+     [
+      "水声工程学院",
+      "http://uae.hrbeu.edu.cn/"
+     ],
+     [
+      "计算机科学与技术学院",
+      "http://cstc.hrbeu.edu.cn/"
+     ],
+     [
+      "国家保密学院",
+      "https://nis.hrbeu.edu.cn/"
+     ],
+     [
+      "国家特色化示范性软件学院",
+      "https://software.hrbeu.edu.cn/"
+     ],
+     [
+      "机电工程学院",
+      "http://meec.hrbeu.edu.cn/"
+     ],
+     [
+      "信息与通信工程学院",
+      "https://icec.hrbeu.edu.cn"
+     ],
+     [
+      "经济管理学院",
+      "http://sem.hrbeu.edu.cn/"
+     ],
+     [
+      "材料科学与化学工程学院",
+      "http://heucec.hrbeu.edu.cn/"
+     ],
+     [
+      "数学科学学院",
+      "http://math.hrbeu.edu.cn/"
+     ],
+     [
+      "物理与光电工程学院",
+      "http://ss.hrbeu.edu.cn/"
+     ],
+     [
+      "外国语学院",
+      "http://fld.hrbeu.edu.cn/"
+     ],
+     [
+      "人文社会科学学院",
+      "http://shss.hrbeu.edu.cn/"
+     ],
+     [
+      "核科学与技术学院",
+      "http://cnst.hrbeu.edu.cn/"
+     ],
+     [
+      "马克思主义学院",
+      "http://sizhengbu.hrbeu.edu.cn/"
+     ],
+     [
+      "国际合作教育学院",
+      "http://heucice.hrbeu.edu.cn/"
+     ],
+     [
+      "中外联合学院",
+      "https://uosjei.hrbeu.edu.cn/"
+     ],
+     [
+      "未来技术学院",
+      "http://wljs.hrbeu.edu.cn/"
+     ]
+    ]
+   },
+   "college:source:计算机科学与技术学院": {
+    "checked_at": "2026-10-07T12:18:52+00:00",
+    "archives": [
+     {
+      "first_page": "http://cstc.hrbeu.edu.cn/3666/list.htm",
+      "list_url": "http://cstc.hrbeu.edu.cn/3666/list.htm",
+      "page_order": "single",
+      "total_pages_seen": 1,
+      "newest": "2024-01-09",
+      "oldest_seen": "2022-01-14",
+      "name": "哈尔滨工程大学计算机科学与技术学院·本科生教育",
+      "role": "source",
+      "months": [
+       8,
+       11
+      ],
+      "year_offset": -1,
+      "source": "auto-college"
+     },
+     {
+      "first_page": "http://cstc.hrbeu.edu.cn/3688/list.htm",
+      "list_url": "http://cstc.hrbeu.edu.cn/3688/list{page}.htm",
+      "page_order": "forward",
+      "page_offset": 0,
+      "total_pages_seen": 14,
+      "newest": "2026-09-24",
+      "oldest_seen": "2025-12-25",
+      "name": "哈尔滨工程大学计算机科学与技术学院·通知公告",
+      "role": "source",
+      "months": [
+       8,
+       11
+      ],
+      "year_offset": -1,
+      "source": "auto-college"
+     }
+    ],
+    "college": "计算机科学与技术学院",
+    "college_url": "http://cstc.hrbeu.edu.cn/",
+    "rejects": []
    }
   },
   "中山大学": {

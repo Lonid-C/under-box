@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .competitions import (catalog_query_specs, competition_for_claim,
+                           competition_resolution_note,
                            competition_site as _preset_competition_site, publication_note)
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "strategies.json"
@@ -80,6 +81,7 @@ class Query:
     source: str = ""                   # 来自哪个档案/类别，便于排查
     expect_tier: str | None = None     # 预期能拿到什么等级的来源
     variant: bool = False              # 扩展写法不挤掉原计划的检索渠道
+    confirm_empty: bool = False        # 关键官网整批名单空结果，允许一次受限召回补查
 
 
 @dataclass
@@ -786,6 +788,12 @@ def build_plan(
     if competition:
         plan.notes.append(publication_note(competition))
         plan.notes.append("赛事目录与名单可用性是检索提示，不构成本人获奖证据；名单缺席不等于经历不实。")
+        confirmations = sum(q.confirm_empty for q in plan.queries)
+        if confirmations:
+            plan.notes.append(f"最多{confirmations}条关键整批查询在没有有效名单时可各额外补查一次GLM pro；查询缓存复用，供应商网络重试另计。")
+    resolution_note = competition_resolution_note(claim)
+    if resolution_note:
+        plan.notes.append(resolution_note)
 
     if skipped:
         fields: list[str] = []

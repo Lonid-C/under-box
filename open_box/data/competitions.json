@@ -262,7 +262,11 @@
         "高教社杯全国大学生数学建模竞赛",
         "国赛数学建模",
         "CUMCM",
-        "全国数模竞赛"
+        "全国数模竞赛",
+        "高教社杯",
+        "高教社杯数学建模竞赛",
+        "高教社杯数模",
+        "高教杯数学建模竞赛"
       ],
       "subjects": [
         "数学与统计"
@@ -279,6 +283,19 @@
         "dxs.moe.gov.cn"
       ],
       "result_pages": [
+        {
+          "url": "https://www.mcm.edu.cn/html_cn/node/f1241bf39c38153b57bdb27125fa2d72.html",
+          "kind": "roster",
+          "year": 2025,
+          "level": "national",
+          "stage": "final"
+        },
+        {
+          "url": "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html",
+          "kind": "index",
+          "year": null,
+          "level": "national"
+        },
         {
           "url": "https://dxs.moe.gov.cn/zx/awards/",
           "kind": "index",
@@ -302,14 +319,16 @@
       ],
       "publication": {
         "status": "public_names",
-        "scope_note": "官网及教育部大学生在线提供年度名单查询入口；目录2025初稿PDF于2026-10-07实测HTTP404，已暂停直接回读。省奖应查省赛组委会或学校官方名单，不能用全国初稿名单验证省级奖项。",
+        "scope_note": "官网历年竞赛结果栏目提供当年正式获奖公告及附件；2025正式PDF约19 MB且为扫描件，当前文本解析不能从中核对姓名，须人工读图或学校官方文本名单补证。旧2025初稿PDF为404，暂停直读。省级奖项优先省赛/学校名单，不能用全国奖或校内选拔名单替代。",
         "checked_at": "2026-10-07",
-        "source_url": "https://dxs.moe.gov.cn/zx/awards/"
+        "source_url": "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html"
       },
       "provenance": [
         "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
         "https://dxs.moe.gov.cn/zx/awards/",
-        "https://www.mcm.edu.cn/upload_cn/node/761/QB2FQ76i1393aefba98af47db43d0e56ab7949c9.pdf"
+        "https://www.mcm.edu.cn/upload_cn/node/761/QB2FQ76i1393aefba98af47db43d0e56ab7949c9.pdf",
+        "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html",
+        "https://www.mcm.edu.cn/html_cn/node/f1241bf39c38153b57bdb27125fa2d72.html"
       ],
       "directory_order": 5,
       "website_check": {
@@ -320,7 +339,15 @@
         ],
         "failures": [],
         "candidate_result_urls": []
-      }
+      },
+      "brand_context": [
+        "数学建模",
+        "数模",
+        "CUMCM"
+      ],
+      "search_label": "数学建模",
+      "quote_search_label": false,
+      "regional_query": true
     },
     {
       "id": "nuedc",
@@ -1134,7 +1161,8 @@
       "name": "全国大学生先进成图技术与产品信息建模创新大赛",
       "aliases": [
         "成图大赛",
-        "先进成图大赛"
+        "先进成图大赛",
+        "高教社杯"
       ],
       "subjects": [
         "机械与智能制造",
@@ -1192,7 +1220,12 @@
           "http://www.chengtudasai.com/index/news/show/id/339.html",
           "http://www.chengtudasai.com/index/news/show/id/335.html"
         ]
-      }
+      },
+      "brand_context": [
+        "成图",
+        "图学",
+        "产品信息建模"
+      ]
     },
     {
       "id": "3d-design",
@@ -5746,6 +5779,106 @@
           "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208551294.pdf",
           "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208651891.pdf",
           "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208703014.pdf"
+        ]
+      }
+    },
+    {
+      "id": "eaedu",
+      "name": "全国高等院校大学生英语能力大赛",
+      "aliases": [
+        "全国高等院校英语能力大赛",
+        "高等院校大学生英语能力大赛",
+        "高等院校英语能力大赛",
+        "全国高等院校（大学生）英语能力大赛"
+      ],
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://eaedu.org.cn/",
+        "https://www.eaedu.org.cn/"
+      ],
+      "official_domains": [
+        "eaedu.org.cn"
+      ],
+      "authority_domains": [
+        "eaedu.org.cn"
+      ],
+      "search_label": "高等院校 英语能力大赛",
+      "quote_search_label": false,
+      "regional_query": true,
+      "result_pages": [
+        {
+          "url": "http://eaedu.org.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://eaedu.org.cn/news-106.html",
+          "kind": "roster",
+          "year": 2024,
+          "level": "provincial",
+          "province": "广东",
+          "image_roster": true
+        },
+        {
+          "url": "http://eaedu.org.cn/news-109.html",
+          "kind": "roster",
+          "year": 2024,
+          "level": "provincial",
+          "province": "云南",
+          "image_roster": true
+        },
+        {
+          "url": "http://eaedu.org.cn/searchawards.html",
+          "kind": "index",
+          "year": null,
+          "requires_identity": true
+        },
+        {
+          "url": "https://www.eaedu.org.cn/finalrank-1-1-1.html",
+          "kind": "index",
+          "year": 2026,
+          "level": "national",
+          "stage": "final"
+        }
+      ],
+      "result_link_limit": 3,
+      "search_terms": [
+        "获奖名单",
+        "省赛获奖名单",
+        "决赛获奖名单"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://eaedu.org.cn/news-106.html",
+        "scope_note": "已回读公开HTTP官网及2024广东/云南学生省赛公告，获奖名单以图片发布，当前文本解析不能直接核对图片中的姓名。2024/2025往届查询需年份、姓名、学校、报名手机号，不能仅凭姓名自动完成；可补充官方证书或学校官网佐证。该赛事与NECCS不同；模拟赛、教师赛、正式省赛和全国决赛分开核对。门户显示2026不代表历史条目属于2026。2026-10-07 HTTPS入口证书过期，目录使用实测可读的公开HTTP入口，不自动改协议或绕过证书校验。"
+      },
+      "provenance": [
+        "https://www.eaedu.org.cn/news-130.html",
+        "https://www.eaedu.org.cn/rank-1-2-1.html",
+        "https://www.eaedu.org.cn/finalrank-1-1-1.html",
+        "http://eaedu.org.cn/news-106.html",
+        "http://eaedu.org.cn/searchawards.html"
+      ],
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://eaedu.org.cn/",
+          "http://eaedu.org.cn/news-106.html",
+          "http://eaedu.org.cn/news-109.html",
+          "http://eaedu.org.cn/searchawards.html"
+        ],
+        "failures": [
+          {
+            "url": "https://www.eaedu.org.cn/rank-1-2-1.html",
+            "reason": "网站SSL证书已过期"
+          }
+        ],
+        "candidate_result_urls": [
+          "https://www.eaedu.org.cn/rank-1-2-1.html"
         ]
       }
     }

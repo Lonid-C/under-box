@@ -208,6 +208,14 @@ function renderCard(v) {
       }))
     : el("span", { class: "empty-note", text: "该条要素已全部覆盖。" })));
 
+  if ((v.source_notes || []).length) {
+    const scope = el("div", {}, v.source_notes.map(note => el("p", { text: note })));
+    for (const url of (v.competition_lookup || {}).official_urls || []) {
+      if (/^https?:\/\//i.test(url)) scope.appendChild(el("div", {},
+        el("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: "赛事官网 ↗" })));
+    }
+    dl.appendChild(field("官网名单范围", scope));
+  }
   dl.appendChild(field("下一步", el("span", { text: v.next_step || "—" })));
 
   card.appendChild(dl);

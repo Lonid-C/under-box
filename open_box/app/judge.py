@@ -175,7 +175,11 @@ def classify_tier(
         or any(host.endswith("." + h) for h in organizer_hosts)
     )
     # A：官方站点 + 公示/通知/名单类页面，且不是转载
-    if official_site and looks_official_doc(title, snippet) and not is_repost:
+    contest_results = (organizer_hosts and any(_host(url) == h or _host(url).endswith("." + h)
+                       for h in organizer_hosts)
+                       and re.search(r"\b(?:results?|winners?|awards?|standings|rankings?|scoreboard)\b",
+                                     f"{title} {snippet}", re.I))
+    if official_site and (looks_official_doc(title, snippet) or contest_results) and not is_repost:
         return "A"
 
     # B：官网本人介绍/就读报道、认证公众号文章、权威媒体报道。
@@ -273,6 +277,83 @@ def split_elements(claim: Claim, evidences: list[Evidence]) -> tuple[list[str], 
     proved = [e for e in claim.elements if e in proved_set]
     unproved = [e for e in claim.elements if e not in proved_set]
     return proved, unproved
+
+
+LINKED_PREFIX = "［关联佐证"
+
+
+def corroborate_enrollment(
+    verified: list[VerifiedClaim],
+    candidate_name: str,
+    school_domains: dict[str, str] | None = None,
+) -> list[int]:
+    """用同份简历其他条目已取得的官方名单，补「学历·学校」这一个要素。
+
+    背景（2026-10 一份真实简历实测）：本科学历按设计几乎不检索，只有"官网 + 姓名"和
+    公众号两条探针，搜索索引对 PDF 名单里的人名基本搜不到，于是本科永远是
+    "未找到公开记录"。可同一份简历的推免、奖学金、竞赛条目往往已经读到了
+    本科学校官网上列出本人的名单——只有在读学生才会出现在推免资格、学业奖学金
+    名单里，这本身就是就读的公开佐证。
+
+    规则（全部确定性，不调模型）：
+      · 只补「学校=…」一个要素，不补专业、学位、就读时间；
+      · 来源证据必须是别的条目里已通过身份判定的 A/B 级证据，且未被判冲突；
+      · 页面在该校官方域名下，或原文同时写了该校全称和本人姓名；
+      · 证据标题前缀「关联佐证·来自 cX」，报告里看得出是借来的，不冒充专门检索；
+      · 若该条学历已证明学校，或出现反证，不动它。
+    返回状态被改动的条目下标，调用方据此重新生成澄清问题。
+    """
+    from copy import deepcopy
+    from .plan import claim_school, school_domain
+
+    school_domains = school_domains or {}
+    name_parts = [p for p in re.findall(r"[㐀-鿿]{2,}|[A-Za-z]{2,}", candidate_name or "")]
+    changed: list[int] = []
+    for idx, vc in enumerate(verified):
+        claim = vc.claim
+        if claim.category != "学历":
+            continue
+        school = claim_school(claim)
+        school_el = next((e for e in claim.elements if e.split("=", 1)[0].strip() == "学校"), None)
+        if not school or not school_el or school_el in vc.proved:
+            continue
+        if any(e.contradicts for e in valid_evidence(vc.evidence)):
+            continue
+        domain = school_domain(school) or school_domains.get(school)
+        borrowed: list[Evidence] = []
+        seen = {e.url for e in vc.evidence}
+        for other_idx, other in enumerate(verified):
+            if other_idx == idx:
+                continue
+            for ev in valid_evidence(other.evidence):
+                if ev.source_tier not in ("A", "B") or ev.url in seen:
+                    continue
+                if ev.title.startswith(LINKED_PREFIX):
+                    continue              # 不转借转借来的证据
+                host = _host(ev.url)
+                on_domain = bool(domain) and (host == domain or host.endswith("." + domain))
+                text = f"{ev.title} {ev.snippet}"
+                names_person = not name_parts or all(p in text for p in name_parts)
+                names_school = school in text
+                if not names_person or not (on_domain or names_school):
+                    continue
+                copy = deepcopy(ev)
+                copy.title = f"{LINKED_PREFIX}·来自 {other.claim.id} {other.claim.category}］{ev.title}"
+                copy.supports = [school_el]
+                copy.contradicts = []
+                if "学校一致" not in copy.identity_signals:
+                    copy.identity_signals.append("学校一致")
+                borrowed.append(copy)
+                seen.add(ev.url)
+        if not borrowed:
+            continue
+        updated = assess(claim, [*vc.evidence, *borrowed], search_exhausted=vc.search_exhausted)
+        updated.question = vc.question
+        updated.next_step = vc.next_step
+        if updated.status != vc.status:
+            changed.append(idx)
+        verified[idx] = updated
+    return changed
 
 
 def assess(

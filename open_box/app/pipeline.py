@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
 from . import judge
 from .collect import Budget, collect_for_claim
 from .llm import LLM, build_llm
+from .competitions import competition_for_claim, lookup_summary, publication_note, seed_pages
 from .parse import ParsedDocument, parse_document
 from .plan import MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, plan_with_notes
 from .profile import derive_profile
@@ -27,7 +29,7 @@ from .questions import default_next_step, generate_question
 from .schema import Report
 from .search import CachedSearcher, PageFetcher, Searcher, build_searcher
 from .split import split_claims
-from .strategy import add_admission_source_hints
+from .strategy import add_admission_source_hints, add_competition_school_hints
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -80,7 +82,7 @@ def run_pipeline(
 
     # 3 陈述拆分（只送 scrub 过的安全文本）
     say("[2/6] 陈述拆分")
-    claims = add_admission_source_hints(split_claims(doc.safe_text, llm))
+    claims = add_competition_school_hints(add_admission_source_hints(split_claims(doc.safe_text, llm)))
 
     # 姓名：调用方给的 > 画像里的（模型读的原词）> 实体里的。都空才留空——
     # 之前这里直接落到"（未标注姓名）"，导致检索计划里的 `{name}` 查询全部废掉。
@@ -117,10 +119,29 @@ def run_pipeline(
         )
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)
+        competition = competition_for_claim(claim)
+        if competition:
+            vc.competition_lookup = lookup_summary(competition)
+            vc.source_notes = [publication_note(competition)]
+            failures = getattr(fetcher, "failures", {})
+            if any(failures.get(p["url"]) for p in seed_pages(competition, claim)):
+                vc.source_notes.append("本次部分官网名单入口未能回读；访问失败不等于官网不提供名单，也不代表本人未获奖。")
+            if not evidences and re.search(r"[A-Za-z]", name) and not re.search(r"[\u3400-\u9fff]", name):
+                vc.source_notes.append("当前只提供英文姓名；中文名单中的同名拼音不能自动认定为本人，可补充中文姓名或参赛队号建立关联。")
         vc.next_step = default_next_step(vc)
         # 6 澄清问题
         vc.question = generate_question(vc, llm)
         verified.append(vc)
+
+    # 5' 学历的关联佐证：别的条目已经读到的本校官方名单（推免资格、奖学金、竞赛获奖）
+    # 同样是"在该校就读"的公开记录。纯规则、不额外检索，只补「学校」这一个要素。
+    changed = judge.corroborate_enrollment(verified, name, school_domains)
+    for idx in changed:
+        vc = verified[idx]
+        vc.next_step = default_next_step(vc)
+        vc.question = generate_question(vc, llm)
+        say(f"    关联佐证：{vc.claim.id} 学历 借用同份简历其他条目的官方名单，"
+            f"状态更新为 {vc.status}")
 
     say("[6/6] 汇总报告")
     return Report(

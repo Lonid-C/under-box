@@ -1,0 +1,5753 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-10-07",
+  "basis": [
+    {
+      "url": "https://www.moe.gov.cn/srcsite/A08/s5672/202607/t20260731_1445670.html",
+      "description": "教育部主办赛事通知，确认创新大赛及其报名官网；不是全部大学生竞赛白名单。"
+    },
+    {
+      "url": "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+      "description": "高校公开存档的《2024全国普通高校大学生竞赛分析报告》84项目录；保留历史出处，网址需逐项复核，不称作教育部主办目录。"
+    }
+  ],
+  "competitions": [
+    {
+      "id": "cicsic",
+      "name": "中国国际大学生创新大赛",
+      "aliases": [
+        "中国国际“互联网+”大学生创新创业大赛",
+        "中国国际互联网+大学生创新创业大赛",
+        "互联网+大学生创新创业大赛",
+        "互联网+大赛"
+      ],
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://cy.ncss.cn/"
+      ],
+      "official_domains": [
+        "cy.ncss.cn"
+      ],
+      "authority_domains": [
+        "cy.ncss.cn",
+        "moe.gov.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A08/s7056/202602/W020260227619308665503.pdf",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "教育部公布部分年度、赛道的正式获奖附件，含项目、学校、负责人及团队成员；须核对具体赛道、年份和人员行。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.moe.gov.cn/srcsite/A08/s7056/202602/W020260227619308665503.pdf"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.moe.gov.cn/srcsite/A08/s5672/202607/t20260731_1445670.html"
+      ],
+      "directory_order": 1,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://cy.ncss.cn/",
+          "https://www.moe.gov.cn/srcsite/A08/s7056/202602/W020260227619308665503.pdf"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "challenge-academic",
+      "name": "“挑战杯”全国大学生课外学术科技作品竞赛",
+      "aliases": [
+        "挑战杯全国大学生课外学术科技作品竞赛",
+        "挑战杯课外学术科技作品竞赛",
+        "挑战杯学术科技作品竞赛",
+        "挑战杯"
+      ],
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.tiaozhanbei.net/"
+      ],
+      "official_domains": [
+        "tiaozhanbei.net"
+      ],
+      "authority_domains": [
+        "tiaozhanbei.net"
+      ],
+      "result_pages": [
+        {
+          "url": "https://old.tiaozhanbei.net/tzb",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://xmk.tiaozhanbei.net/project/list/talent/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "旧站成绩公告及人才项目库公开部分年度/奖项；拟授奖与正式授奖须区分；人才库不保证覆盖全部成员。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://old.tiaozhanbei.net/tzb"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://old.tiaozhanbei.net/tzb",
+        "https://xmk.tiaozhanbei.net/project/list/talent/"
+      ],
+      "directory_order": 2,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.tiaozhanbei.net/"
+        ],
+        "failures": [
+          {
+            "url": "https://old.tiaozhanbei.net/tzb",
+            "reason": "HTTP 502"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "challenge-business",
+      "name": "“挑战杯”中国大学生创业计划大赛",
+      "aliases": [
+        "挑战杯中国大学生创业计划大赛",
+        "挑战杯中国大学生创业计划竞赛",
+        "挑战杯创业计划大赛",
+        "挑战杯创业计划竞赛",
+        "挑战杯",
+        "创青春全国大学生创业大赛"
+      ],
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.tiaozhanbei.net/"
+      ],
+      "official_domains": [
+        "tiaozhanbei.net"
+      ],
+      "authority_domains": [
+        "tiaozhanbei.net"
+      ],
+      "result_pages": [
+        {
+          "url": "https://old.tiaozhanbei.net/tzb",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://old.tiaozhanbei.net/article/15819/",
+          "kind": "roster",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "官网有创业计划赛历届获奖附件；项目库有部分人名。课外学术作品赛与创业计划赛必须分开核对。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://old.tiaozhanbei.net/tzb"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://old.tiaozhanbei.net/tzb",
+        "https://old.tiaozhanbei.net/article/15819/"
+      ],
+      "directory_order": 3,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.tiaozhanbei.net/"
+        ],
+        "failures": [
+          {
+            "url": "https://old.tiaozhanbei.net/tzb",
+            "reason": "HTTP 502"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "icpc",
+      "name": "ICPC国际大学生程序设计竞赛",
+      "aliases": [
+        "ACM-ICPC",
+        "ICPC",
+        "International Collegiate Programming Contest",
+        "国际大学生程序设计竞赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://icpc.global/"
+      ],
+      "official_domains": [
+        "icpc.global"
+      ],
+      "authority_domains": [
+        "icpc.global"
+      ],
+      "result_pages": [
+        {
+          "url": "https://worldfinals.icpc.global/scoreboard/2025/finals/",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://worldfinals.icpc.global/scoreboard/2025/finals/",
+        "scope_note": "官网公开世界总决赛学校/队伍排名；需通过队伍资料/学校公告关联个人，排名不自动等于金银铜奖，亚洲区域赛不能当作世界总决赛。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://worldfinals.icpc.global/scoreboard/2025/finals/"
+      ],
+      "directory_order": 4,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://icpc.global/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      },
+      "search_label": "ICPC"
+    },
+    {
+      "id": "cumcm",
+      "name": "全国大学生数学建模竞赛",
+      "aliases": [
+        "高教社杯全国大学生数学建模竞赛",
+        "国赛数学建模",
+        "CUMCM",
+        "全国数模竞赛"
+      ],
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.mcm.edu.cn/"
+      ],
+      "official_domains": [
+        "mcm.edu.cn"
+      ],
+      "authority_domains": [
+        "mcm.edu.cn",
+        "dxs.moe.gov.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://dxs.moe.gov.cn/zx/awards/",
+          "kind": "index",
+          "year": null,
+          "level": "national"
+        },
+        {
+          "url": "https://www.mcm.edu.cn/upload_cn/node/761/QB2FQ76i1393aefba98af47db43d0e56ab7949c9.pdf",
+          "kind": "roster",
+          "year": 2025,
+          "stage": "provisional",
+          "level": "national",
+          "inactive": true,
+          "inactive_reason": "2026-10-07实测HTTP404，暂停直接回读，改查年度公告及学校名单"
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "官网及教育部大学生在线提供年度名单查询入口；目录2025初稿PDF于2026-10-07实测HTTP404，已暂停直接回读。省奖应查省赛组委会或学校官方名单，不能用全国初稿名单验证省级奖项。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://dxs.moe.gov.cn/zx/awards/"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://dxs.moe.gov.cn/zx/awards/",
+        "https://www.mcm.edu.cn/upload_cn/node/761/QB2FQ76i1393aefba98af47db43d0e56ab7949c9.pdf"
+      ],
+      "directory_order": 5,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.mcm.edu.cn/",
+          "https://dxs.moe.gov.cn/zx/awards/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "nuedc",
+      "name": "全国大学生电子设计竞赛",
+      "aliases": [
+        "NUEDC",
+        "全国大学生电子设计大赛",
+        "电赛"
+      ],
+      "subjects": [
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.nuedcchina.com/"
+      ],
+      "official_domains": [
+        "nuedcchina.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 6,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.nuedcchina.com/",
+            "reason": "证书校验失败（SSL）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "medical-skills",
+      "name": "中国大学生医学技术技能大赛",
+      "aliases": [
+        "全国大学生临床技能竞赛",
+        "全国大学生医学技术技能大赛"
+      ],
+      "subjects": [
+        "医学与生命科学"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://medu.bjmu.edu.cn/jnds/"
+      ],
+      "official_domains": [
+        "medu.bjmu.edu.cn",
+        "moe.gov.cn"
+      ],
+      "authority_domains": [
+        "medu.bjmu.edu.cn",
+        "moe.gov.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A08/moe_740/s3864/202109/t20210916_563749.html",
+          "kind": "roster",
+          "year": 2021
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "scope_note": "教育部2021年通知指定北京大学医学部赛事报名网站；教育部公布同届五个赛道的获奖高校附件，只能证明学校/团队赛果，个人身份仍需成员材料。网站为历史入口，后续届次需复查。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.moe.gov.cn/srcsite/A08/moe_740/s3864/202101/t20210104_508666.html"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A08/moe_740/s3864/202101/t20210104_508666.html",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 7,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "http://medu.bjmu.edu.cn/jnds/",
+            "seconds": 13.25,
+            "readable": false,
+            "failure": "读取超时（>8 秒）"
+          },
+          {
+            "url": "https://www.moe.gov.cn/srcsite/A08/moe_740/s3864/202109/t20210916_563749.html",
+            "seconds": 8.62,
+            "readable": true,
+            "failure": "",
+            "title": "教育部办公厅关于公布第十届中国大学生医学技术技能大赛总决赛获奖高校名单的通知 - 中华人民共和国教育部政府门户网站",
+            "result_text": true,
+            "excerpt": "页面标题：教育部办公厅关于公布第十届中国大学生 医学技术技能大赛总决赛获奖 高校名单的通知\n| 信息名称： | 教育部办公厅关于公布第十届中国大学生医学技术技能大赛总决赛获奖高校名单的通知 |  |  |  |  | \n| 信息索引： | 360A08-07-2021-0016-1 | 生成日期： | 2021-09-07 | 发文机构： | 教育部办公厅 | \n| 发文字号： | 教高厅函〔2021〕28号 | 信息类别： | 高等教育 |  |  | \n| 内容概述： | 教育部办公厅公布第十届中国大学生医学技术技能大赛总决赛获奖高校名单。 |  |  |  |  | \n教高厅函〔2021〕28号\n各省、自治区、直辖市教育厅（教委），新疆生产建设兵团教育局，有关部门（单位）教育司（局），部属有关高等学校、部省合建有关高等学校：\n为全面贯彻全国教育大会、全国卫生与健康大会及全国中医药大会精神，落实《国务院办公厅关于加快医学教育创新发展的指导意见》（国办发〔2020〕34号）要求，以新医科统领医学教育创新发展，加快培养尚德精术的卓越医学人才，教育部、天津市人民政府共同举办了第十届中国大学生医学技术技能大赛，2021年5月16日全国总决赛在天津圆满落下帷幕。本届大赛总决赛设置了临床医学专业五年制、临床医学专业八年制、中医学专业、预防医学专业、护理学专业等五个赛道，共有来自全国81所高校的142支代表队同台竞技，充分展现了新时代医学生德医双修、仁心仁术的青春风采，成为一场盛况空前、令人难忘的高水平赛事。经大赛专家委员会评审、组织委员会审定，并向社会公示无异议，总决赛结果如下：\n一、临床医学专业五年制赛道冠军获奖高校1所、亚军获奖高校1所、季军获奖高校1所，金奖获奖高校6所，银奖获奖高校12所，铜奖获奖高校24所。\n二、临床医学专业八年制赛道冠军获奖高校1所、亚军获奖高校1所、季军获奖高校1所，金奖获奖高校3所，银奖获奖高校3所，铜奖获奖高校7所。\n三、中医学专业赛道冠军获奖高校1所、亚军获奖高校1所、季军获奖高校1所，金奖获奖高校3所，银奖获奖高校6所，铜奖获奖高校11所。\n四、预防医学专业赛道冠军获奖高校1所、亚军获奖高校1所、季军获奖高校1所，金奖获奖高校3所，银奖获奖高校5所，铜奖获奖高校13所。\n五、护理学专业赛道冠军获奖高校1所、亚军获奖高校1所、季军获奖高校1所，金奖获奖高校6所，银奖获奖高校15所，铜奖获奖高校25所。\n现将以上获奖高校名单予以公布（见附件）。\n请各地各有关高校坚持以赛促学、以赛促教、以赛促改，深化医学教育综合改革，创新医学实践教学体系，打造高水平临床教师队伍，全面提升医学人才培养质量，持续推进新时代医学教育创新发展，为健康中国建设注入源源不断的青春力量。\n附件：1.第十届中国大学生医学技术技能大赛总决赛临床医学专业五年制赛道获奖高校名单\n2.第十届中国大学生医学技术技能大赛总决赛临床医学专业八年制赛道获奖高校名单\n3.第十届中国大学生医学技术技能大赛总决赛中医学专业赛道获奖高校名单\n4.第十届中国大学生医学技术技能大赛总决赛预防医学专业赛道获奖高校名单\n5.第十届中国大学生医学技术技能大赛总决赛护理学专业赛道获奖高校名单\n教育部办公厅\n2021年9月2日\n版权所有：中华人民共和国教育部 中文域名：教育部.政务\n京ICP备10028400号-1 京公网安备11010202007625号 网站标识码：bm05000001"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "mechanical-design",
+      "name": "全国大学生机械创新设计大赛",
+      "aliases": [
+        "大学生机械创新设计大赛"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://umic.ckcest.cn/"
+      ],
+      "official_domains": [
+        "umic.ckcest.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 8,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://umic.ckcest.cn/",
+            "reason": "请求失败（RemoteProtocolError）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "structural-design",
+      "name": "全国大学生结构设计竞赛",
+      "aliases": [
+        "大学生结构设计竞赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.structurecontest.com/"
+      ],
+      "official_domains": [
+        "structurecontest.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 9,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.structurecontest.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "advertising",
+      "name": "全国大学生广告艺术大赛",
+      "aliases": [
+        "大广赛",
+        "全国大学生广告艺术比赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.sun-ada.net/"
+      ],
+      "official_domains": [
+        "sun-ada.net"
+      ],
+      "authority_domains": [
+        "sun-ada.net"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.sun-ada.net/home/search/index",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "官网提供历届、类别获奖查询，含作品编号、作者和学校；需核对全国/省赛、复活赛及作品类别。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.sun-ada.net/home/search/index"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.sun-ada.net/home/search/index"
+      ],
+      "directory_order": 10,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.sun-ada.net/",
+          "https://www.sun-ada.net/home/search/index"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.sun-ada.net/home/search/index"
+        ]
+      }
+    },
+    {
+      "id": "smartcar",
+      "name": "全国大学生智能汽车竞赛",
+      "aliases": [
+        "恩智浦杯全国大学生智能汽车竞赛",
+        "飞思卡尔杯全国大学生智能汽车竞赛",
+        "智能车竞赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.smartcarrace.com/"
+      ],
+      "official_domains": [
+        "smartcarrace.com"
+      ],
+      "authority_domains": [
+        "smartcarrace.com",
+        "caa.org.cn"
+      ],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.caa.org.cn/Content/260.html"
+      ],
+      "directory_order": 11,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.smartcarrace.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "ecommerce",
+      "name": "全国大学生电子商务“创新、创意及创业”挑战赛",
+      "aliases": [
+        "三创赛",
+        "电子商务三创赛",
+        "全国大学生电子商务创新创意及创业挑战赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.3chuang.net/"
+      ],
+      "official_domains": [
+        "3chuang.net"
+      ],
+      "authority_domains": [
+        "3chuang.net"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.3chuang.net/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "scope_note": "首页平台公告有总决赛获奖公告及赛道公示，需跟进对应附件；校赛、省赛、实战赛和常规赛不能混用。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.3chuang.net/"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.3chuang.net/"
+      ],
+      "directory_order": 12,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.3chuang.net/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "engineering-practice",
+      "name": "中国大学生工程实践与创新能力大赛",
+      "aliases": [
+        "全国大学生工程训练综合能力竞赛",
+        "工程实践与创新能力大赛",
+        "工训赛"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.gcxl.edu.cn/"
+      ],
+      "official_domains": [
+        "gcxl.edu.cn"
+      ],
+      "authority_domains": [
+        "gcxl.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "http://www.gcxl.edu.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://www.gcxl.edu.cn/info/1049/1690.htm",
+          "kind": "roster",
+          "year": 2019
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://www.gcxl.edu.cn/",
+        "scope_note": "官网历史公告附分赛道获奖PDF；已确认2019历史样例。当前年度、赛道以及省赛产生的奖项须单独核对。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://www.gcxl.edu.cn/",
+        "http://www.gcxl.edu.cn/info/1049/1690.htm"
+      ],
+      "directory_order": 13,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.gcxl.edu.cn/",
+          "http://www.gcxl.edu.cn/info/1049/1690.htm"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.gcxl.edu.cn/info/1049/1690.htm",
+          "http://www.gcxl.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1200360794&wbfileid=E6E9AFB452232FD8325B4CCFAD62490E",
+          "http://www.gcxl.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1200360794&wbfileid=81BE51FC67B540D1C271876B64766AAE",
+          "http://www.gcxl.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1200360794&wbfileid=FAA3D5D3E1C30206BA4A9FCA20A026A3",
+          "http://www.gcxl.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1200360794&wbfileid=7F72291C669AC4343F92CF424CB55A81"
+        ]
+      }
+    },
+    {
+      "id": "logistics",
+      "name": "全国大学生物流设计大赛",
+      "aliases": [
+        "大学生物流设计大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.clpp.org.cn/"
+      ],
+      "official_domains": [
+        "clpp.org.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 14,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.clpp.org.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "fltrp",
+      "name": "“外研社·国才杯”“理解当代中国”全国大学生外语能力大赛",
+      "aliases": [
+        "外研社国才杯",
+        "外研社杯全国英语演讲大赛",
+        "外研社杯全国英语写作大赛",
+        "外研社杯全国英语阅读大赛",
+        "外研社杯全国英语辩论赛",
+        "FLTRP Cup"
+      ],
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://uchallenge.unipus.cn/"
+      ],
+      "official_domains": [
+        "uchallenge.unipus.cn"
+      ],
+      "authority_domains": [
+        "uchallenge.unipus.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://uchallenge.unipus.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://uchallenge.unipus.cn/c/2021-05-06/501336.shtml",
+          "kind": "roster",
+          "year": 2020
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://uchallenge.unipus.cn/",
+        "scope_note": "官网历史名单含学生姓名、学校和奖级；样例是2020年度。演讲、写作、阅读、辩论及国赛/省赛不可交叉证明。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://uchallenge.unipus.cn/",
+        "https://uchallenge.unipus.cn/c/2021-05-06/501336.shtml"
+      ],
+      "directory_order": 15,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://uchallenge.unipus.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "huacan",
+      "name": "两岸新锐设计竞赛·华灿奖",
+      "aliases": [
+        "华灿奖",
+        "两岸新锐设计竞赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.huacanjiang.com/home"
+      ],
+      "official_domains": [
+        "huacanjiang.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 16,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.huacanjiang.com/home"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "innovation-conference",
+      "name": "全国大学生创新创业训练计划年会展示",
+      "aliases": [
+        "全国大学生创新创业年会",
+        "大创年会优秀项目",
+        "大创年会优秀论文"
+      ],
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://gjcxcy.bjtu.edu.cn/Index.aspx"
+      ],
+      "official_domains": [
+        "gjcxcy.bjtu.edu.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 17,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://gjcxcy.bjtu.edu.cn/Index.aspx"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "chemical-design",
+      "name": "全国大学生化工设计竞赛",
+      "aliases": [
+        "大学生化工设计竞赛"
+      ],
+      "subjects": [
+        "化学材料与能源"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://iche.zju.edu.cn/"
+      ],
+      "official_domains": [
+        "iche.zju.edu.cn"
+      ],
+      "authority_domains": [
+        "iche.zju.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://iche.zju.edu.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://iche.zju.edu.cn/a/sstz/1695.html",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://iche.zju.edu.cn/",
+        "scope_note": "官网有确认授奖通知及全国奖、赛区奖附件，公告说明含团队成员及教师；两种奖级不能混用，需读取本人所属附件。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://iche.zju.edu.cn/",
+        "https://iche.zju.edu.cn/a/sstz/1695.html"
+      ],
+      "directory_order": 18,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://iche.zju.edu.cn/",
+          "https://iche.zju.edu.cn/a/sstz/1695.html",
+          "https://iche.zju.edu.cn/a/sstz/1694.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://iche.zju.edu.cn/a/sstz/1695.html",
+          "https://iche.zju.edu.cn/a/sstz/1694.html",
+          "https://iche.zju.edu.cn/a/sstz/1693.html",
+          "https://iche.zju.edu.cn/a/sstz/1692.html",
+          "https://iche.zju.edu.cn/a/sstz/1691.html",
+          "https://iche.zju.edu.cn/uploads/20260828/ea9f44c03b8d1fc6fb49af20a32fae9a.pdf"
+        ]
+      }
+    },
+    {
+      "id": "robocon",
+      "name": "全国大学生机器人大赛（RoboCon）",
+      "aliases": [
+        "全国大学生机器人大赛CURC",
+        "RoboCon",
+        "ABU Robocon"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.cnrobocon.net/"
+      ],
+      "official_domains": [
+        "cnrobocon.net"
+      ],
+      "authority_domains": [
+        "cnrobocon.net"
+      ],
+      "result_pages": [
+        {
+          "url": "http://www.cnrobocon.net/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://www.cnrobocon.net/sys-nd/1191.html",
+          "kind": "roster",
+          "year": 2024
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://www.cnrobocon.net/",
+        "scope_note": "官网第二十三届获奖名单公告附PDF。RoboCon与RoboMaster为不同赛事，不交叉证明。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://www.cnrobocon.net/",
+        "http://www.cnrobocon.net/sys-nd/1191.html"
+      ],
+      "directory_order": 19,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.cnrobocon.net/",
+          "http://www.cnrobocon.net/sys-nd/1191.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.cnrobocon.net/sys-nd/1191.html"
+        ]
+      }
+    },
+    {
+      "id": "market-survey",
+      "name": "全国大学生市场调查与分析大赛",
+      "aliases": [
+        "正大杯全国大学生市场调查与分析大赛",
+        "市调大赛",
+        "市场调查与分析大赛"
+      ],
+      "subjects": [
+        "经管财经与商科",
+        "数学与统计"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.china-cssc.org/"
+      ],
+      "official_domains": [
+        "china-cssc.org"
+      ],
+      "authority_domains": [
+        "china-cssc.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.china-cssc.org/uploadfile/20250523/1748002351891035.pdf",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "主办学会公开获奖PDF，含学校、作品、获奖学生和指导教师；此样例是研究生组，不能替代本科组名单。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.china-cssc.org/uploadfile/20250523/1748002351891035.pdf"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.china-cssc.org/uploadfile/20250523/1748002351891035.pdf"
+      ],
+      "directory_order": 20,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.china-cssc.org/",
+            "reason": "连接超时（>5 秒）"
+          },
+          {
+            "url": "https://www.china-cssc.org/uploadfile/20250523/1748002351891035.pdf",
+            "reason": "同一站点刚才连接超时（>5 秒），已跳过"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "engineering-drawing",
+      "name": "全国大学生先进成图技术与产品信息建模创新大赛",
+      "aliases": [
+        "成图大赛",
+        "先进成图大赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "土木建筑与测绘"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.chengtudasai.com/"
+      ],
+      "official_domains": [
+        "chengtudasai.com"
+      ],
+      "authority_domains": [
+        "chengtudasai.com"
+      ],
+      "result_pages": [
+        {
+          "url": "http://www.chengtudasai.com/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://www.chengtudasai.com/index/news/show/id/339.html",
+          "kind": "roster",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://www.chengtudasai.com/",
+        "scope_note": "官网有团体、开放赛道与成图赛道名单附件；同站教师竞赛获奖不能作为大学生奖项。历史样例须核对届次，不自动推定赛年。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://www.chengtudasai.com/",
+        "http://www.chengtudasai.com/index/news/show/id/339.html"
+      ],
+      "directory_order": 21,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.chengtudasai.com/",
+          "http://www.chengtudasai.com/index/news/show/id/341.html",
+          "http://www.chengtudasai.com/index/news/show/id/339.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.chengtudasai.com/index/news/show/id/341.html",
+          "http://www.chengtudasai.com/index/news/show/id/339.html",
+          "http://www.chengtudasai.com/index/news/show/id/335.html"
+        ]
+      }
+    },
+    {
+      "id": "3d-design",
+      "name": "全国三维数字化创新设计大赛",
+      "aliases": [
+        "全国3D大赛",
+        "全国三维数字化创新设计大赛3D大赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒",
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://3dds.3ddl.net/"
+      ],
+      "official_domains": [
+        "3dds.3ddl.net"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 22,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://3dds.3ddl.net/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "siemens",
+      "name": "“西门子杯”中国智能制造挑战赛",
+      "aliases": [
+        "西门子杯",
+        "中国智能制造挑战赛",
+        "CIMC"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.siemenscup-cimc.org.cn/"
+      ],
+      "official_domains": [
+        "siemenscup-cimc.org.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 23,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.siemenscup-cimc.org.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "outsourcing",
+      "name": "中国大学生服务外包创新创业大赛",
+      "aliases": [
+        "服创大赛",
+        "服务外包创新创业大赛"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.fwwb.org.cn/"
+      ],
+      "official_domains": [
+        "fwwb.org.cn"
+      ],
+      "authority_domains": [
+        "fwwb.org.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "http://www.fwwb.org.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://www.fwwb.org.cn/news/show/663",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://www.fwwb.org.cn/",
+        "scope_note": "官网有全国决赛获奖名单及团队详细信息；全国赛与分区域赛不同，须跟进对应获奖团队附件。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://www.fwwb.org.cn/",
+        "http://www.fwwb.org.cn/news/show/663"
+      ],
+      "directory_order": 24,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.fwwb.org.cn/",
+          "http://www.fwwb.org.cn/news/show/663",
+          "http://www.fwwb.org.cn/news/show/661"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.fwwb.org.cn/news/show/663",
+          "http://www.fwwb.org.cn/news/show/662",
+          "http://www.fwwb.org.cn/news/show/661",
+          "http://www.fwwb.org.cn/attached/file/20260827/20260827105027_16.pdf",
+          "http://www.fwwb.org.cn/attached/file/20260824/20260824154842_81.pdf"
+        ]
+      }
+    },
+    {
+      "id": "computer-design",
+      "name": "中国大学生计算机设计大赛",
+      "aliases": [
+        "计算机设计大赛",
+        "4C大赛"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://jsjds.blcu.edu.cn/"
+      ],
+      "official_domains": [
+        "jsjds.blcu.edu.cn"
+      ],
+      "authority_domains": [
+        "jsjds.blcu.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://jsjds.blcu.edu.cn/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "scope_note": "官网有各年获奖公告及公示，需要跟进组别、决赛区与作品附件。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://jsjds.blcu.edu.cn/"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://jsjds.blcu.edu.cn/"
+      ],
+      "directory_order": 25,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://jsjds.blcu.edu.cn/",
+          "https://jsjds.blcu.edu.cn/info/1043/2434.htm",
+          "https://jsjds.blcu.edu.cn/info/1042/2904.htm"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://jsjds.blcu.edu.cn/info/1041/2914.htm",
+          "https://jsjds.blcu.edu.cn/info/1042/2904.htm",
+          "https://jsjds.blcu.edu.cn/info/1043/2434.htm"
+        ]
+      }
+    },
+    {
+      "id": "computer-series",
+      "name": "中国高校计算机大赛",
+      "aliases": [
+        "团体程序设计天梯赛",
+        "程序设计天梯赛",
+        "GPLT",
+        "中国高校计算机大赛大数据挑战赛",
+        "中国高校计算机大赛移动应用创新赛",
+        "中国高校计算机大赛网络技术挑战赛",
+        "中国高校计算机大赛人工智能创意赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.c4best.cn/"
+      ],
+      "official_domains": [
+        "c4best.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 26,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.c4best.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "lanqiao",
+      "name": "蓝桥杯全国软件和信息技术专业人才大赛",
+      "aliases": [
+        "蓝桥杯",
+        "蓝桥杯全国软件和信息技术专业人才大赛"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.lanqiao.cn/"
+      ],
+      "official_domains": [
+        "lanqiao.cn"
+      ],
+      "authority_domains": [
+        "lanqiao.cn",
+        "dasai.lanqiao.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.lanqiao.cn/cup-sixteen/",
+          "kind": "index",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "scope_note": "官网年度回顾明确有获奖情况公示，但当前未确认所有软件赛组别都提供免登录完整名单；不能泛称官网不提供。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.lanqiao.cn/cup-sixteen/"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.lanqiao.cn/cup-sixteen/"
+      ],
+      "directory_order": 27,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.lanqiao.cn/",
+          "https://www.lanqiao.cn/cup-sixteen/",
+          "https://dasai.lanqiao.cn/notices/860/"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://dasai.lanqiao.cn/notices/860/",
+          "https://dasai.lanqiao.cn/dasai-front/cert-search/",
+          "https://dasai.lanqiao.cn/pages/v7/dasai/activities/ct_20220311.html",
+          "https://www.lanqiao.cn/courses/67554/"
+        ]
+      }
+    },
+    {
+      "id": "milan-china",
+      "name": "米兰设计周中国高校设计学科师生优秀作品展",
+      "aliases": [
+        "米兰设计周中国高校设计学科师生优秀作品展",
+        "米兰设计周全国高校设计大赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.dandad.cn/"
+      ],
+      "official_domains": [
+        "dandad.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 28,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://www.dandad.cn/",
+            "reason": "读取超时（>6 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "geology",
+      "name": "全国大学生地质技能竞赛",
+      "aliases": [
+        "大学生地质技能竞赛"
+      ],
+      "subjects": [
+        "地学农业与环境"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://yuanxi.cugb.edu.cn/competition/"
+      ],
+      "official_domains": [
+        "yuanxi.cugb.edu.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 29,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://yuanxi.cugb.edu.cn/competition/",
+          "https://yuanxi.cugb.edu.cn/competition/c/2021/04/28/672590.shtml",
+          "https://yuanxi.cugb.edu.cn/competition/c/2021/04/28/672562.shtml"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://yuanxi.cugb.edu.cn/competition/c/2021/04/28/672590.shtml",
+          "https://yuanxi.cugb.edu.cn/competition/c/2021/04/28/672562.shtml",
+          "https://yuanxi.cugb.edu.cn/competition/upload/resources/file/2021/04/28/103916.doc"
+        ]
+      }
+    },
+    {
+      "id": "optoelectronics",
+      "name": "全国大学生光电设计竞赛",
+      "aliases": [
+        "大学生光电设计竞赛"
+      ],
+      "subjects": [
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://gd.p.moocollege.com/"
+      ],
+      "official_domains": [
+        "gd.p.moocollege.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 30,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://gd.p.moocollege.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "integrated-circuit",
+      "name": "全国大学生集成电路创新创业大赛",
+      "aliases": [
+        "集创赛",
+        "集成电路创新创业大赛"
+      ],
+      "subjects": [
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://univ.ciciec.com/"
+      ],
+      "official_domains": [
+        "univ.ciciec.com"
+      ],
+      "authority_domains": [
+        "univ.ciciec.com"
+      ],
+      "result_pages": [
+        {
+          "url": "http://univ.ciciec.com/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://univ.ciciec.com/nd.jsp?id=1093&fromMid=1688",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://univ.ciciec.com/",
+        "scope_note": "官网按芯片设计/产业链、芯片应用/芯创成果赛项分别公示；团队、学生及指导教师奖不可混用。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://univ.ciciec.com/",
+        "http://univ.ciciec.com/nd.jsp?id=1093&fromMid=1688"
+      ],
+      "directory_order": 31,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://univ.ciciec.com/",
+          "http://univ.ciciec.com/nd.jsp?id=1093&fromMid=1688",
+          "http://univ.ciciec.com/nd.jsp?id=1094&fromMid=1688"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://univ.ciciec.com/nd.jsp?id=1094&fromMid=1688",
+          "http://univ.ciciec.com/nd.jsp?id=1093&fromMid=1688"
+        ]
+      }
+    },
+    {
+      "id": "metallography",
+      "name": "全国大学生金相技能大赛",
+      "aliases": [
+        "金相技能大赛"
+      ],
+      "subjects": [
+        "化学材料与能源"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.cnzjjx.cn/"
+      ],
+      "official_domains": [
+        "cnzjjx.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 32,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://www.cnzjjx.cn/",
+            "reason": "HTTP 401"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "ciscn",
+      "name": "全国大学生信息安全竞赛",
+      "aliases": [
+        "CISCN",
+        "全国大学生信息安全竞赛创新实践能力赛",
+        "全国大学生信息安全竞赛作品赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.ciscn.cn/"
+      ],
+      "official_domains": [
+        "ciscn.cn"
+      ],
+      "authority_domains": [
+        "ciscn.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.ciscn.cn/announcement/view/357",
+          "kind": "roster",
+          "year": 2024
+        },
+        {
+          "url": "https://www.ciscn.cn/index.php/announcement/view/392",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "scope_note": "创新实践赛公开队名与高校赛果；作品赛另有附件。团队获奖不单独证明个人是该队成员，指导教师奖不等于学生奖。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.ciscn.cn/announcement/view/357"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.ciscn.cn/announcement/view/357",
+        "https://www.ciscn.cn/index.php/announcement/view/392"
+      ],
+      "directory_order": 33,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.ciscn.cn/",
+            "reason": "证书校验失败（SSL）"
+          },
+          {
+            "url": "https://www.ciscn.cn/announcement/view/357",
+            "reason": "证书校验失败（SSL）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "ncda",
+      "name": "未来设计师·全国高校数字艺术设计大赛",
+      "aliases": [
+        "NCDA",
+        "未来设计师全国高校数字艺术设计大赛",
+        "未来设计师大赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.ncda.org.cn/"
+      ],
+      "official_domains": [
+        "ncda.org.cn"
+      ],
+      "authority_domains": [
+        "www.ncda.org.cn",
+        "api.ncda.org.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.ncda.org.cn/dsjs/hjmd/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://www.ncda.org.cn/review/11th/hjmd/",
+          "kind": "roster",
+          "year": 2023
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "学生组获奖名单含学校、作品和创作人员；教师教创赛是另一赛事，不能移用。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.ncda.org.cn/dsjs/hjmd/"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.ncda.org.cn/dsjs/hjmd/",
+        "https://www.ncda.org.cn/review/11th/hjmd/"
+      ],
+      "directory_order": 34,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.ncda.org.cn/",
+          "https://www.ncda.org.cn/dsjs/hjmd/",
+          "https://www.ncda.org.cn/news/2026/1001/765.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.ncda.org.cn/news/2026/1005/766.html",
+          "https://www.ncda.org.cn/news/2026/1001/765.html",
+          "https://www.ncda.org.cn/news/2026/0903/762.html",
+          "https://www.ncda.org.cn/dsjs/hjmd/"
+        ]
+      },
+      "excluded_domains": [
+        "ndtc.ncda.org.cn"
+      ]
+    },
+    {
+      "id": "zhou-peiyuan",
+      "name": "全国周培源大学生力学竞赛",
+      "aliases": [
+        "周培源力学竞赛",
+        "周培源大学生力学竞赛"
+      ],
+      "subjects": [
+        "数学与统计",
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://zpy.cstam.org.cn/"
+      ],
+      "official_domains": [
+        "zpy.cstam.org.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 35,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://zpy.cstam.org.cn/",
+            "reason": "读取超时（>6 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "mechanical-series",
+      "name": "中国大学生机械工程创新创意大赛",
+      "aliases": [
+        "过程装备实践与创新赛",
+        "铸造工艺设计赛",
+        "材料热处理创新创业赛",
+        "起重机创意赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "化学材料与能源"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.gczbds.org/"
+      ],
+      "official_domains": [
+        "gczbds.org"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 36,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.gczbds.org/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "robocup-china",
+      "name": "中国机器人大赛暨RoboCup机器人世界杯中国赛",
+      "aliases": [
+        "中国机器人大赛",
+        "RoboCup中国赛",
+        "RoboCup机器人世界杯中国赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://crc.drct-caa.org.cn/"
+      ],
+      "official_domains": [
+        "crc.drct-caa.org.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 37,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://crc.drct-caa.org.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "software-cup",
+      "name": "“中国软件杯”大学生软件设计大赛",
+      "aliases": [
+        "中国软件杯",
+        "中国软件杯大学生软件设计大赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.cnsoftbei.com/"
+      ],
+      "official_domains": [
+        "cnsoftbei.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 38,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://www.cnsoftbei.com/",
+            "reason": "HTTP 444"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "china-us-maker",
+      "name": "中美青年创客大赛",
+      "aliases": [
+        "中美青年创客竞赛"
+      ],
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.eol.cn/html/lx/maker/"
+      ],
+      "official_domains": [
+        "eol.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 39,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.eol.cn/html/lx/maker/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "raicom",
+      "name": "睿抗机器人开发者大赛",
+      "aliases": [
+        "RAICOM",
+        "RoboCom机器人开发者大赛",
+        "睿抗机器人开发者大赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.robocom.com.cn/"
+      ],
+      "official_domains": [
+        "robocom.com.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 40,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.robocom.com.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "datang",
+      "name": "“大唐杯”全国大学生新一代信息通信技术大赛",
+      "aliases": [
+        "大唐杯",
+        "大唐杯全国大学生移动通信5G技术大赛"
+      ],
+      "subjects": [
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://dtcup.dtxiaotangren.com/"
+      ],
+      "official_domains": [
+        "dtcup.dtxiaotangren.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 41,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://dtcup.dtxiaotangren.com/",
+            "reason": "证书校验失败（SSL）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "huawei-ict",
+      "name": "华为ICT大赛",
+      "aliases": [
+        "Huawei ICT Competition",
+        "华为ICT竞赛"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://e.huawei.com/cn/talent/ict-academy/"
+      ],
+      "official_domains": [
+        "e.huawei.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 42,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://e.huawei.com/cn/talent/ict-academy/",
+            "reason": "HTTP 403"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "embedded",
+      "name": "全国大学生嵌入式芯片与系统设计竞赛",
+      "aliases": [
+        "嵌入式芯片与系统设计竞赛"
+      ],
+      "subjects": [
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.socchina.net/"
+      ],
+      "official_domains": [
+        "socchina.net"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 43,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.socchina.net/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "life-science",
+      "name": "全国大学生生命科学竞赛",
+      "aliases": [
+        "CULSC",
+        "全国大学生生命科学创新创业大赛"
+      ],
+      "subjects": [
+        "医学与生命科学"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.culsc.cn/"
+      ],
+      "official_domains": [
+        "culsc.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 44,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.culsc.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "physics-lab",
+      "name": "全国大学生物理实验竞赛",
+      "aliases": [
+        "全国大学生物理实验竞赛创新",
+        "物理实验竞赛"
+      ],
+      "subjects": [
+        "物理与基础科学"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://wlsycx.moocollege.com/"
+      ],
+      "official_domains": [
+        "wlsycx.moocollege.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 45,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://wlsycx.moocollege.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "bim",
+      "name": "全国高校BIM毕业设计创新大赛",
+      "aliases": [
+        "BIM毕业设计创新大赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://gxbsxs.glodonedu.com/index"
+      ],
+      "official_domains": [
+        "gxbsxs.glodonedu.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 46,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://gxbsxs.glodonedu.com/index"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "business-elite",
+      "name": "全国高校商业精英挑战赛",
+      "aliases": [
+        "商业精英挑战赛",
+        "全国高校商业精英挑战赛品牌策划竞赛",
+        "全国高校商业精英挑战赛国际贸易竞赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://cubec.org.cn/"
+      ],
+      "official_domains": [
+        "cubec.org.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 47,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://cubec.org.cn/",
+            "reason": "证书校验失败（SSL）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "xuechuang",
+      "name": "“学创杯”全国大学生创业综合模拟大赛",
+      "aliases": [
+        "学创杯",
+        "大学生创业综合模拟大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.bster.cn/cyds/index"
+      ],
+      "official_domains": [
+        "bster.cn"
+      ],
+      "authority_domains": [
+        "bster.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "http://www.bster.cn/cyds/index",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://www.bster.cn/cyds/article/detail_view?id=2212",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://www.bster.cn/cyds/index",
+        "scope_note": "官网有省级选拔赛获奖公示；目前样例是江苏省赛，不能据此认定全国总决赛获奖。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://www.bster.cn/cyds/index",
+        "http://www.bster.cn/cyds/article/detail_view?id=2212"
+      ],
+      "directory_order": 48,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.bster.cn/cyds/index",
+          "http://www.bster.cn/cyds/article/detail_view?id=2212",
+          "http://www.bster.cn/cyds/article/detail_view?id=2213"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.bster.cn/cyds/article/detail_view?id=2212",
+          "http://www.bster.cn/cyds/article/detail_view?id=2213",
+          "http://www.bster.cn/cyds/article/detail_view?id=2214",
+          "http://www.bster.cn/cyds/article/detail_view?id=2208",
+          "http://www.bster.cn/cyds/article/detail_view?id=2209",
+          "http://www.bster.cn/cyds/article/detail_view?id=2210"
+        ]
+      }
+    },
+    {
+      "id": "creative-robot",
+      "name": "中国高校智能机器人创意大赛",
+      "aliases": [
+        "智能机器人创意大赛"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.robotcontest.cn/"
+      ],
+      "official_domains": [
+        "robotcontest.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 49,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.robotcontest.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "good-creative",
+      "name": "中国好创意暨全国数字艺术设计大赛",
+      "aliases": [
+        "中国好创意",
+        "全国数字艺术设计大赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.cdec.org.cn/"
+      ],
+      "official_domains": [
+        "cdec.org.cn"
+      ],
+      "authority_domains": [
+        "cdec.org.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.cdec.org.cn/certificate",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.cdec.org.cn/certificate",
+        "scope_note": "官网有获奖名单查询与证书下载入口，按届次/专项赛发布；有公开查询不代表完整名单可无条件批量获取。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.cdec.org.cn/certificate"
+      ],
+      "directory_order": 50,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.cdec.org.cn/",
+          "https://www.cdec.org.cn/certificate"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.cdec.org.cn/certificate"
+        ]
+      }
+    },
+    {
+      "id": "robot-ai",
+      "name": "中国机器人及人工智能大赛",
+      "aliases": [
+        "CRAIC",
+        "中国机器人及人工智能大赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.caairobot.com/"
+      ],
+      "official_domains": [
+        "caairobot.com"
+      ],
+      "authority_domains": [
+        "caairobot.com"
+      ],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已通过赛事公开入口更新官网为 caairobot.com；尚未确认全国总决赛完整获奖名单。网站可访问或首页未见名单都不能证明官网不提供名单，保留学校官网补查。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.caairobot.com/"
+      ],
+      "directory_order": 51,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.caairobot.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "energy-saving",
+      "name": "全国大学生节能减排社会实践与科技竞赛",
+      "aliases": [
+        "节能减排竞赛",
+        "大学生节能减排社会实践与科技竞赛"
+      ],
+      "subjects": [
+        "化学材料与能源",
+        "地学农业与环境"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.jienengjianpai.org/"
+      ],
+      "official_domains": [
+        "jienengjianpai.org"
+      ],
+      "authority_domains": [
+        "jienengjianpai.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.jienengjianpai.org/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://www.jienengjianpai.org/sys-nd/424.html",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.jienengjianpai.org/",
+        "scope_note": "官网正式公布主赛道获奖名单附件，证书通过学校联系人分发；名单公开与证书登录/邮件领取是不同事项。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.jienengjianpai.org/",
+        "https://www.jienengjianpai.org/sys-nd/424.html"
+      ],
+      "directory_order": 52,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.jienengjianpai.org/",
+          "https://www.jienengjianpai.org/sys-nd/427.html",
+          "https://www.jienengjianpai.org/sys-nd/424.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.jienengjianpai.org/sys-nd/428.html",
+          "https://www.jienengjianpai.org/sys-nd/427.html",
+          "https://www.jienengjianpai.org/sys-nd/426.html",
+          "https://www.jienengjianpai.org/sys-nd/425.html",
+          "https://www.jienengjianpai.org/sys-nd/424.html"
+        ]
+      }
+    },
+    {
+      "id": "21st-century",
+      "name": "“21世纪杯”全国英语演讲比赛",
+      "aliases": [
+        "21世纪杯",
+        "21世纪杯全国英语演讲比赛"
+      ],
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://contest.i21st.cn/"
+      ],
+      "official_domains": [
+        "contest.i21st.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 53,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://contest.i21st.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "ican",
+      "name": "iCAN大学生创新创业大赛",
+      "aliases": [
+        "iCAN",
+        "国际大学生iCAN创新创业大赛"
+      ],
+      "subjects": [
+        "综合与创新创业",
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.g-ican.com/"
+      ],
+      "official_domains": [
+        "g-ican.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 54,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.g-ican.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "icbc-fintech",
+      "name": "“工行杯”全国大学生金融科技创新大赛",
+      "aliases": [
+        "工行杯",
+        "金融科技创新大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.gonghangbei.com/"
+      ],
+      "official_domains": [
+        "gonghangbei.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 55,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.gonghangbei.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "chinese-classics",
+      "name": "中华经典诵写讲大赛",
+      "aliases": [
+        "中华经典诵写讲大赛",
+        "诵读中国",
+        "诗教中国",
+        "笔墨中国",
+        "印记中国"
+      ],
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.jingdiansxj.cn/home"
+      ],
+      "official_domains": [
+        "jingdiansxj.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 56,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.jingdiansxj.cn/home",
+            "reason": "连接超时（>5 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "intercultural",
+      "name": "“外教社杯”全国高校学生跨文化能力大赛",
+      "aliases": [
+        "外教社杯全国高校学生跨文化能力大赛",
+        "外教社杯跨文化能力大赛"
+      ],
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://ict.sflep.com/"
+      ],
+      "official_domains": [
+        "ict.sflep.com"
+      ],
+      "authority_domains": [
+        "ict.sflep.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://ict.sflep.com/index.php?a=show&c=index&catid=15&id=116&m=content",
+          "kind": "roster",
+          "year": 2024
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "scope_note": "外教社官方赛事报道公开2024全国决赛/总决赛获奖名单，名单以图片呈现。当前纯文本读取不能自动核对图片中的姓名，需学校公告或人工读图；中国学生组、国际学生组及短视频赛须区分。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://ict.sflep.com/index.php?a=lists&c=index&catid=49&m=content"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://ict.sflep.com/index.php?a=lists&c=index&catid=49&m=content",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 57,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "https://ict.sflep.com/",
+            "seconds": 4.52,
+            "readable": true,
+            "failure": "",
+            "title": "跨文化能力测试中心",
+            "result_text": false,
+            "excerpt": "中心简介\n专家团队\n联系我们\n考试\n大赛\n研修\n学术\n其他\n跨文化能力考试\n其他测评服务\n测评研究基地\n大赛简介\n大赛资讯\n国赛章程\n省赛章程\n短视频大赛\n赛事回顾\n研修培训\n定制服务\n会议/讲座\n课题申报\n其他活动\n公开课程\n收费课程\n相关推荐\n免费下载\n实践活动\n实习就业\n上海外语教育出版社联合上海外国语大学跨文化研究中心，与全国各地高等教育院校合作，开展“跨文化教学与测评研究基地”共建计划，以回应新时代国家战略需求，顺应新文科建设发展趋势，打造跨文化能力教学与测评高地，增强外语学科建设特色，培养有效参与国际传播的高素质国际化复合型人才。\nPartners\nPartners"
+          },
+          {
+            "url": "https://ict.sflep.com/index.php?a=show&c=index&catid=15&id=116&m=content",
+            "seconds": 2.98,
+            "readable": true,
+            "failure": "",
+            "title": "第七届“外教社杯”全国高校学生跨文化能力大赛成功举办 - 大赛 - 跨文化能力测试中心",
+            "result_text": true,
+            "excerpt": "11月29日~12月1日，第七届“外教社杯”全国高校学生跨文化能力大赛在上海外国语大学成功举办。大赛由中国教育国际交流协会指导，上海外国语大学主办，上海外语教育出版社承办，上海外国语大学跨文化研究中心提供学术支持。\n大赛自3月启动以来，吸引了来自28个省市自治区1000多所高校的3000多名学生参加比赛。经过校赛和省赛的比拼，共有来自北京大学、复旦大学、南京大学、上海外国语大学、武汉大学、中南大学、同济大学、西安交通大学、吉林大学、湖南大学等的64支中国学生组队伍和20支国际学生组队伍晋级全国决赛，参赛规模和层次均为历届最高。大赛强调真实任务、团队协作、英语表达、多元展示，多环节综合考查学生的跨文化能力。在全国决赛和总决赛的舞台上，参赛团队各展所长，充分体现了当代大学生对世界文化多样性的理解和尊重。经过案例开发与展析、名言名句解读、知识问答、情境述评和讲述中国故事等多项比赛环节的考查，复旦大学团队和浙江传媒学院团队分别摘得中国学生组和国际学生组冠军。本次大赛通过网络全程在线直播，获得广泛关注，观看总人次突破13万。\n12月1日下午，第七届“外教社杯”全国高校学生跨文化能力大赛全国决赛、总决赛颁奖典礼在上海外国语大学虹口校区举办。中国高等教育学会姜恩来副会长、中国教育国际交流协会傅博副秘书长、上海外国语大学李岩松校长、教育部高等学校外国语言文学类专业教学指导委员会孙有中主任委员、外交学院孙吉胜副校长、北京市教育国际交流协会黄侃会长、上海市教育国际交流协会李维平秘书长、上海市教育委员会国际交流处陈皞副处长等领导和嘉宾出席。\n开幕式上，在场嘉宾和师生共同观看了大赛宣传片，一起见证大赛从上海走向长三角，从长三角走向全国的发展历程，在光影中感受文明交融的魅力。\n李岩松校长在致辞中表示，“外教社杯”全国高校学生跨文化能力大赛始终以培养具有中国情怀、国际视野、专业本领、跨文化沟通能力的青年人才为目标，致力于推动我国跨文化教学与人才培养的高质量发展，与上外“诠释世界、成就未来”的办学理念一脉相承、不谋而合。今年是上海外国语大学建校75周年，他结合上外多年来在跨文化交流方面的实践，提出了三点期望：一是希望同学们永远心怀人文交流的热情，全方位筑牢发展根基；二是希望同学们不断增强文明互鉴的意识与能力，激发跨文化交流的内生动力；三是希望同学们持续提升开展国际交流的核心竞争力，承担起对外传播的时代责任。\n傅博副秘书长指出，“外教社杯”全国高校学生跨文化能力大赛作为我国特色鲜明的一流学生赛事平台，多年以来，聚焦跨文化人才培养，始终以服务国家战略为导向，促进中外人文交流发展。希望大赛继续发挥纽带作用，架起文化交流“连心桥”。不忘本来，吸收外来，面向未来。同时，他希望大赛能够提升青年学子的语言应用能力，和说理叙事能力，拓宽国际交流的渠道与模式，以务实举措助力国际传播能力建设。作为中国教育界开展民间对外教育合作与交流的全国性组织，中国教育国际交流协会将持续运用平台优势，增进各国和各地区人民之间的了解和友谊。\n姜恩来副会长认为，跨文化沟通能力的提升对于深化高层次国际化人才培养、推动中国教育走向世界都具有重要的现实意义。他希望大赛今后在以下四个方面继续努力：第一，坚定落实立德树人根本任务，挖掘赛事更大的育人潜能；第二，立足社会需求、聚焦时代之变，探索大赛创新发展新赛道；第三，汇聚青年人才，搭建平台，激发大赛创新活力；第四，聚焦提质增效，营造良好氛围，提高赛事影响力和吸引力。他希望同学们能够深刻理解跨文化能力的内涵与价值，更大限度发挥在国际传播创新上的优势，讲好中国故事、传播好中国声音。\n黄侃会长代表各赛区协办单位对大赛的成功举办表示祝贺。“外教社杯”全国高校学生跨文化能力大赛已列入《2023全国普通高校大学生竞赛分析报告》竞赛目录。许多省级教育主管单位已经将“外教社杯”跨文化能力"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "baidu-star",
+      "name": "百度之星程序设计大赛",
+      "aliases": [
+        "百度之星",
+        "Baidu Star"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://star.baidu.com/"
+      ],
+      "official_domains": [
+        "star.baidu.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 58,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://star.baidu.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "industrial-design",
+      "name": "全国大学生工业设计大赛",
+      "aliases": [
+        "大学生工业设计大赛",
+        "NCUID"
+      ],
+      "subjects": [
+        "艺术设计与传媒",
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://www.cuidc.net/"
+      ],
+      "official_domains": [
+        "cuidc.net"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 59,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.cuidc.net/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "water-design",
+      "name": "全国大学生水利创新设计大赛",
+      "aliases": [
+        "大学生水利创新设计大赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘",
+        "地学农业与环境"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://sljzw.hhu.edu.cn/fenhui/11999/list.psp"
+      ],
+      "official_domains": [
+        "sljzw.hhu.edu.cn"
+      ],
+      "authority_domains": [
+        "sljzw.hhu.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://sljzw.hhu.edu.cn/_upload/article/files/7e/f0/04d1303c4327a6b5d8807f02d895/a10a778c-49f0-4f28-9fd1-b2579df82ce7.pdf",
+          "kind": "roster",
+          "year": 2025
+        },
+        {
+          "url": "https://sljzw.hhu.edu.cn/_upload/article/files/d9/8b/ca6bf1e9482fa355a2b06d733a16/fa0bdc18-33c6-4a57-a614-71764c0e965b.pdf",
+          "kind": "roster",
+          "year": 2023,
+          "stage": "provisional"
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "中国水利教育协会高等教育分会官网公开结果通知及附件；2023样例含作品、学校和学生姓名，但为推荐获奖公示，不能当作最终名单。2025 PDF本次未提取到可用文本，需人工读取或学校公告补证；教师奖与组织奖不替代学生项目奖。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://sljzw.hhu.edu.cn/fenhui/11999/list.psp"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://sljzw.hhu.edu.cn/fenhui/11999/list.psp",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 60,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "https://sljzw.hhu.edu.cn/fenhui/11999/list.psp",
+            "seconds": 4.48,
+            "readable": true,
+            "failure": "",
+            "title": "通知公告",
+            "result_text": true,
+            "excerpt": "|  |                  分会动态                |  |  |  | \n|  |  |  | \n|  |  通知公告  |  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | \n|  | 关于公布2026年高等学校水利类专业教学成果遴选结果的通知 | 2026-08-05 | \n|  | 关于2026年水利类专业教学成果奖获奖成果的公示 | 2026-07-28 | \n|  | 关于第十届水利类专业青年教师讲课竞赛结果的公示 | 2026-07-20 | \n|  | 关于召开中国水利教育协会高等教育分会2026年理事会年会的通知（... | 2026-06-12 | \n|  | 【2026】9号 关于开展第八届全国高等学校水利类专业优秀研究生学... | 2026-05-18 | \n|  | 水教协【2026】8号关于开展2026年高等学校水利类专业教学成果遴... | 2026-04-01 | \n|  | 【2026】7号关于举办第十届全国水利类专业青年教师讲课竞赛的通... | 2026-04-01 | \n|  | 关于公布第四届水利德育教育优秀成果 遴选结果的通知 | 2025-10-20 | \n|  | 关于公布水利高等教育教学改革课题立项结果的通知 | 2025-08-21 | \n|  | 中国水利教育协会高等教育分会第七届理事会2025年会暨教育部高等... | 2025-07-25 | \n|  | 2025【24】号关于公布第九届全国大学生水利创新设计大赛结果的通... | 2025-07-25 | \n|  | 关于水利高等教育教学改革课题立项结果的公示 | 2025-07-21 | \n|  | 关于发布第九届全国大学生水利创新设计大赛决赛赛程通知 | 2025-07-01 | \n|  | 关于召开中国水利教育协会高等教育分会第七届理事会年会暨教育部... | 2025-07-01 | \n| 版权所有：中国水利教育协会高等教育分会 技术支持：南京先极科技有限公司 |"
+          },
+          {
+            "url": "https://sljzw.hhu.edu.cn/_upload/article/files/7e/f0/04d1303c4327a6b5d8807f02d895/a10a778c-49f0-4f28-9fd1-b2579df82ce7.pdf",
+            "seconds": 6.57,
+            "readable": false,
+            "failure": "PDF 未提取到文本，可能是扫描件或受保护文件"
+          },
+          {
+            "url": "https://sljzw.hhu.edu.cn/fenhui/2026/0728/c12009a332165/page.htm",
+            "seconds": 1.96,
+            "readable": true,
+            "failure": "",
+            "title": "关于2026年水利类专业教学成果奖获奖成果的公示",
+            "result_text": true,
+            "excerpt": "首页\n关于分会\n分会动态\n文件下载\n专题报道\n关于2026年水利类专业教学成果奖获奖成果的公示\n发布人：周林 发布时间：2026-07-28 浏览次数:\n10\n版权所有：中国水利教育协会高等教育分会 技术支持：\n南京先极科技有限公司"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "chemical-lab",
+      "name": "全国大学生化工实验大赛",
+      "aliases": [
+        "大学生化工实验大赛"
+      ],
+      "subjects": [
+        "化学材料与能源"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://edu.cteic.com/match/app/main"
+      ],
+      "official_domains": [
+        "edu.cteic.com"
+      ],
+      "authority_domains": [
+        "edu.cteic.com"
+      ],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "中国化工教育协会赛事平台提供全国大学生化工实验大赛规则及报名信息；尚未确认免登录全国总决赛完整获奖名单入口。各赛区承办高校公告可补查，化工实验大赛与化学实验创新设计大赛不是同一赛事。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://edu.cteic.com/match/app/notice/42"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://edu.cteic.com/match/app/notice/42",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 61,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "https://edu.cteic.com/match/app/main",
+            "seconds": 6.52,
+            "readable": false,
+            "failure": "证书校验失败（SSL）"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "chemistry-design",
+      "name": "全国大学生化学实验创新设计大赛",
+      "aliases": [
+        "大学生化学实验创新设计大赛"
+      ],
+      "subjects": [
+        "化学材料与能源"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://cid.nju.edu.cn/"
+      ],
+      "official_domains": [
+        "cid.nju.edu.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 62,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://cid.nju.edu.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "computer-system",
+      "name": "全国大学生计算机系统能力大赛",
+      "aliases": [
+        "全国大学生计算机系统能力大赛编译系统设计赛",
+        "操作系统设计赛",
+        "CSCC"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://compiler.educg.net/"
+      ],
+      "official_domains": [
+        "compiler.educg.net"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 63,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://compiler.educg.net/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "garden-design",
+      "name": "全国大学生花园设计建造竞赛",
+      "aliases": [
+        "花园设计建造竞赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘",
+        "地学农业与环境"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://landscape-caup.tongji.edu.cn/"
+      ],
+      "official_domains": [
+        "landscape-caup.tongji.edu.cn"
+      ],
+      "authority_domains": [
+        "landscape-caup.tongji.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://landscape-caup.tongji.edu.cn/9d/77/c10574a367991/page.htm",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "承办单位同济大学景观学系官网公布2025社区花园赛道作品、学校、参赛者和奖项；公告发表于2026年，比赛年度仍为2025年，不能替代建造节等其他赛道。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://landscape-caup.tongji.edu.cn/9d/77/c10574a367991/page.htm"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://landscape-caup.tongji.edu.cn/9d/77/c10574a367991/page.htm",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 64,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "https://landscape-caup.tongji.edu.cn/",
+            "seconds": 4.12,
+            "readable": true,
+            "failure": "",
+            "title": "建筑与城市规划学院景观学系",
+            "result_text": true,
+            "excerpt": "页面标题：更多 讲座展览\n近日，2026年德国红点设计奖（Red Dot Award）获奖名单正式揭晓。由同济大学建筑与城... 全文\n2026年6月6日，第三届LA风景园林奖颁奖典礼隆重举行，业界同仁共襄盛举，见证中国风景... 全文\n以下文章来源于同济大学建筑城规学院，作者CAUP同济大学建筑城规学院.同济大学建筑与... 全文\n2026年6月30日至7月2日，第二十七届中国生物圈保护区网络成员大会暨鼎湖山国家级自然... 全文\n同济大学是国内最早开设风景园林课程、创办风景园林专业的高校之一。景观学系、同济大学风景科学研究所隶属于同济大学建筑与城市规划学院，系所同一, 是中国建筑规划类院校中唯一的风景园林系所。 了解更多\n2014景观环境测绘实习即将开始 @waterfronts\n寻人：同济一位浙江籍研究建筑风水的知名教授 @wangwxc\n绿野的读书笔记 @绿野仙踪\n© 同济大学建筑与城市规划学院景观学系 版权所有."
+          },
+          {
+            "url": "https://landscape-caup.tongji.edu.cn/9d/77/c10574a367991/page.htm",
+            "seconds": 2.57,
+            "readable": true,
+            "failure": "",
+            "title": "作品展示 | “共生发展”——全国大学生花园设计建造竞赛【社区花园赛道】",
+            "result_text": true,
+            "excerpt": "页面标题：作品展示 | “共生发展”——全国大学生花园设计建造竞赛【社区花园赛道】\n“百姓园林 共生发展”\n全国大学生花园设计建造竞赛\n【社区花园赛道】\n为积极响应国家花园城市建设号召，推动花园城市理念落地实践，2025年全国大学生花园设计建造竞赛首次增设“社区花园赛道”。本届竞赛以“百姓园林，共生发展”为主题，贯彻落实中国风景园林学会倡导的“百姓园林”核心行业理念。旨在推动园林建设回归大众、服务民生，实现共建共治共享，2025年会主题“百姓园林 乡土风景”也在业内形成了广泛共识。秉承以人民为中心的发展思想，本次竞赛以待改造的城乡绿地空间为实践载体开展社区参与式花园设计、营造实验，不仅是为了优化城市空间、提供休闲场所，更深层的意义在于发动基层力量参与，将“园林即生活”的愿景转化为社区层面的具体行动，大学生与社区居民、商户等形成合作团队进行共创，从而增强社区凝聚力，并系统探索人与自然、社区与城市的和谐共生之道，是学会理念从行业倡议转化为人才培养和社会参与的关键实践。\n本届竞赛共报名106组，经过43位专家组成的评审委员会评审，评选一等奖1组、二等奖2组、三等奖3组、特别专题奖6组，现予公布。\n延伸阅读：\n01\n竞赛征集主办单位和承办单位\nHOSTS AND ORGANIZERS\n指导单位：\n中国风景园林学会\n主办单位：\n北京林业大学\n承办单位：\n同济大学建筑与城市规划学院景观学系、北京林业大学园林学院、《中国园林》杂志社、《风景园林》杂志社\n02\n终评结果\nTHE RESULTS OF THE FINAL REVIEW\n获奖作品展示\n（共12组）\n（按排名排序）\nC088 《“童”筑绿洲·共生未来》\n参赛院校：华南农业大学\n参赛者：陈佳豪、张正月、江香花、张尹馨、招楚姗、孙弘儒、罗泳淇\n指导教师：汤辉\n获奖理由：该作品以其在儿童参与式社区花园设计中的革新理念与扎实实践荣获嘉奖。其核心突破在于实现了儿童从“象征性参与”到“全程主导”的范式革新，将儿童权利前瞻性地融入需求调研、设计、建造与运维的全流程。方案以“童筑绿洲”为主题，策略系统、共建机制完整，成功调动了多方力量共同推进，并在生态与社会效益间取得平衡。实践过程历时数月，融合自然教育，利旧利费，取得了良好的建设效果与社会反响。成果表达生动，完成度高，为构建儿童友好型社区提供了极具推广价值的方法论，是一次充满理想与启蒙意义的成功探索。\nC089 《立方自然》\n参赛者：陈梦玥、谭治贤、刘正瑜、郭雨彤、徐嘉仪、罗炜桐、刘晶莹\n获奖理由：该作品的核心创新在于系统构建了一套以“亲生物模块”为核心理念的校园疗愈花园体系，通过高度契合高校学生心理需求的模块化设计，将“立方自然”概念转化为可复制、低成本的实体空间。项目以师生共建与课程联动为特色，不仅形成了严谨的设计逻辑与完整的共建运维机制，更巧妙融合了科研观察与生态教育功能，实现了生态效益与心理疗愈的有效平衡，为校园微更新如何融合自然、教育与社会价值提供了具有示范意义的创新解决方案。\nC105 《泥好微花园营造》\n参赛院校：南京工程学院、东南大学\n参赛者：裴子怡、于尚宇、仇志澳、赵哲、邱慧雯\n指导教师：冯艳春\n获奖理由：该项目精准回应了回迁社区这一特殊场域中代际融合与社会重建的深层需求，通过构建“线下花园+线上平台”双轨模式，创新性地将社区记忆留存、代际对话与生态营造融为一体。项目以系统性的社区调研与共建机制为基础，引入了螺旋花园等具有教育意义的生态装置，并通过工作坊、智慧小程序等持续激活社区参与，成功帮助居民重新建立情感联结与社区认同。其展现出的“人文关怀+数字赋能+生态实践”三位一体的系统思维，为城市更新中如何以花园为媒介促进社会融合提供了具有示范意义的创新路径。\nC031 《邻心林趣儿童花园信用社》\n参赛院校：北京林业大学\n参赛者：邓玥兮、朱思彤、解明"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "iot",
+      "name": "全国大学生物联网设计竞赛",
+      "aliases": [
+        "大学生物联网设计竞赛"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "电子与通信"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://developer.huaweicloud.com/college/wulianwang.html"
+      ],
+      "official_domains": [
+        "developer.huaweicloud.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 65,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://developer.huaweicloud.com/college/wulianwang.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "iscc",
+      "name": "全国大学生信息安全与对抗技术竞赛",
+      "aliases": [
+        "ISCC",
+        "信息安全与对抗技术竞赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.isclab.org.cn/"
+      ],
+      "official_domains": [
+        "isclab.org.cn"
+      ],
+      "authority_domains": [
+        "isclab.org.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.isclab.org.cn/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.isclab.org.cn/",
+        "scope_note": "官网有获奖证书下载通知，并明确需参赛账号登录ISCC信息系统；尚未确认所有赛道完整公开姓名名单。不能把实验室“学生获奖”页面当作赛事总名单。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://www.isclab.org.cn/"
+      ],
+      "directory_order": 66,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.isclab.org.cn/",
+          "https://www.isclab.org.cn/2026/07/15/2026%e5%b9%b4%e7%ac%ac23%e5%b1%8a%e4%bf%a1%e6%81%af%e5%ae%89%e5%85%a8%e4%b8%8e%e5%af%b9%e6%8a%97%e6%8a%80%e6%9c%af%e7%ab%9e%e8%b5%9b%e7%ba%bf%e4%b8%8a%e6%8c%91%e6%88%98%e8%b5%9b-5/",
+          "https://www.isclab.org.cn/%e7%a0%94%e7%a9%b6%e7%94%9f%e8%8e%b7%e5%a5%96/"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.isclab.org.cn/%e7%a0%94%e7%a9%b6%e7%94%9f%e8%8e%b7%e5%a5%96/",
+          "https://www.isclab.org.cn/category/zxjx/jyjx_3/",
+          "https://www.isclab.org.cn/2026/07/15/2026%e5%b9%b4%e7%ac%ac23%e5%b1%8a%e4%bf%a1%e6%81%af%e5%ae%89%e5%85%a8%e4%b8%8e%e5%af%b9%e6%8a%97%e6%8a%80%e6%9c%af%e7%ab%9e%e8%b5%9b%e7%ba%bf%e4%b8%8a%e6%8c%91%e6%88%98%e8%b5%9b-5/"
+        ]
+      }
+    },
+    {
+      "id": "surveying",
+      "name": "全国大学生测绘学科创新创业智能大赛",
+      "aliases": [
+        "测绘学科创新创业智能大赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://smt.whu.edu.cn/"
+      ],
+      "official_domains": [
+        "smt.whu.edu.cn"
+      ],
+      "authority_domains": [
+        "smt.whu.edu.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "http://smt.whu.edu.cn/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://smt.whu.edu.cn/info/1009/7452.htm",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://smt.whu.edu.cn/",
+        "scope_note": "测绘教指委官网有学生大赛获奖通报及附件1—9；同站教学创新大赛是教师赛事，不用于学生奖项。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://smt.whu.edu.cn/",
+        "http://smt.whu.edu.cn/info/1009/7452.htm"
+      ],
+      "directory_order": 67,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://smt.whu.edu.cn/",
+          "http://smt.whu.edu.cn/info/1009/7452.htm",
+          "http://smt.whu.edu.cn/info/1009/7442.htm"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://smt.whu.edu.cn/info/1009/7452.htm",
+          "http://smt.whu.edu.cn/info/1009/7442.htm",
+          "http://smt.whu.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1491569902&wbfileid=01F7C5D579CA64D6DAB753A4133914EE",
+          "http://smt.whu.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1491569902&wbfileid=A7DA9752075B75D4EED5F8312233FAD0",
+          "http://smt.whu.edu.cn/system/_content/download.jsp?urltype=news.DownloadAttachUrl&owner=1491569902&wbfileid=74D366098EAF071E2A6897C109C43D9E"
+        ]
+      }
+    },
+    {
+      "id": "statistical-modeling",
+      "name": "全国大学生统计建模大赛",
+      "aliases": [
+        "统计建模大赛"
+      ],
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://tjjmds.ai-learning.net/"
+      ],
+      "official_domains": [
+        "tjjmds.ai-learning.net"
+      ],
+      "authority_domains": [
+        "tjjmds.ai-learning.net"
+      ],
+      "result_pages": [
+        {
+          "url": "http://tjjmds.ai-learning.net/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "http://tjjmds.ai-learning.net/sshg/37055.jhtml",
+          "kind": "roster",
+          "year": 2024
+        },
+        {
+          "url": "http://tjjmds.ai-learning.net/dsdt/37144.jhtml",
+          "kind": "roster",
+          "year": 2026
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "http://tjjmds.ai-learning.net/",
+        "scope_note": "官网有国赛正式获奖通知及附件；国赛、省赛、研究生组与本科组须分别核对。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "http://tjjmds.ai-learning.net/",
+        "http://tjjmds.ai-learning.net/sshg/37055.jhtml",
+        "http://tjjmds.ai-learning.net/dsdt/37144.jhtml"
+      ],
+      "directory_order": 68,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://tjjmds.ai-learning.net/",
+          "http://tjjmds.ai-learning.net/sshg/37055.jhtml",
+          "http://tjjmds.ai-learning.net/dsdt/37144.jhtml"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://tjjmds.ai-learning.net/dsdt/37144.jhtml",
+          "http://tjjmds.ai-learning.net/sshg/37055.jhtml",
+          "http://tjjmds.ai-learning.net/sshg/36966.jhtml",
+          "http://tjjmds.ai-learning.net/sshg/36964.jhtml",
+          "http://tjjmds.ai-learning.net/dsdt/37133.jhtml"
+        ]
+      }
+    },
+    {
+      "id": "energy-economics",
+      "name": "全国大学生能源经济学术创意大赛",
+      "aliases": [
+        "能源经济学术创意大赛"
+      ],
+      "subjects": [
+        "化学材料与能源",
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://energy.ckcest.cn/eneco/contribution/index.html"
+      ],
+      "official_domains": [
+        "energy.ckcest.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 69,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://energy.ckcest.cn/eneco/contribution/index.html",
+            "reason": "请求失败（RemoteProtocolError）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "basic-medicine",
+      "name": "全国大学生基础医学创新研究暨实验设计论坛（大赛）",
+      "aliases": [
+        "基础医学创新研究暨实验设计论坛",
+        "基础医学创新研究暨实验设计大赛"
+      ],
+      "subjects": [
+        "医学与生命科学"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.jcyxds.com/"
+      ],
+      "official_domains": [
+        "jcyxds.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 70,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.jcyxds.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "digital-media",
+      "name": "全国大学生数字媒体科技作品及创意竞赛",
+      "aliases": [
+        "数字媒体科技作品及创意竞赛"
+      ],
+      "subjects": [
+        "艺术设计与传媒",
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://mit.caai.cn/"
+      ],
+      "official_domains": [
+        "mit.caai.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 71,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://mit.caai.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "tax-risk",
+      "name": "全国本科院校税收风险管控案例大赛",
+      "aliases": [
+        "税收风险管控案例大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://ssfkds.moocollege.com/"
+      ],
+      "official_domains": [
+        "ssfkds.moocollege.com"
+      ],
+      "authority_domains": [
+        "ssfkds.moocollege.com"
+      ],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "高校官方参赛通知明确指定 ssfkds.moocollege.com 为赛事官方网站。门户为动态页面，尚未确认免登录全国获奖总名单；省赛获奖及晋级名单可见于承办高校，不能替代全国总决赛结果。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://xkjszx.nwafu.edu.cn/sstz/352d2a848e144e6eb0cca84c23060190.htm"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        {
+          "url": "https://xkjszx.nwafu.edu.cn/sstz/352d2a848e144e6eb0cca84c23060190.htm",
+          "description": "补查主办/承办单位或教育部原始通知，确认公开官网及名单范围"
+        }
+      ],
+      "directory_order": 72,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "requests": [
+          {
+            "url": "https://ssfkds.moocollege.com/",
+            "seconds": 4.1,
+            "readable": true,
+            "failure": "",
+            "title": "高校学生竞赛网—竞赛质量提升，创新人才培养",
+            "result_text": false,
+            "excerpt": "高校学生竞赛网—竞赛质量提升，创新人才培养"
+          }
+        ],
+        "note": "公开页面抽查，网络失败不等于无名单；不自动修改公开范围。"
+      }
+    },
+    {
+      "id": "enterprise-simulation",
+      "name": "全国企业竞争模拟大赛",
+      "aliases": [
+        "企业竞争模拟大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.ibizsim.cn/"
+      ],
+      "official_domains": [
+        "ibizsim.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 73,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.ibizsim.cn/",
+          "http://www.ibizsim.cn/main/news/272",
+          "http://www.ibizsim.cn/main/news/274"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "http://www.ibizsim.cn/main/news/274",
+          "http://www.ibizsim.cn/main/news/272",
+          "http://bisai.ibizsim.cn/uploads/20250728/506b88e22e574d5dc148928bfffe028d.pdf",
+          "http://bisai.ibizsim.cn/uploads/20250728/8540b6535d59102733ba64e4d95f9e10.pdf",
+          "https://bisai.ibizsim.cn/uploads/20260319/190f7f3de59709ae66d6ce499eb61234.pdf",
+          "https://bisai.ibizsim.cn/uploads/20260319/9f8a472a7d8f8dc62ce29e7f18a09aa1.pdf"
+        ]
+      }
+    },
+    {
+      "id": "sandtable",
+      "name": "全国高等院校数智化企业经营沙盘大赛",
+      "aliases": [
+        "数智化企业经营沙盘大赛",
+        "全国大学生企业经营沙盘模拟竞赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://spbk.seentao.com/"
+      ],
+      "official_domains": [
+        "spbk.seentao.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 74,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://spbk.seentao.com/",
+            "reason": "请求失败（RemoteProtocolError）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "digital-building",
+      "name": "全国数字建筑创新应用大赛",
+      "aliases": [
+        "数字建筑创新应用大赛"
+      ],
+      "subjects": [
+        "土木建筑与测绘"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://bisai.ccen.com.cn/"
+      ],
+      "official_domains": [
+        "bisai.ccen.com.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 75,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://bisai.ccen.com.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "huawei-algorithm",
+      "name": "全球校园人工智能算法精英大赛",
+      "aliases": [
+        "华为算法精英大赛",
+        "全球校园人工智能算法精英大赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://developer.huawei.com/consumer/cn/activity/digixActivity/"
+      ],
+      "official_domains": [
+        "developer.huawei.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 76,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://developer.huawei.com/consumer/cn/activity/digixActivity/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "smart-agriculture",
+      "name": "国际大学生智能农业装备创新大赛",
+      "aliases": [
+        "智能农业装备创新大赛",
+        "UIAEC"
+      ],
+      "subjects": [
+        "地学农业与环境",
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://uiaec.ujs.edu.cn/"
+      ],
+      "official_domains": [
+        "uiaec.ujs.edu.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 77,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://uiaec.ujs.edu.cn/",
+            "reason": "HTTP 483"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "keyun",
+      "name": "“科云杯”全国大学生财会职业能力大赛",
+      "aliases": [
+        "科云杯",
+        "大学生财会职业能力大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://match.xmkeyun.com.cn/"
+      ],
+      "official_domains": [
+        "match.xmkeyun.com.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 78,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://match.xmkeyun.com.cn/",
+            "reason": "读取超时（>6 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "vocational-skills",
+      "name": "全国职业院校技能大赛",
+      "aliases": [
+        "全国职业院校技能大赛",
+        "世界职业院校技能大赛"
+      ],
+      "subjects": [
+        "职业技能"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://chinaskills.icve.com.cn/"
+      ],
+      "official_domains": [
+        "chinaskills.icve.com.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 79,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://chinaskills.icve.com.cn/",
+            "reason": "证书校验失败（SSL）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "robotac",
+      "name": "全国大学生机器人大赛RoboTac",
+      "aliases": [
+        "RoboTac",
+        "全国大学生机器人大赛RoboTac"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.robotac.cn/"
+      ],
+      "official_domains": [
+        "robotac.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 80,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "http://www.robotac.cn/",
+            "reason": "读取超时（>6 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "worldskills",
+      "name": "世界技能大赛",
+      "aliases": [
+        "WorldSkills Competition",
+        "世界技能大赛"
+      ],
+      "subjects": [
+        "职业技能"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://worldskills.org/"
+      ],
+      "official_domains": [
+        "worldskills.org"
+      ],
+      "authority_domains": [
+        "worldskills.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://results.worldskills.org/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://results.worldskills.org/",
+        "scope_note": "主办方明确所有赛果在线发布，公开结果网站需动态加载。比赛技能、届次与年龄/学生身份须核对，国内选拔赛不是国际赛。"
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
+        "https://results.worldskills.org/"
+      ],
+      "directory_order": 81,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://worldskills.org/",
+          "https://results.worldskills.org/",
+          "https://worldskills.org/media/news/get-ready-tonights-magic/"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://results.worldskills.org/",
+          "https://worldskills.org/media/news/get-ready-tonights-magic/",
+          "https://worldskills.org/media/news/get-ready-tonights-magic",
+          "https://results.worldskills.org/results?event=611&offset=0"
+        ]
+      },
+      "search_label": "WorldSkills"
+    },
+    {
+      "id": "worldskills-china",
+      "name": "世界技能大赛中国选拔赛",
+      "aliases": [
+        "世界技能大赛中国选拔赛",
+        "世界技能大赛全国选拔赛"
+      ],
+      "subjects": [
+        "职业技能"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://worldskillschina.mohrss.gov.cn/"
+      ],
+      "official_domains": [
+        "worldskillschina.mohrss.gov.cn"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 82,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://worldskillschina.mohrss.gov.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "brics-skills",
+      "name": "一带一路暨金砖国家技能发展与技术创新大赛",
+      "aliases": [
+        "金砖国家技能发展与技术创新大赛",
+        "金砖大赛"
+      ],
+      "subjects": [
+        "职业技能"
+      ],
+      "region": "China",
+      "official_urls": [
+        "http://www.brskills.com/"
+      ],
+      "official_domains": [
+        "brskills.com"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 83,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "http://www.brskills.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "matibei",
+      "name": "码蹄杯全国职业院校程序设计大赛",
+      "aliases": [
+        "码蹄杯",
+        "码蹄杯全国职业院校程序设计大赛"
+      ],
+      "subjects": [
+        "职业技能",
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "official_urls": [
+        "https://matiji.net/matibei"
+      ],
+      "official_domains": [
+        "matiji.net"
+      ],
+      "authority_domains": [],
+      "result_pages": [],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示",
+        "比赛结果"
+      ],
+      "publication": {
+        "status": "unknown",
+        "scope_note": "已检查预设公开入口，尚未确认官方名单；访问失败或首页未见链接不能证明官网不提供名单。",
+        "checked_at": "2026-10-07",
+        "source_url": null
+      },
+      "provenance": [
+        "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf"
+      ],
+      "directory_order": 84,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://matiji.net/matibei",
+            "reason": "连接超时（>5 秒）"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "mcm-icm",
+      "name": "美国大学生数学建模竞赛（MCM/ICM）",
+      "aliases": [
+        "MCM",
+        "ICM",
+        "MCM/ICM",
+        "美赛",
+        "美国大学生数学建模竞赛",
+        "Mathematical Contest in Modeling",
+        "Interdisciplinary Contest in Modeling"
+      ],
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://contest.comap.com/undergraduate/contests/mcm/"
+      ],
+      "official_domains": [
+        "contest.comap.com"
+      ],
+      "authority_domains": [
+        "comap.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://contest.comap.com/undergraduate/contests/mcm/previous-contests.php",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://contest.comap.com/undergraduate/contests/mcm/contests/2025/results/index.html",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "scope_note": "COMAP公开题目分组的完整结果PDF及队号/学校；多数名单不列完整个人姓名。需队号与学校材料关联，保留原英文奖级，不把Meritorious/Honorable Mention随意换算成中国一二等奖。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://contest.comap.com/undergraduate/contests/mcm/previous-contests.php"
+      },
+      "provenance": [
+        "https://contest.comap.com/undergraduate/contests/mcm/previous-contests.php",
+        "https://contest.comap.com/undergraduate/contests/mcm/contests/2025/results/index.html"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://contest.comap.com/undergraduate/contests/mcm/",
+          "https://contest.comap.com/undergraduate/contests/mcm/previous-contests.php"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://contest.comap.com/undergraduate/contests/mcm/previous-contests.php",
+          "https://contest.comap.com/undergraduate/contests/matrix/index.html",
+          "https://contest.comap.com/undergraduate/contests/mcm/contests/2026/results",
+          "https://contest.comap.com/undergraduate/contests/mcm/contests/2025/results",
+          "https://contest.comap.com/undergraduate/contests/mcm/contests/2024/results",
+          "https://contest.comap.com/undergraduate/contests/mcm/contests/2023/results"
+        ]
+      },
+      "result_link_limit": 6,
+      "search_label": "MCM ICM",
+      "result_anchor_keys": [
+        "team_id",
+        "team_number",
+        "team"
+      ]
+    },
+    {
+      "id": "imc",
+      "name": "International Mathematics Competition for University Students",
+      "aliases": [
+        "IMC",
+        "国际大学生数学竞赛"
+      ],
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.imc-math.org.uk/"
+      ],
+      "official_domains": [
+        "imc-math.org.uk"
+      ],
+      "authority_domains": [
+        "imc-math.org.uk"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.imc-math.org.uk/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://imc-math.org.uk/?act=results&by=name1&onl=0&year=2025",
+          "kind": "roster",
+          "year": 2025,
+          "stage": "provisional"
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.imc-math.org.uk/",
+        "scope_note": "官方结果表含姓名、学校、分数和奖级；2025样例页面标记Preliminary Results，只能作为初步结果，需核对最终状态。"
+      },
+      "provenance": [
+        "https://www.imc-math.org.uk/",
+        "https://imc-math.org.uk/?act=results&by=name1&onl=0&year=2025"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.imc-math.org.uk/",
+          "https://www.imc-math.org.uk/?year=2026&item=results"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.imc-math.org.uk/?year=2026&item=results",
+          "https://www.imc-math.org.uk/?act=results&by=sum&year=2026",
+          "https://www.imc-math.org.uk/?act=teams&year=2026"
+        ]
+      }
+    },
+    {
+      "id": "putnam",
+      "name": "William Lowell Putnam Mathematical Competition",
+      "aliases": [
+        "Putnam",
+        "普特南数学竞赛"
+      ],
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://maa.org/putnam-/"
+      ],
+      "official_domains": [
+        "maa.org"
+      ],
+      "authority_domains": [
+        "maa.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://maa.org/maa-putnam-archive/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://maa.org/news/results-of-the-86th-william-lowell-putnam-mathematical-competition/",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "scope_note": "MAA公开获奖者姓名、学校及学校团队排名；完整参赛分数不等同公开获奖名单。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://maa.org/maa-putnam-archive/"
+      },
+      "provenance": [
+        "https://maa.org/maa-putnam-archive/",
+        "https://maa.org/news/results-of-the-86th-william-lowell-putnam-mathematical-competition/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://maa.org/putnam-/",
+            "reason": "HTTP 403"
+          },
+          {
+            "url": "https://maa.org/maa-putnam-archive/",
+            "reason": "HTTP 403"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "igem",
+      "name": "International Genetically Engineered Machine Competition",
+      "aliases": [
+        "iGEM",
+        "国际遗传工程机器大赛",
+        "国际基因工程机器大赛"
+      ],
+      "subjects": [
+        "医学与生命科学"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://competition.igem.org/"
+      ],
+      "official_domains": [
+        "competition.igem.org"
+      ],
+      "authority_domains": [
+        "competition.igem.org",
+        "jamboree.igem.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://competition.igem.org/results",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://competition.igem.org/about/previous-years",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "scope_note": "官方公开各年队伍、组别、奖项/奖牌结果；队伍Wiki里的成员是队伍自填材料，应再用学校公告关联本人。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://competition.igem.org/results"
+      },
+      "provenance": [
+        "https://competition.igem.org/results",
+        "https://competition.igem.org/about/previous-years"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://competition.igem.org/",
+          "https://competition.igem.org/results"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "formula-student",
+      "name": "Formula Student Germany",
+      "aliases": [
+        "Formula Student Germany",
+        "FSG",
+        "德国大学生方程式竞赛"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.formulastudent.de/"
+      ],
+      "official_domains": [
+        "formulastudent.de"
+      ],
+      "authority_domains": [
+        "formulastudent.de"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.formulastudent.de/fsg/results/2025",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.formulastudent.de/fsg/results/2025",
+        "scope_note": "官网公开分项目与总成绩PDF，以赛车编号、学校及团队为主；个人成员、总成绩和单项奖需分别关联。"
+      },
+      "provenance": [
+        "https://www.formulastudent.de/fsg/results/2025"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.formulastudent.de/",
+          "https://www.formulastudent.de/fsg/results/2026"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.formulastudent.de/fsg/results/2026",
+          "https://www.formulastudent.de/uploads/tx_fsg/scoring2/pdf/FSG26_Overall_Results_v1_rp00042.pdf",
+          "https://www.formulastudent.de/uploads/tx_fsg/scoring2/pdf/DC26_Overall_Results_v1_rp00041.pdf",
+          "https://www.formulastudent.de/uploads/tx_fsg/scoring2/pdf/FSG26_SPA_MathWorks_finalists%20v1_rp00002.pdf",
+          "https://www.formulastudent.de/uploads/tx_fsg/scoring2/pdf/FSG26_SPA_MathWorks_placing%20v1_rp00043.pdf",
+          "https://www.formulastudent.de/uploads/tx_fsg/scoring2/pdf/FSC26_SPA_Sportsman_placing%20v1_rp00039.pdf"
+        ]
+      }
+    },
+    {
+      "id": "formula-sae",
+      "name": "Formula SAE",
+      "aliases": [
+        "Formula SAE",
+        "FSAE",
+        "美国大学生方程式竞赛"
+      ],
+      "subjects": [
+        "机械与智能制造"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.fsaeonline.com/"
+      ],
+      "official_domains": [
+        "fsaeonline.com"
+      ],
+      "authority_domains": [
+        "fsaeonline.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.fsaeonline.com/cdsweb/app/news.aspx",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://www.fsaeonline.com/CompResources/2025/c796a916-c2e8-4ce6-bae3-c79f36776556/FSAE_2025_MI5_results.pdf",
+          "kind": "roster",
+          "year": 2025,
+          "stage": "provisional"
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.fsaeonline.com/cdsweb/app/news.aspx",
+        "scope_note": "官网有队伍总成绩PDF及正式/初步结果公告；油车、电车、初步成绩和正式成绩须区分，队伍成绩不证明个人成员。"
+      },
+      "provenance": [
+        "https://www.fsaeonline.com/cdsweb/app/news.aspx",
+        "https://www.fsaeonline.com/CompResources/2025/c796a916-c2e8-4ce6-bae3-c79f36776556/FSAE_2025_MI5_results.pdf"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.fsaeonline.com/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "cfa-research",
+      "name": "CFA Institute Research Challenge",
+      "aliases": [
+        "CFA Research Challenge",
+        "CFA全球投资分析大赛",
+        "CFA协会全球投资分析大赛"
+      ],
+      "subjects": [
+        "经管财经与商科"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.cfainstitute.org/insights/events/research-challenge/"
+      ],
+      "official_domains": [
+        "cfainstitute.org"
+      ],
+      "authority_domains": [
+        "cfainstitute.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.cfainstitute.org/insights/events/research-challenge/past-champions",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "scope_note": "官方公开学校团队冠军、地区赛冠军及部分报道；不保证完整成员名单，地区获奖不能当作全球获奖。",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.cfainstitute.org/insights/events/research-challenge/past-champions"
+      },
+      "provenance": [
+        "https://www.cfainstitute.org/insights/events/research-challenge/past-champions"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.cfainstitute.org/insights/events/research-challenge/",
+          "https://www.cfainstitute.org/insights/events/research-challenge/past-champions"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "hult",
+      "name": "Hult Prize",
+      "aliases": [
+        "Hult Prize",
+        "霍特奖",
+        "霍特奖全球大学生社会创新大赛"
+      ],
+      "subjects": [
+        "综合与创新创业",
+        "经管财经与商科"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.hultprize.org/"
+      ],
+      "official_domains": [
+        "hultprize.org"
+      ],
+      "authority_domains": [
+        "hultprize.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.hultprize.org/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://www.hultprize.org/hult-prize-winners/2025/stick-em",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.hultprize.org/",
+        "scope_note": "官网公开Winner/Finalist项目、大学及部分创始成员姓名。Finalist是入围，不能当作全球冠军；公开名单不保证所有队员都有姓名。"
+      },
+      "provenance": [
+        "https://www.hultprize.org/",
+        "https://www.hultprize.org/hult-prize-winners/2025/stick-em"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.hultprize.org/",
+          "https://www.hultprize.org/hult-prize-winners/2024/korion-health",
+          "https://www.hultprize.org/hult-prize-winners/2025/stick-em"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.hultprize.org/hult-prize-winners",
+          "https://www.hultprize.org/hult-prize-winners/2026/flow-guard-solutions",
+          "https://www.hultprize.org/hult-prize-winners/2025/stick-em",
+          "https://www.hultprize.org/hult-prize-winners/2024/korion-health",
+          "https://www.hultprize.org/hult-prize-winners/2022/ecobana",
+          "https://www.hultprize.org/hult-prize-winners/2019/rutopia"
+        ]
+      }
+    },
+    {
+      "id": "jessup",
+      "name": "Philip C. Jessup International Law Moot Court Competition",
+      "aliases": [
+        "Jessup",
+        "杰赛普国际法模拟法庭",
+        "杰赛普国际法模拟法庭比赛"
+      ],
+      "subjects": [
+        "法学"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.ilsa.org/jessup/"
+      ],
+      "official_domains": [
+        "ilsa.org"
+      ],
+      "authority_domains": [
+        "ilsa.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.ilsa.org/jessup-year/jessup-2025/",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.ilsa.org/jessup-year/jessup-2025/",
+        "scope_note": "ILSA官方年度页面列世界冠军团队、成员及部分个人辩手奖；各国选拔赛和国际轮奖项须区分。"
+      },
+      "provenance": [
+        "https://www.ilsa.org/jessup-year/jessup-2025/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.ilsa.org/jessup/",
+            "reason": "HTTP 403"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "vis",
+      "name": "Willem C. Vis International Commercial Arbitration Moot",
+      "aliases": [
+        "Willem C. Vis",
+        "Vis Moot",
+        "维斯国际商事仲裁模拟仲裁庭"
+      ],
+      "subjects": [
+        "法学"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.vismoot.org/"
+      ],
+      "official_domains": [
+        "vismoot.org"
+      ],
+      "authority_domains": [
+        "vismoot.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.vismoot.org/",
+          "kind": "index",
+          "year": null
+        },
+        {
+          "url": "https://www.vismoot.org/previous-moots/29th-vis-moot/",
+          "kind": "roster",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.vismoot.org/",
+        "scope_note": "官网历史赛果列团体口辩、书状及个人辩手奖；已确认第29届历史样例，未知赛年时不自动拿来证明其他届次。"
+      },
+      "provenance": [
+        "https://www.vismoot.org/",
+        "https://www.vismoot.org/previous-moots/29th-vis-moot/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.vismoot.org/",
+          "https://www.vismoot.org/about-the-moot/awards/"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.vismoot.org/about-the-moot/awards/"
+        ]
+      }
+    },
+    {
+      "id": "dyson",
+      "name": "James Dyson Award",
+      "aliases": [
+        "James Dyson Award",
+        "詹姆斯戴森设计大奖",
+        "戴森设计大奖"
+      ],
+      "subjects": [
+        "艺术设计与传媒",
+        "机械与智能制造"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.jamesdysonaward.org/"
+      ],
+      "official_domains": [
+        "jamesdysonaward.org"
+      ],
+      "authority_domains": [
+        "jamesdysonaward.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.jamesdysonaward.org/en-gb/past-winners/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.jamesdysonaward.org/en-gb/past-winners/",
+        "scope_note": "官网按年份公开获奖设计项目，可跟进设计者资料；国家奖、国际奖、可持续发展奖与Top20入围不同。"
+      },
+      "provenance": [
+        "https://www.jamesdysonaward.org/en-gb/past-winners/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.jamesdysonaward.org/",
+            "reason": "HTTP 403"
+          }
+        ],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "imagine-cup",
+      "name": "Microsoft Imagine Cup",
+      "aliases": [
+        "Imagine Cup",
+        "微软创新杯",
+        "微软Imagine Cup"
+      ],
+      "subjects": [
+        "计算机与信息技术",
+        "综合与创新创业"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://imaginecup.microsoft.com/"
+      ],
+      "official_domains": [
+        "imaginecup.microsoft.com"
+      ],
+      "authority_domains": [
+        "imaginecup.microsoft.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://imaginecup.microsoft.com/en-us/Winner",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://imaginecup.microsoft.com/en-us/Winner",
+        "scope_note": "官网列历届世界冠军队伍及项目；部分详情可查看成员，但不能据团队冠军直接证明个人成员身份。"
+      },
+      "provenance": [
+        "https://imaginecup.microsoft.com/en-us/Winner"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://imaginecup.microsoft.com/",
+          "https://imaginecup.microsoft.com/en-us/winners"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://imaginecup.microsoft.com/en-us/winners",
+          "https://imaginecup.microsoft.com/en-us/winners/2022WorldFinalists",
+          "https://imaginecup.microsoft.com/winners/2021WorldChampions",
+          "https://imaginecup.microsoft.com/winners/2020WorldChampions",
+          "https://imaginecup.microsoft.com/winners/2019WorldChampions",
+          "https://imaginecup.microsoft.com/winners/2018WorldChampions"
+        ]
+      }
+    },
+    {
+      "id": "dandad-new-blood",
+      "name": "D&AD New Blood Awards",
+      "aliases": [
+        "D&AD New Blood",
+        "D&AD新血奖",
+        "D&AD新血设计奖"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.dandad.org/"
+      ],
+      "official_domains": [
+        "dandad.org"
+      ],
+      "authority_domains": [
+        "dandad.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.dandad.org/awards/new-blood-awards",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.dandad.org/awards/new-blood-awards",
+        "scope_note": "官网有New Blood获奖作品入口，需进入项目核对创作者、学校及Pencil等级；New Blood Portfolios与New Blood Awards不能混用。"
+      },
+      "provenance": [
+        "https://www.dandad.org/awards/new-blood-awards"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.dandad.org/",
+          "https://www.dandad.org/work/d-ad-awards-archive",
+          "https://www.dandad.org/work/new-blood-archive"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.dandad.org/awards",
+          "https://www.dandad.org/awards/d-ad-awards",
+          "https://www.dandad.org/awards/new-blood-awards",
+          "https://www.dandad.org/work/d-ad-awards-archive",
+          "https://www.dandad.org/work/new-blood-archive",
+          "https://www.dandad.org/insights/awards"
+        ]
+      }
+    },
+    {
+      "id": "asla-student",
+      "name": "ASLA Student Awards",
+      "aliases": [
+        "ASLA Student Awards",
+        "美国景观设计师协会学生奖",
+        "ASLA学生奖"
+      ],
+      "subjects": [
+        "土木建筑与测绘",
+        "艺术设计与传媒"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.asla.org/"
+      ],
+      "official_domains": [
+        "asla.org"
+      ],
+      "authority_domains": [
+        "asla.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards/2025-student-awards",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards/2025-student-awards",
+        "scope_note": "官网公开Student Awards项目，详情含学校及创作资料；Professional Awards是另一类别，不可替代学生奖。"
+      },
+      "provenance": [
+        "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards/2025-student-awards"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.asla.org/",
+          "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards",
+          "https://www.asla.org/",
+          "https://www.asla.org/awards-events-main-landing",
+          "https://www.asla.org/awards-events-main-landing/honors-awards",
+          "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards/2026-professional-awards",
+          "https://www.asla.org/awards-events-main-landing/honors-awards/pro-student-awards/2026-asla-student-awards"
+        ]
+      }
+    },
+    {
+      "id": "robocup",
+      "name": "RoboCup World Championship",
+      "aliases": [
+        "RoboCup世界杯",
+        "RoboCup World Championship",
+        "机器人世界杯国际赛"
+      ],
+      "subjects": [
+        "机械与智能制造",
+        "计算机与信息技术"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.robocup.org/"
+      ],
+      "official_domains": [
+        "robocup.org"
+      ],
+      "authority_domains": [
+        "robocup.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://spl.robocup.org/results-2025/",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://spl.robocup.org/results-2025/",
+        "scope_note": "联盟官网公开分联赛排名、团队与所属机构；样例仅SPL联赛，不能泛用于所有RoboCup组别；个人需学校/团队名单关联。"
+      },
+      "provenance": [
+        "https://spl.robocup.org/results-2025/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.robocup.org/",
+          "https://www.robocup.org/iros_robocup_best_paper_award",
+          "https://www.robocup.org/silvia_coradeschi"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.robocup.org/robocup_symposium_best_paper_award",
+          "https://www.robocup.org/silvia_coradeschi",
+          "https://www.robocup.org/iros_robocup_best_paper_award",
+          "https://www.robocup.org/gkk_award"
+        ]
+      }
+    },
+    {
+      "id": "student-cluster",
+      "name": "SC Student Cluster Competition",
+      "aliases": [
+        "SC Student Cluster Competition",
+        "SC学生超算竞赛",
+        "SC超级计算机竞赛"
+      ],
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://sc26.supercomputing.org/students/cluster-competition-history/"
+      ],
+      "official_domains": [
+        "sc26.supercomputing.org"
+      ],
+      "authority_domains": [
+        "supercomputing.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://sc26.supercomputing.org/students/cluster-competition-history/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://sc26.supercomputing.org/students/cluster-competition-history/",
+        "scope_note": "SC官方历史页面按年份列获胜队伍与学校。Student Cluster Competition与IndySCC是不同赛项。"
+      },
+      "provenance": [
+        "https://sc26.supercomputing.org/students/cluster-competition-history/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://sc26.supercomputing.org/students/cluster-competition-history/",
+          "https://sc26.supercomputing.org/program/awards/"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://sc26.supercomputing.org/program/awards/",
+          "https://sc26.supercomputing.org/test-of-time-award/",
+          "https://sc26.supercomputing.org/program/papers/reproducibility-appendices-badges/#criteria"
+        ]
+      }
+    },
+    {
+      "id": "rsa-design",
+      "name": "RSA Student Design Awards",
+      "aliases": [
+        "RSA Student Design Awards",
+        "RSA学生设计奖"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.thersa.org/"
+      ],
+      "official_domains": [
+        "thersa.org"
+      ],
+      "authority_domains": [
+        "thersa.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.thersa.org/awards/student-design-awards/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_names",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.thersa.org/awards/student-design-awards/",
+        "scope_note": "RSA官网保留2023—24获奖者资料，官网说明原Student Design Awards运行至2024年，后续整合为RSA Spark；历史奖项与新项目不可混用。"
+      },
+      "provenance": [
+        "https://www.thersa.org/awards/student-design-awards/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [],
+        "failures": [
+          {
+            "url": "https://www.thersa.org/",
+            "reason": "HTTP 403"
+          }
+        ],
+        "candidate_result_urls": []
+      },
+      "active_status": "historical"
+    },
+    {
+      "id": "red-dot",
+      "name": "Red Dot Award: Design Concept",
+      "aliases": [
+        "Red Dot Design Concept",
+        "红点设计概念奖",
+        "红点设计概念大奖"
+      ],
+      "subjects": [
+        "艺术设计与传媒"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://www.red-dot.org/"
+      ],
+      "official_domains": [
+        "red-dot.org"
+      ],
+      "authority_domains": [
+        "red-dot.org"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.red-dot.org/magazine/red-dot-award-design-concept-2025-results-en",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "results",
+        "winners",
+        "awards"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.red-dot.org/magazine/red-dot-award-design-concept-2025-results-en",
+        "scope_note": "官网公开Design Concept赛果及获奖作品；并非大学生专属赛事，设计概念、产品设计、品牌传播不同奖种须分别识别。"
+      },
+      "provenance": [
+        "https://www.red-dot.org/magazine/red-dot-award-design-concept-2025-results-en"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.red-dot.org/",
+          "https://www.red-dot.org/search?solr[filter][]=meta_categories:/10/&solr[filter][]=year:2025",
+          "https://www.red-dot.org/award"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.red-dot.org/pd",
+          "https://www.red-dot.org/award",
+          "https://www.red-dot.org/search",
+          "https://www.red-dot.org/search?solr[filter][]=meta_categories:/10/&solr[filter][]=year:2025"
+        ]
+      }
+    },
+    {
+      "id": "cmc",
+      "name": "全国大学生数学竞赛",
+      "subjects": [
+        "数学与统计"
+      ],
+      "region": "China",
+      "aliases": [
+        "CMC",
+        "全国大学生数学竞赛"
+      ],
+      "official_urls": [
+        "https://www.cms.org.cn/index.php/Home/comp/comp/cid/16.html"
+      ],
+      "official_domains": [
+        "cms.org.cn"
+      ],
+      "authority_domains": [
+        "cms.org.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.cms.org.cn/index.php/Home/comp/comp/cid/16.html",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.cms.org.cn/index.php/Home/comp/comp/cid/16.html",
+        "scope_note": "中国数学会发布竞赛与获奖公告；另有竞赛信息发布平台名单。需区分初赛/决赛、数学类/非数学类、个人奖/高校组织奖，跨年决赛不按新闻日期推定参赛年份。"
+      },
+      "provenance": [
+        "https://www.cms.org.cn/index.php/Home/comp/comp/cid/16.html"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.cms.org.cn/index.php/Home/comp/comp/cid/16.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1434.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1433.html"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1379.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1434.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1433.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1432.html",
+          "https://www.cms.org.cn/Home/comp/comp_details/id/1431.html",
+          "https://www.cms.org.cn/upload/file/20260422/1776842409699322.pdf"
+        ]
+      }
+    },
+    {
+      "id": "neccs",
+      "name": "全国大学生英语竞赛",
+      "subjects": [
+        "外语与人文"
+      ],
+      "region": "China",
+      "aliases": [
+        "NECCS",
+        "大英赛",
+        "全国大学生英语竞赛"
+      ],
+      "official_urls": [
+        "https://www.chinaneccs.cn/"
+      ],
+      "official_domains": [
+        "chinaneccs.cn"
+      ],
+      "authority_domains": [
+        "chinaneccs.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.chinaneccs.cn/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.chinaneccs.cn/",
+        "scope_note": "高校官方通知说明全国特等奖/一等奖在官网发布，个人证书需登录下载；其他奖级可补查学校初赛名单。不能说全部奖项名单都需要登录或都不公开。"
+      },
+      "provenance": [
+        "https://www.shupl.edu.cn/yywhxy/2026/0130/c1632a146311/page.htm",
+        "https://www.chinaneccs.cn/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.chinaneccs.cn/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "ccpc",
+      "name": "中国大学生程序设计竞赛",
+      "subjects": [
+        "计算机与信息技术"
+      ],
+      "region": "China",
+      "aliases": [
+        "CCPC",
+        "China Collegiate Programming Contest",
+        "中国大学生程序设计竞赛"
+      ],
+      "official_urls": [
+        "https://ccpc.io/"
+      ],
+      "official_domains": [
+        "ccpc.io"
+      ],
+      "authority_domains": [
+        "ccpc.io"
+      ],
+      "result_pages": [
+        {
+          "url": "https://ccpc.io/",
+          "kind": "index",
+          "year": null
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://ccpc.io/",
+        "scope_note": "官网有历年赛事、榜单、获奖与证书入口；需核对具体站点/总决赛、队伍及奖级，不将排名自动换成奖牌。"
+      },
+      "provenance": [
+        "https://ccpc.io/"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://ccpc.io/"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "robomaster",
+      "name": "全国大学生机器人大赛RoboMaster",
+      "subjects": [
+        "机械与智能制造",
+        "电子与通信"
+      ],
+      "region": "China",
+      "aliases": [
+        "RoboMaster",
+        "机甲大师超级对抗赛",
+        "RMUC"
+      ],
+      "official_urls": [
+        "https://www.robomaster.com/"
+      ],
+      "official_domains": [
+        "robomaster.com"
+      ],
+      "authority_domains": [
+        "robomaster.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.robomaster.com/zh-CN/resource/pages/announcement/1856",
+          "kind": "roster",
+          "year": 2025
+        },
+        {
+          "url": "https://www.robomaster.com/zh-CN/resource/pages/announcement/1847",
+          "kind": "roster",
+          "year": 2025
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示"
+      ],
+      "publication": {
+        "status": "public_teams",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.robomaster.com/zh-CN/resource/pages/announcement/1856",
+        "scope_note": "官网全国赛与区域赛名单列学校、队伍、奖级和名次，个人成员须再关联；区域赛一等奖不等于全国赛一等奖。"
+      },
+      "provenance": [
+        "https://www.robomaster.com/zh-CN/resource/pages/announcement/1856",
+        "https://www.robomaster.com/zh-CN/resource/pages/announcement/1847"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.robomaster.com/",
+          "https://www.robomaster.com/zh-CN/resource/pages/announcement/1856"
+        ],
+        "failures": [],
+        "candidate_result_urls": []
+      }
+    },
+    {
+      "id": "career",
+      "name": "全国大学生职业规划大赛",
+      "subjects": [
+        "综合与创新创业"
+      ],
+      "region": "China",
+      "aliases": [
+        "全国大学生职业规划大赛",
+        "大学生职业规划大赛"
+      ],
+      "official_urls": [
+        "https://www.moe.gov.cn/srcsite/A15/s7063/202609/t20260902_1448809.html"
+      ],
+      "official_domains": [
+        "moe.gov.cn"
+      ],
+      "authority_domains": [
+        "moe.gov.cn"
+      ],
+      "result_pages": [
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A15/s7063/202609/t20260902_1448809.html",
+          "kind": "roster",
+          "year": 2026
+        },
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A15/s7063/202508/t20250826_1410565.html",
+          "kind": "roster",
+          "year": 2025
+        },
+        {
+          "url": "https://www.moe.gov.cn/srcsite/A15/s3265/202408/t20240813_1145399.html",
+          "kind": "roster",
+          "year": 2024
+        }
+      ],
+      "search_terms": [
+        "获奖名单",
+        "获奖公示"
+      ],
+      "publication": {
+        "status": "public_results",
+        "checked_at": "2026-10-07",
+        "source_url": "https://www.moe.gov.cn/srcsite/A15/s7063/202609/t20260902_1448809.html",
+        "scope_note": "教育部逐届公布全国总决赛获奖附件；成长/就业赛道、学生/教师赛道及校赛/省赛/全国赛须区分。"
+      },
+      "provenance": [
+        "https://www.moe.gov.cn/srcsite/A15/s7063/202609/t20260902_1448809.html",
+        "https://www.moe.gov.cn/srcsite/A15/s7063/202508/t20250826_1410565.html",
+        "https://www.moe.gov.cn/srcsite/A15/s3265/202408/t20240813_1145399.html"
+      ],
+      "directory_order": null,
+      "website_check": {
+        "checked_at": "2026-10-07",
+        "readable_urls": [
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/t20260902_1448809.html",
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208435031.pdf",
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208551294.pdf"
+        ],
+        "failures": [],
+        "candidate_result_urls": [
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208435031.pdf",
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208551294.pdf",
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208651891.pdf",
+          "https://www.moe.gov.cn/srcsite/A15/s7063/202609/W020260902748208703014.pdf"
+        ]
+      }
+    }
+  ]
+}

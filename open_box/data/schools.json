@@ -27,7 +27,9 @@
       "aliases": [
         "北师香港浸会大学",
         "北师港浸大",
-        "北京师范大学－香港浸会大学联合国际学院"
+        "北京师范大学－香港浸会大学联合国际学院",
+        "Beijing Normal-Hong Kong Baptist University",
+        "BNBU"
       ],
       "domain": "bnbu.edu.cn",
       "dept_domains": [
@@ -44,7 +46,9 @@
       "dept_domains": [
         "cs.tsinghua.edu.cn",
         "jwc.tsinghua.edu.cn"
-      ]
+      ],
+      "province": "北京",
+      "push_qualified": true
     },
     {
       "name": "北京大学",
@@ -55,7 +59,9 @@
       "dept_domains": [
         "cs.pku.edu.cn",
         "eecs.pku.edu.cn"
-      ]
+      ],
+      "province": "北京",
+      "push_qualified": true
     },
     {
       "name": "复旦大学",
@@ -65,7 +71,9 @@
       "domain": "fudan.edu.cn",
       "dept_domains": [
         "cs.fudan.edu.cn"
-      ]
+      ],
+      "province": "上海",
+      "push_qualified": true
     },
     {
       "name": "上海交通大学",
@@ -77,7 +85,9 @@
       "dept_domains": [
         "cs.sjtu.edu.cn",
         "jwc.sjtu.edu.cn"
-      ]
+      ],
+      "province": "上海",
+      "push_qualified": true
     },
     {
       "name": "浙江大学",
@@ -87,7 +97,9 @@
       "domain": "zju.edu.cn",
       "dept_domains": [
         "cs.zju.edu.cn"
-      ]
+      ],
+      "province": "浙江",
+      "push_qualified": true
     },
     {
       "name": "南京大学",
@@ -97,7 +109,9 @@
       "domain": "nju.edu.cn",
       "dept_domains": [
         "cs.nju.edu.cn"
-      ]
+      ],
+      "province": "江苏",
+      "push_qualified": true
     },
     {
       "name": "中国科学技术大学",
@@ -108,7 +122,9 @@
       "domain": "ustc.edu.cn",
       "dept_domains": [
         "cs.ustc.edu.cn"
-      ]
+      ],
+      "province": "安徽",
+      "push_qualified": true
     },
     {
       "name": "哈尔滨工业大学",
@@ -118,7 +134,9 @@
       "domain": "hit.edu.cn",
       "dept_domains": [
         "cs.hit.edu.cn"
-      ]
+      ],
+      "province": "黑龙江",
+      "push_qualified": true
     },
     {
       "name": "西安交通大学",
@@ -129,7 +147,9 @@
       "domain": "xjtu.edu.cn",
       "dept_domains": [
         "cs.xjtu.edu.cn"
-      ]
+      ],
+      "province": "陕西",
+      "push_qualified": true
     },
     {
       "name": "同济大学",
@@ -139,7 +159,9 @@
       "domain": "tongji.edu.cn",
       "dept_domains": [
         "cs.tongji.edu.cn"
-      ]
+      ],
+      "province": "上海",
+      "push_qualified": true
     },
     {
       "name": "北京航空航天大学",
@@ -149,17 +171,22 @@
       "domain": "buaa.edu.cn",
       "dept_domains": [
         "scse.buaa.edu.cn"
-      ]
+      ],
+      "province": "北京",
+      "push_qualified": true
     },
     {
       "name": "北京理工大学",
       "aliases": [
-        "北理工"
+        "北理工",
+        "北理"
       ],
       "domain": "bit.edu.cn",
       "dept_domains": [
         "cs.bit.edu.cn"
-      ]
+      ],
+      "province": "北京",
+      "push_qualified": true
     },
     {
       "name": "华中科技大学",
@@ -170,7 +197,9 @@
       "domain": "hust.edu.cn",
       "dept_domains": [
         "cs.hust.edu.cn"
-      ]
+      ],
+      "province": "湖北",
+      "push_qualified": true
     },
     {
       "name": "武汉大学",
@@ -180,7 +209,9 @@
       "domain": "whu.edu.cn",
       "dept_domains": [
         "cs.whu.edu.cn"
-      ]
+      ],
+      "province": "湖北",
+      "push_qualified": true
     },
     {
       "name": "中山大学",
@@ -190,7 +221,9 @@
       "domain": "sysu.edu.cn",
       "dept_domains": [
         "cse.sysu.edu.cn"
-      ]
+      ],
+      "province": "广东",
+      "push_qualified": true
     },
     {
       "name": "东南大学",
@@ -200,7 +233,9 @@
       "domain": "seu.edu.cn",
       "dept_domains": [
         "cse.seu.edu.cn"
-      ]
+      ],
+      "province": "江苏",
+      "push_qualified": true
     },
     {
       "name": "天津大学",
@@ -210,7 +245,9 @@
       "domain": "tju.edu.cn",
       "dept_domains": [
         "cic.tju.edu.cn"
-      ]
+      ],
+      "province": "天津",
+      "push_qualified": true
     },
     {
       "name": "南开大学",
@@ -220,7 +257,9 @@
       "domain": "nankai.edu.cn",
       "dept_domains": [
         "cc.nankai.edu.cn"
-      ]
+      ],
+      "province": "天津",
+      "push_qualified": true
     },
     {
       "name": "厦门大学",
@@ -230,7 +269,9 @@
       "domain": "xmu.edu.cn",
       "dept_domains": [
         "informatics.xmu.edu.cn"
-      ]
+      ],
+      "province": "福建",
+      "push_qualified": true
     },
     {
       "name": "山东大学",
@@ -240,7 +281,9 @@
       "domain": "sdu.edu.cn",
       "dept_domains": [
         "cs.sdu.edu.cn"
-      ]
+      ],
+      "province": "山东",
+      "push_qualified": true
     },
     {
       "name": "哈尔滨工程大学",
@@ -251,7 +294,23 @@
       "domain": "hrbeu.edu.cn",
       "dept_domains": [
         "heic.hrbeu.edu.cn"
-      ]
+      ],
+      "notice_archives": [
+        {
+          "name": "本科生院·工作通知",
+          "first_page": "https://ugs.hrbeu.edu.cn/2821/list.htm",
+          "list_url": "https://ugs.hrbeu.edu.cn/2821/list{page}.htm",
+          "role": "source",
+          "months": [
+            8,
+            11
+          ],
+          "year_offset": -1,
+          "_verified": "2026-10-03 人工确认：2023 届推免资格公示（2022-09-26）在该栏目，名单为内嵌 PDF"
+        }
+      ],
+      "province": "黑龙江",
+      "push_qualified": true
     },
     {
       "name": "电子科技大学",
@@ -260,7 +319,9 @@
         "成电"
       ],
       "domain": "uestc.edu.cn",
-      "dept_domains": []
+      "dept_domains": [],
+      "province": "四川",
+      "push_qualified": true
     },
     {
       "name": "华南理工大学",
@@ -269,7 +330,184 @@
         "华南理工"
       ],
       "domain": "scut.edu.cn",
-      "dept_domains": []
+      "dept_domains": [],
+      "province": "广东",
+      "push_qualified": true,
+      "notice_archives": [
+        {
+          "name": "研究生招生网·硕士招生",
+          "first_page": "https://yz.scut.edu.cn/sszs/list.htm",
+          "list_url": "https://yz.scut.edu.cn/sszs/list{page}.htm",
+          "page_order": "forward",
+          "role": "receiver",
+          "months": [
+            9,
+            12
+          ],
+          "year_offset": -1,
+          "_verified": "2026-10-07 内置浏览器核对：WebPlus 递增翻页，共 10 页，含预推免/推免通知"
+        }
+      ],
+      "_access_note": "教务处 jw.scut.edu.cn 对校外访问返回 403（提示走学校 SSLVPN），不做绕过；推免名单发在各学院网站「教务通知/通知公告」，经 college_index 按专业找学院（2026-10-07 核对计算机学院 jwtz 栏目含拟推荐名单）；接收方推免复试拟录取名单在学院「招生资讯」（2026-10-07 核对工商管理学院 cnsba.scut.edu.cn/zszx/，2023–2025 年每年 10 月一份，HTML 表格）",
+      "college_index": "https://www.scut.edu.cn/new/8996/list.htm",
+      "colleges": [
+        [
+          "机械与汽车工程学院",
+          "https://www.scut.edu.cn/smae/"
+        ],
+        [
+          "建筑学院",
+          "https://www.scut.edu.cn/architecture/"
+        ],
+        [
+          "土木与交通学院",
+          "https://www2.scut.edu.cn/jtxy/"
+        ],
+        [
+          "电子与信息学院",
+          "https://www2.scut.edu.cn/ee/"
+        ],
+        [
+          "材料科学与工程学院",
+          "https://www2.scut.edu.cn/materials/"
+        ],
+        [
+          "化学与化工学院",
+          "https://www2.scut.edu.cn/ce/"
+        ],
+        [
+          "轻工科学与工程学院",
+          "https://www2.scut.edu.cn/qgkxygc/"
+        ],
+        [
+          "食品科学与工程学院",
+          "https://www2.scut.edu.cn/sp/"
+        ],
+        [
+          "数学学院",
+          "https://www2.scut.edu.cn/math/"
+        ],
+        [
+          "物理与光电学院",
+          "https://www2.scut.edu.cn/physics/"
+        ],
+        [
+          "经济与金融学院",
+          "https://www2.scut.edu.cn/economy/"
+        ],
+        [
+          "旅游管理系",
+          "https://www2.scut.edu.cn/tourism/"
+        ],
+        [
+          "电子商务系",
+          "https://www2.scut.edu.cn/e_business/"
+        ],
+        [
+          "自动化科学与工程学院",
+          "https://www2.scut.edu.cn/automation/"
+        ],
+        [
+          "计算机科学与工程学院",
+          "https://www2.scut.edu.cn/cs/"
+        ],
+        [
+          "电力学院",
+          "https://www.scut.edu.cn/ep/"
+        ],
+        [
+          "生物科学与工程学院",
+          "https://www.scut.edu.cn/biology/index.html"
+        ],
+        [
+          "环境与能源学院",
+          "https://www.scut.edu.cn/environment/"
+        ],
+        [
+          "软件学院",
+          "https://www.scut.edu.cn/sse/"
+        ],
+        [
+          "工商管理学院",
+          "https://cnsba.scut.edu.cn/"
+        ],
+        [
+          "公共管理学院",
+          "https://www2.scut.edu.cn/spa/"
+        ],
+        [
+          "马克思主义学院",
+          "https://www.scut.edu.cn/politics/"
+        ],
+        [
+          "外国语学院",
+          "https://www.scut.edu.cn/sfl/"
+        ],
+        [
+          "法学院",
+          "https://www.scut.edu.cn/law/index.htm"
+        ],
+        [
+          "新闻与传播学院",
+          "https://www.scut.edu.cn/communication/"
+        ],
+        [
+          "艺术学院",
+          "https://www.scut.edu.cn/arts/index.htm"
+        ],
+        [
+          "体育学院",
+          "https://www.scut.edu.cn/sport/"
+        ],
+        [
+          "设计学院",
+          "https://www2.scut.edu.cn/design/"
+        ],
+        [
+          "医学院",
+          "https://www.scut.edu.cn/med/"
+        ],
+        [
+          "能源学院",
+          "https://www2.scut.edu.cn/energy/"
+        ],
+        [
+          "国际教育学院",
+          "https://www.scut.edu.cn/sie/"
+        ],
+        [
+          "生物医学科学与工程学院",
+          "https://www2.scut.edu.cn/bmse/"
+        ],
+        [
+          "吴贤铭智能工程学院",
+          "https://www2.scut.edu.cn/wusie/"
+        ],
+        [
+          "前沿软物质学院",
+          "https://www2.scut.edu.cn/SESM/"
+        ],
+        [
+          "先进材料国际化示范学院",
+          "https://www2.scut.edu.cn/advancedmaterials/"
+        ],
+        [
+          "微电子学院",
+          "https://www2.scut.edu.cn/microelectronics/"
+        ],
+        [
+          "未来技术学院",
+          "https://www2.scut.edu.cn/ft/"
+        ],
+        [
+          "海洋科学与工程学院",
+          "https://www2.scut.edu.cn/marine/"
+        ],
+        [
+          "国家卓越工程师学院",
+          "https://www2.scut.edu.cn/engineers/"
+        ]
+      ]
     },
     {
       "name": "大连理工大学",
@@ -278,25 +516,47 @@
         "大连理工"
       ],
       "domain": "dlut.edu.cn",
-      "dept_domains": []
+      "dept_domains": [],
+      "province": "辽宁",
+      "push_qualified": true
     },
     {
       "name": "上海大学",
-      "aliases": ["上大"],
+      "aliases": [
+        "上大"
+      ],
       "domain": "shu.edu.cn",
-      "dept_domains": ["music.shu.edu.cn", "xxgk.shu.edu.cn"]
+      "dept_domains": [
+        "music.shu.edu.cn",
+        "xxgk.shu.edu.cn"
+      ],
+      "province": "上海",
+      "push_qualified": true
     },
     {
       "name": "中南大学",
       "aliases": [],
       "domain": "csu.edu.cn",
-      "dept_domains": ["saa.csu.edu.cn", "cse.csu.edu.cn", "yz.csu.edu.cn"]
+      "dept_domains": [
+        "saa.csu.edu.cn",
+        "cse.csu.edu.cn",
+        "yz.csu.edu.cn"
+      ],
+      "province": "湖南",
+      "push_qualified": true
     },
     {
       "name": "四川大学",
-      "aliases": ["川大"],
+      "aliases": [
+        "川大"
+      ],
       "domain": "scu.edu.cn",
-      "dept_domains": ["classics.scu.edu.cn", "idmr.scu.edu.cn"]
+      "dept_domains": [
+        "classics.scu.edu.cn",
+        "idmr.scu.edu.cn"
+      ],
+      "province": "四川",
+      "push_qualified": true
     },
     {
       "name": "西北工业大学",
@@ -304,7 +564,2935 @@
         "西工大"
       ],
       "domain": "nwpu.edu.cn",
-      "dept_domains": []
+      "dept_domains": [],
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽财经大学",
+      "aliases": [],
+      "domain": "aufe.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽大学",
+      "aliases": [],
+      "domain": "ahu.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽工业大学",
+      "aliases": [],
+      "domain": "ahut.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽建筑大学",
+      "aliases": [],
+      "domain": "ahjzu.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽理工大学",
+      "aliases": [],
+      "domain": "aust.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽农业大学",
+      "aliases": [],
+      "domain": "ahau.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽师范大学",
+      "aliases": [],
+      "domain": "ahnu.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽医科大学",
+      "aliases": [],
+      "domain": "ahmu.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "安徽中医药大学",
+      "aliases": [],
+      "domain": "ahtcm.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "蚌埠医科大学",
+      "aliases": [],
+      "domain": "bbmu.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "合肥工业大学",
+      "aliases": [],
+      "domain": "hfut.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "皖南医学院",
+      "aliases": [],
+      "domain": "wnmc.edu.cn",
+      "province": "安徽",
+      "push_qualified": true
+    },
+    {
+      "name": "北方工业大学",
+      "aliases": [],
+      "domain": "ncut.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京第二外国语学院",
+      "aliases": [],
+      "domain": "bisu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京电影学院",
+      "aliases": [],
+      "domain": "bfa.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京电子科技学院",
+      "aliases": [],
+      "domain": "besti.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京服装学院",
+      "aliases": [],
+      "domain": "bift.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京工商大学",
+      "aliases": [],
+      "domain": "btbu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京工业大学",
+      "aliases": [],
+      "domain": "bjut.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京化工大学",
+      "aliases": [],
+      "domain": "buct.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京建筑大学",
+      "aliases": [],
+      "domain": "bucea.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京交通大学",
+      "aliases": [
+        "北交大",
+        "北京交大"
+      ],
+      "domain": "bjtu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京科技大学",
+      "aliases": [
+        "北科大"
+      ],
+      "domain": "ustb.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京联合大学",
+      "aliases": [],
+      "domain": "buu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京林业大学",
+      "aliases": [],
+      "domain": "bjfu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京师范大学",
+      "aliases": [
+        "北师大"
+      ],
+      "domain": "bnu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京体育大学",
+      "aliases": [],
+      "domain": "bsu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京外国语大学",
+      "aliases": [
+        "北外"
+      ],
+      "domain": "bfsu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京物资学院",
+      "aliases": [],
+      "domain": "bwu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京协和医学院",
+      "aliases": [
+        "协和医学院"
+      ],
+      "domain": "pumc.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京信息科技大学",
+      "aliases": [],
+      "domain": "bistu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京邮电大学",
+      "aliases": [
+        "北邮"
+      ],
+      "domain": "bupt.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京语言大学",
+      "aliases": [],
+      "domain": "blcu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "北京中医药大学",
+      "aliases": [],
+      "domain": "bucm.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "对外经济贸易大学",
+      "aliases": [
+        "贸大",
+        "对外经贸大学"
+      ],
+      "domain": "uibe.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "国际关系学院",
+      "aliases": [],
+      "domain": "uir.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "华北电力大学",
+      "aliases": [],
+      "domain": "ncepu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "首都经济贸易大学",
+      "aliases": [],
+      "domain": "cueb.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "首都师范大学",
+      "aliases": [],
+      "domain": "cnu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "首都医科大学",
+      "aliases": [],
+      "domain": "ccmu.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "外交学院",
+      "aliases": [],
+      "domain": "cfau.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国传媒大学",
+      "aliases": [
+        "中传"
+      ],
+      "domain": "cuc.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国地质大学（北京）",
+      "aliases": [
+        "中国地质大学(北京)"
+      ],
+      "domain": "cugb.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国科学院大学",
+      "aliases": [
+        "国科大"
+      ],
+      "domain": "ucas.ac.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国矿业大学（北京）",
+      "aliases": [
+        "中国矿业大学(北京)"
+      ],
+      "domain": "cumtb.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国农业大学",
+      "aliases": [
+        "中国农大"
+      ],
+      "domain": "cau.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国人民大学",
+      "aliases": [
+        "人大",
+        "人民大学"
+      ],
+      "domain": "ruc.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国人民公安大学",
+      "aliases": [],
+      "domain": "ppsuc.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国社会科学院大学",
+      "aliases": [],
+      "domain": "ucass.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国石油大学（北京）",
+      "aliases": [
+        "中国石油大学(北京)"
+      ],
+      "domain": "cup.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国音乐学院",
+      "aliases": [],
+      "domain": "ccmusic.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中国政法大学",
+      "aliases": [
+        "法大"
+      ],
+      "domain": "cupl.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中央财经大学",
+      "aliases": [
+        "央财"
+      ],
+      "domain": "cufe.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中央美术学院",
+      "aliases": [],
+      "domain": "cafa.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中央民族大学",
+      "aliases": [],
+      "domain": "muc.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中央戏剧学院",
+      "aliases": [],
+      "domain": "chntheatre.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "中央音乐学院",
+      "aliases": [],
+      "domain": "ccom.edu.cn",
+      "province": "北京",
+      "push_qualified": true
+    },
+    {
+      "name": "四川美术学院",
+      "aliases": [],
+      "domain": "scfai.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "四川外国语大学",
+      "aliases": [],
+      "domain": "sisu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "西南大学",
+      "aliases": [],
+      "domain": "swu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "西南政法大学",
+      "aliases": [],
+      "domain": "swupl.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "陆军军医大学",
+      "aliases": [],
+      "domain": "tmmu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "重庆大学",
+      "aliases": [
+        "重大"
+      ],
+      "domain": "cqu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "重庆交通大学",
+      "aliases": [],
+      "domain": "cqjtu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "重庆师范大学",
+      "aliases": [],
+      "domain": "cqnu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "重庆医科大学",
+      "aliases": [],
+      "domain": "cqmu.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "重庆邮电大学",
+      "aliases": [],
+      "domain": "cqupt.edu.cn",
+      "province": "重庆",
+      "push_qualified": true
+    },
+    {
+      "name": "福建农林大学",
+      "aliases": [],
+      "domain": "fafu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "福建师范大学",
+      "aliases": [],
+      "domain": "fjnu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "福建医科大学",
+      "aliases": [],
+      "domain": "fjmu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "福建中医药大学",
+      "aliases": [],
+      "domain": "fjtcm.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "福州大学",
+      "aliases": [],
+      "domain": "fzu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "华侨大学",
+      "aliases": [],
+      "domain": "hqu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "集美大学",
+      "aliases": [],
+      "domain": "jmu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "闽南师范大学",
+      "aliases": [],
+      "domain": "mnnu.edu.cn",
+      "province": "福建",
+      "push_qualified": true
+    },
+    {
+      "name": "甘肃农业大学",
+      "aliases": [],
+      "domain": "gsau.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "甘肃中医药大学",
+      "aliases": [],
+      "domain": "gszy.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "兰州财经大学",
+      "aliases": [],
+      "domain": "lzufe.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "兰州大学",
+      "aliases": [
+        "兰大"
+      ],
+      "domain": "lzu.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "兰州交通大学",
+      "aliases": [],
+      "domain": "lzjtu.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "兰州理工大学",
+      "aliases": [],
+      "domain": "lut.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "西北民族大学",
+      "aliases": [],
+      "domain": "xbmu.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "西北师范大学",
+      "aliases": [],
+      "domain": "nwnu.edu.cn",
+      "province": "甘肃",
+      "push_qualified": true
+    },
+    {
+      "name": "佛山大学",
+      "aliases": [],
+      "domain": "fosu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广东财经大学",
+      "aliases": [],
+      "domain": "gdufe.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广东工业大学",
+      "aliases": [],
+      "domain": "gdut.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广东海洋大学",
+      "aliases": [],
+      "domain": "gdou.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广东外语外贸大学",
+      "aliases": [],
+      "domain": "gdufs.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广东药科大学",
+      "aliases": [],
+      "domain": "gdpu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广州大学",
+      "aliases": [],
+      "domain": "gzhu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广州美术学院",
+      "aliases": [],
+      "domain": "gzarts.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广州医科大学",
+      "aliases": [],
+      "domain": "gzhmu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广州中医药大学",
+      "aliases": [],
+      "domain": "gzucm.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "华南农业大学",
+      "aliases": [],
+      "domain": "scau.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "华南师范大学",
+      "aliases": [],
+      "domain": "scnu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "暨南大学",
+      "aliases": [],
+      "domain": "jnu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "南方科技大学",
+      "aliases": [
+        "南科大"
+      ],
+      "domain": "sustech.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "南方医科大学",
+      "aliases": [],
+      "domain": "smu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "汕头大学",
+      "aliases": [],
+      "domain": "stu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "深圳大学",
+      "aliases": [],
+      "domain": "szu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "五邑大学",
+      "aliases": [],
+      "domain": "wyu.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "香港中文大学（深圳）",
+      "aliases": [
+        "港中深",
+        "港中文深圳",
+        "香港中文大学(深圳)"
+      ],
+      "domain": "cuhk.edu.cn",
+      "province": "广东",
+      "push_qualified": true
+    },
+    {
+      "name": "广西大学",
+      "aliases": [],
+      "domain": "gxu.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "广西民族大学",
+      "aliases": [],
+      "domain": "gxmzu.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "广西师范大学",
+      "aliases": [],
+      "domain": "gxnu.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "广西医科大学",
+      "aliases": [],
+      "domain": "gxmu.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "广西艺术学院",
+      "aliases": [],
+      "domain": "gxau.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "广西中医药大学",
+      "aliases": [],
+      "domain": "gxtcmu.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "桂林电子科技大学",
+      "aliases": [],
+      "domain": "guet.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "桂林理工大学",
+      "aliases": [],
+      "domain": "glut.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "桂林医科大学",
+      "aliases": [],
+      "domain": "glmc.edu.cn",
+      "province": "广西",
+      "push_qualified": true
+    },
+    {
+      "name": "贵州大学",
+      "aliases": [],
+      "domain": "gzu.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "贵州民族大学",
+      "aliases": [],
+      "domain": "gzmu.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "贵州师范大学",
+      "aliases": [],
+      "domain": "gznu.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "贵州医科大学",
+      "aliases": [],
+      "domain": "gmc.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "贵州中医药大学",
+      "aliases": [],
+      "domain": "gzy.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "遵义医科大学",
+      "aliases": [],
+      "domain": "zmu.edu.cn",
+      "province": "贵州",
+      "push_qualified": true
+    },
+    {
+      "name": "海南大学",
+      "aliases": [],
+      "domain": "hainanu.edu.cn",
+      "province": "海南",
+      "push_qualified": true
+    },
+    {
+      "name": "海南师范大学",
+      "aliases": [],
+      "domain": "hainnu.edu.cn",
+      "province": "海南",
+      "push_qualified": true
+    },
+    {
+      "name": "海南医科大学",
+      "aliases": [],
+      "domain": "hainmc.edu.cn",
+      "province": "海南",
+      "push_qualified": true
+    },
+    {
+      "name": "河北北方学院",
+      "aliases": [],
+      "domain": "hebeinu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北大学",
+      "aliases": [],
+      "domain": "hbu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北地质大学",
+      "aliases": [],
+      "domain": "hgu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北工程大学",
+      "aliases": [],
+      "domain": "hebeu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北工业大学",
+      "aliases": [],
+      "domain": "hebut.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北经贸大学",
+      "aliases": [],
+      "domain": "heuet.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北科技大学",
+      "aliases": [],
+      "domain": "hebust.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北农业大学",
+      "aliases": [],
+      "domain": "hebau.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北师范大学",
+      "aliases": [],
+      "domain": "hebtu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北医科大学",
+      "aliases": [],
+      "domain": "hebmu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河北中医药大学",
+      "aliases": [],
+      "domain": "hebcm.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "华北理工大学",
+      "aliases": [],
+      "domain": "ncst.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "石家庄铁道大学",
+      "aliases": [],
+      "domain": "stdu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "燕山大学",
+      "aliases": [],
+      "domain": "ysu.edu.cn",
+      "province": "河北",
+      "push_qualified": true
+    },
+    {
+      "name": "河南财经政法大学",
+      "aliases": [],
+      "domain": "huel.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南大学",
+      "aliases": [],
+      "domain": "henu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南工业大学",
+      "aliases": [],
+      "domain": "haut.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南科技大学",
+      "aliases": [],
+      "domain": "haust.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南理工大学",
+      "aliases": [],
+      "domain": "hpu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南农业大学",
+      "aliases": [],
+      "domain": "henau.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南师范大学",
+      "aliases": [],
+      "domain": "htu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南医药大学",
+      "aliases": [],
+      "domain": "xxmu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "河南中医药大学",
+      "aliases": [],
+      "domain": "hactcm.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "华北水利水电大学",
+      "aliases": [],
+      "domain": "ncwu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "郑州大学",
+      "aliases": [],
+      "domain": "zzu.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "郑州轻工业大学",
+      "aliases": [],
+      "domain": "zzuli.edu.cn",
+      "province": "河南",
+      "push_qualified": true
+    },
+    {
+      "name": "东北林业大学",
+      "aliases": [],
+      "domain": "nefu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "东北农业大学",
+      "aliases": [],
+      "domain": "neau.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "东北石油大学",
+      "aliases": [],
+      "domain": "nepu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "哈尔滨理工大学",
+      "aliases": [],
+      "domain": "hrbust.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "哈尔滨商业大学",
+      "aliases": [],
+      "domain": "hrbcu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "哈尔滨师范大学",
+      "aliases": [],
+      "domain": "hrbnu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "哈尔滨体育学院",
+      "aliases": [],
+      "domain": "hrbipe.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "哈尔滨医科大学",
+      "aliases": [],
+      "domain": "hrbmu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "黑龙江八一农垦大学",
+      "aliases": [],
+      "domain": "byau.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "黑龙江大学",
+      "aliases": [],
+      "domain": "hlju.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "黑龙江科技大学",
+      "aliases": [],
+      "domain": "usth.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "黑龙江中医药大学",
+      "aliases": [],
+      "domain": "hljucm.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "佳木斯大学",
+      "aliases": [],
+      "domain": "jmsu.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "齐齐哈尔大学",
+      "aliases": [],
+      "domain": "qqhru.edu.cn",
+      "province": "黑龙江",
+      "push_qualified": true
+    },
+    {
+      "name": "湖北大学",
+      "aliases": [],
+      "domain": "hubu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "湖北工业大学",
+      "aliases": [],
+      "domain": "hbut.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "湖北中医药大学",
+      "aliases": [],
+      "domain": "hbtcm.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "华中农业大学",
+      "aliases": [],
+      "domain": "hzau.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "华中师范大学",
+      "aliases": [
+        "华师"
+      ],
+      "domain": "ccnu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "江汉大学",
+      "aliases": [],
+      "domain": "jhun.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "三峡大学",
+      "aliases": [],
+      "domain": "ctgu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉纺织大学",
+      "aliases": [],
+      "domain": "wtu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉工程大学",
+      "aliases": [],
+      "domain": "wit.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉科技大学",
+      "aliases": [],
+      "domain": "wust.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉理工大学",
+      "aliases": [
+        "武理工"
+      ],
+      "domain": "whut.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉轻工大学",
+      "aliases": [],
+      "domain": "whpu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "武汉体育学院",
+      "aliases": [],
+      "domain": "wipe.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "长江大学",
+      "aliases": [],
+      "domain": "yangtzeu.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "中国地质大学（武汉）",
+      "aliases": [
+        "中国地质大学(武汉)"
+      ],
+      "domain": "cug.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "中南财经政法大学",
+      "aliases": [
+        "中南财大"
+      ],
+      "domain": "zuel.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "中南民族大学",
+      "aliases": [],
+      "domain": "scuec.edu.cn",
+      "province": "湖北",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南大学",
+      "aliases": [
+        "湖大"
+      ],
+      "domain": "hnu.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南工商大学",
+      "aliases": [],
+      "domain": "hutb.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南科技大学",
+      "aliases": [],
+      "domain": "hnust.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南农业大学",
+      "aliases": [],
+      "domain": "hunau.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南师范大学",
+      "aliases": [],
+      "domain": "hunnu.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湖南中医药大学",
+      "aliases": [],
+      "domain": "hnucm.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "吉首大学",
+      "aliases": [],
+      "domain": "jsu.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "南华大学",
+      "aliases": [],
+      "domain": "usc.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "湘潭大学",
+      "aliases": [],
+      "domain": "xtu.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "长沙理工大学",
+      "aliases": [],
+      "domain": "csust.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "中南林业科技大学",
+      "aliases": [],
+      "domain": "csuft.edu.cn",
+      "province": "湖南",
+      "push_qualified": true
+    },
+    {
+      "name": "北华大学",
+      "aliases": [],
+      "domain": "beihua.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "东北电力大学",
+      "aliases": [],
+      "domain": "neepu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "东北师范大学",
+      "aliases": [],
+      "domain": "nenu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "吉林财经大学",
+      "aliases": [],
+      "domain": "jlufe.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "吉林大学",
+      "aliases": [
+        "吉大"
+      ],
+      "domain": "jlu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "吉林农业大学",
+      "aliases": [],
+      "domain": "jlau.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "吉林师范大学",
+      "aliases": [],
+      "domain": "jlnu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "延边大学",
+      "aliases": [],
+      "domain": "ybu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "长春工业大学",
+      "aliases": [],
+      "domain": "ccut.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "长春理工大学",
+      "aliases": [],
+      "domain": "cust.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "长春师范大学",
+      "aliases": [],
+      "domain": "ccsfu.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "长春中医药大学",
+      "aliases": [],
+      "domain": "ccucm.edu.cn",
+      "province": "吉林",
+      "push_qualified": true
+    },
+    {
+      "name": "常州大学",
+      "aliases": [],
+      "domain": "cczu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "河海大学",
+      "aliases": [
+        "河海"
+      ],
+      "domain": "hhu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "江南大学",
+      "aliases": [],
+      "domain": "jiangnan.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "江苏大学",
+      "aliases": [],
+      "domain": "ujs.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "江苏科技大学",
+      "aliases": [],
+      "domain": "just.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "江苏师范大学",
+      "aliases": [],
+      "domain": "jsnu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京财经大学",
+      "aliases": [],
+      "domain": "nufe.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京工业大学",
+      "aliases": [],
+      "domain": "njtech.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京航空航天大学",
+      "aliases": [
+        "南航"
+      ],
+      "domain": "nuaa.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京理工大学",
+      "aliases": [
+        "南理工"
+      ],
+      "domain": "njust.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京林业大学",
+      "aliases": [],
+      "domain": "njfu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京农业大学",
+      "aliases": [],
+      "domain": "njau.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京师范大学",
+      "aliases": [],
+      "domain": "njnu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京体育学院",
+      "aliases": [],
+      "domain": "nsi.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京信息工程大学",
+      "aliases": [],
+      "domain": "nuist.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京医科大学",
+      "aliases": [],
+      "domain": "njmu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京艺术学院",
+      "aliases": [],
+      "domain": "nua.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京邮电大学",
+      "aliases": [],
+      "domain": "njupt.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南京中医药大学",
+      "aliases": [],
+      "domain": "njucm.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "南通大学",
+      "aliases": [],
+      "domain": "ntu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "苏州大学",
+      "aliases": [],
+      "domain": "suda.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "苏州科技大学",
+      "aliases": [],
+      "domain": "usts.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "徐州医科大学",
+      "aliases": [],
+      "domain": "xzhmu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "扬州大学",
+      "aliases": [],
+      "domain": "yzu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "中国矿业大学",
+      "aliases": [],
+      "domain": "cumt.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "中国药科大学",
+      "aliases": [],
+      "domain": "cpu.edu.cn",
+      "province": "江苏",
+      "push_qualified": true
+    },
+    {
+      "name": "东华理工大学",
+      "aliases": [],
+      "domain": "ecut.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "华东交通大学",
+      "aliases": [],
+      "domain": "ecjtu.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "江西财经大学",
+      "aliases": [],
+      "domain": "jxufe.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "江西理工大学",
+      "aliases": [],
+      "domain": "jxust.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "江西农业大学",
+      "aliases": [],
+      "domain": "jxau.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "江西师范大学",
+      "aliases": [],
+      "domain": "jxnu.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "江西中医药大学",
+      "aliases": [],
+      "domain": "jxutcm.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "景德镇陶瓷大学",
+      "aliases": [],
+      "domain": "jcu.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "南昌大学",
+      "aliases": [],
+      "domain": "ncu.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "南昌航空大学",
+      "aliases": [],
+      "domain": "nchu.edu.cn",
+      "province": "江西",
+      "push_qualified": true
+    },
+    {
+      "name": "渤海大学",
+      "aliases": [],
+      "domain": "bhu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连大学",
+      "aliases": [],
+      "domain": "dlu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连工业大学",
+      "aliases": [],
+      "domain": "dlpu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连海事大学",
+      "aliases": [],
+      "domain": "dlmu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连海洋大学",
+      "aliases": [],
+      "domain": "dlou.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连交通大学",
+      "aliases": [],
+      "domain": "djtu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连外国语大学",
+      "aliases": [],
+      "domain": "dlufl.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "大连医科大学",
+      "aliases": [],
+      "domain": "dmu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "东北财经大学",
+      "aliases": [],
+      "domain": "dufe.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "东北大学",
+      "aliases": [
+        "东北大"
+      ],
+      "domain": "neu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁大学",
+      "aliases": [],
+      "domain": "lnu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁工程技术大学",
+      "aliases": [],
+      "domain": "lntu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁科技大学",
+      "aliases": [],
+      "domain": "ustl.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁师范大学",
+      "aliases": [],
+      "domain": "lnnu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁石油化工大学",
+      "aliases": [],
+      "domain": "lnpu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "辽宁中医药大学",
+      "aliases": [],
+      "domain": "lnutcm.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "鲁迅美术学院",
+      "aliases": [],
+      "domain": "lumei.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳工业大学",
+      "aliases": [],
+      "domain": "sut.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳航空航天大学",
+      "aliases": [],
+      "domain": "sau.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳化工大学",
+      "aliases": [],
+      "domain": "syuct.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳建筑大学",
+      "aliases": [],
+      "domain": "sjzu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳农业大学",
+      "aliases": [],
+      "domain": "syau.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳师范大学",
+      "aliases": [],
+      "domain": "synu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳体育学院",
+      "aliases": [],
+      "domain": "syty.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳药科大学",
+      "aliases": [],
+      "domain": "syphu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "沈阳音乐学院",
+      "aliases": [],
+      "domain": null,
+      "province": "辽宁",
+      "push_qualified": true,
+      "_domain_note": "未确认官网域名，运行时按学校名发现"
+    },
+    {
+      "name": "中国医科大学",
+      "aliases": [],
+      "domain": "cmu.edu.cn",
+      "province": "辽宁",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古大学",
+      "aliases": [],
+      "domain": "imu.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古工业大学",
+      "aliases": [],
+      "domain": "imut.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古科技大学",
+      "aliases": [],
+      "domain": "imust.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古民族大学",
+      "aliases": [],
+      "domain": "imun.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古农业大学",
+      "aliases": [],
+      "domain": "imau.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古师范大学",
+      "aliases": [],
+      "domain": "imnu.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "内蒙古医科大学",
+      "aliases": [],
+      "domain": "immu.edu.cn",
+      "province": "内蒙古",
+      "push_qualified": true
+    },
+    {
+      "name": "北方民族大学",
+      "aliases": [],
+      "domain": "nmu.edu.cn",
+      "province": "宁夏",
+      "push_qualified": true
+    },
+    {
+      "name": "宁夏大学",
+      "aliases": [],
+      "domain": "nxu.edu.cn",
+      "province": "宁夏",
+      "push_qualified": true
+    },
+    {
+      "name": "宁夏医科大学",
+      "aliases": [],
+      "domain": "nxmu.edu.cn",
+      "province": "宁夏",
+      "push_qualified": true
+    },
+    {
+      "name": "青海大学",
+      "aliases": [],
+      "domain": "qhu.edu.cn",
+      "province": "青海",
+      "push_qualified": true
+    },
+    {
+      "name": "青海民族大学",
+      "aliases": [],
+      "domain": "qhmu.edu.cn",
+      "province": "青海",
+      "push_qualified": true
+    },
+    {
+      "name": "青海师范大学",
+      "aliases": [],
+      "domain": "qhnu.edu.cn",
+      "province": "青海",
+      "push_qualified": true
+    },
+    {
+      "name": "济南大学",
+      "aliases": [],
+      "domain": "ujn.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "聊城大学",
+      "aliases": [],
+      "domain": "lcu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "齐鲁工业大学",
+      "aliases": [],
+      "domain": "qlu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "青岛大学",
+      "aliases": [],
+      "domain": "qdu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "青岛科技大学",
+      "aliases": [],
+      "domain": "qust.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "青岛理工大学",
+      "aliases": [],
+      "domain": "qut.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "青岛农业大学",
+      "aliases": [],
+      "domain": "qau.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "曲阜师范大学",
+      "aliases": [],
+      "domain": "qfnu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东财经大学",
+      "aliases": [],
+      "domain": "sdufe.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东第一医科大学",
+      "aliases": [],
+      "domain": "sdfmu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东建筑大学",
+      "aliases": [],
+      "domain": "sdjzu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东科技大学",
+      "aliases": [],
+      "domain": "sdust.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东理工大学",
+      "aliases": [],
+      "domain": "sdut.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东农业大学",
+      "aliases": [],
+      "domain": "sdau.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东师范大学",
+      "aliases": [],
+      "domain": "sdnu.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东艺术学院",
+      "aliases": [],
+      "domain": "sdca.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山东中医药大学",
+      "aliases": [],
+      "domain": "sdutcm.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "中国海洋大学",
+      "aliases": [
+        "中国海大"
+      ],
+      "domain": "ouc.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "中国石油大学（华东）",
+      "aliases": [
+        "中国石油大学(华东)"
+      ],
+      "domain": "upc.edu.cn",
+      "province": "山东",
+      "push_qualified": true
+    },
+    {
+      "name": "山西财经大学",
+      "aliases": [],
+      "domain": "sxufe.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "山西大学",
+      "aliases": [],
+      "domain": "sxu.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "山西农业大学",
+      "aliases": [],
+      "domain": "sxau.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "山西师范大学",
+      "aliases": [],
+      "domain": "sxnu.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "山西医科大学",
+      "aliases": [],
+      "domain": "sxmu.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "山西中医药大学",
+      "aliases": [],
+      "domain": "sxtcm.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "太原科技大学",
+      "aliases": [],
+      "domain": "tyust.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "太原理工大学",
+      "aliases": [],
+      "domain": "tyut.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "中北大学",
+      "aliases": [],
+      "domain": "nuc.edu.cn",
+      "province": "山西",
+      "push_qualified": true
+    },
+    {
+      "name": "陕西科技大学",
+      "aliases": [],
+      "domain": "sust.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "陕西师范大学",
+      "aliases": [],
+      "domain": "snnu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "陕西中医药大学",
+      "aliases": [],
+      "domain": "sntcm.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安电子科技大学",
+      "aliases": [
+        "西电"
+      ],
+      "domain": "xidian.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安工程大学",
+      "aliases": [],
+      "domain": "xpu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安工业大学",
+      "aliases": [],
+      "domain": "xatu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安建筑科技大学",
+      "aliases": [],
+      "domain": "xauat.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安科技大学",
+      "aliases": [],
+      "domain": "xust.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安理工大学",
+      "aliases": [],
+      "domain": "xaut.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安美术学院",
+      "aliases": [],
+      "domain": "xafa.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安石油大学",
+      "aliases": [],
+      "domain": "xsyu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安外国语大学",
+      "aliases": [],
+      "domain": "xisu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西安邮电大学",
+      "aliases": [],
+      "domain": "xupt.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西北大学",
+      "aliases": [],
+      "domain": "nwu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西北农林科技大学",
+      "aliases": [
+        "西农"
+      ],
+      "domain": "nwafu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "西北政法大学",
+      "aliases": [],
+      "domain": "nwupl.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "延安大学",
+      "aliases": [],
+      "domain": "yau.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "长安大学",
+      "aliases": [],
+      "domain": "chd.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "空军军医大学",
+      "aliases": [],
+      "domain": "fmmu.edu.cn",
+      "province": "陕西",
+      "push_qualified": true
+    },
+    {
+      "name": "东华大学",
+      "aliases": [],
+      "domain": "dhu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "华东理工大学",
+      "aliases": [
+        "华理"
+      ],
+      "domain": "ecust.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "华东师范大学",
+      "aliases": [
+        "华东师大"
+      ],
+      "domain": "ecnu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "华东政法大学",
+      "aliases": [],
+      "domain": "ecupl.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海财经大学",
+      "aliases": [
+        "上财"
+      ],
+      "domain": "sufe.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海电力大学",
+      "aliases": [],
+      "domain": "shiep.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海对外经贸大学",
+      "aliases": [],
+      "domain": "suibe.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海工程技术大学",
+      "aliases": [],
+      "domain": "sues.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海海事大学",
+      "aliases": [],
+      "domain": "shmtu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海海洋大学",
+      "aliases": [],
+      "domain": "shou.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海科技大学",
+      "aliases": [
+        "上科大"
+      ],
+      "domain": "shanghaitech.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海理工大学",
+      "aliases": [],
+      "domain": "usst.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海师范大学",
+      "aliases": [],
+      "domain": "shnu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海体育大学",
+      "aliases": [],
+      "domain": "sus.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海外国语大学",
+      "aliases": [
+        "上外"
+      ],
+      "domain": "shisu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海音乐学院",
+      "aliases": [],
+      "domain": "shcmusic.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海应用技术大学",
+      "aliases": [],
+      "domain": "sit.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "上海中医药大学",
+      "aliases": [],
+      "domain": "shutcm.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "海军军医大学",
+      "aliases": [],
+      "domain": "smmu.edu.cn",
+      "province": "上海",
+      "push_qualified": true
+    },
+    {
+      "name": "成都大学",
+      "aliases": [],
+      "domain": "cdu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "成都理工大学",
+      "aliases": [],
+      "domain": "cdut.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "成都体育学院",
+      "aliases": [],
+      "domain": "cdsu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "成都信息工程大学",
+      "aliases": [],
+      "domain": "cuit.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "成都中医药大学",
+      "aliases": [],
+      "domain": "cdutcm.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "四川农业大学",
+      "aliases": [],
+      "domain": "sicau.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "四川师范大学",
+      "aliases": [],
+      "domain": "sicnu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "四川音乐学院",
+      "aliases": [],
+      "domain": null,
+      "province": "四川",
+      "push_qualified": true,
+      "_domain_note": "未确认官网域名，运行时按学校名发现"
+    },
+    {
+      "name": "西华大学",
+      "aliases": [],
+      "domain": "xhu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西华师范大学",
+      "aliases": [],
+      "domain": "cwnu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南财经大学",
+      "aliases": [
+        "西财"
+      ],
+      "domain": "swufe.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南交通大学",
+      "aliases": [
+        "西南交大"
+      ],
+      "domain": "swjtu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南科技大学",
+      "aliases": [],
+      "domain": "swust.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南民族大学",
+      "aliases": [],
+      "domain": "swun.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南石油大学",
+      "aliases": [],
+      "domain": "swpu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "西南医科大学",
+      "aliases": [],
+      "domain": "swmu.edu.cn",
+      "province": "四川",
+      "push_qualified": true
+    },
+    {
+      "name": "天津财经大学",
+      "aliases": [],
+      "domain": "tjufe.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津工业大学",
+      "aliases": [],
+      "domain": "tiangong.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津科技大学",
+      "aliases": [],
+      "domain": "tust.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津理工大学",
+      "aliases": [],
+      "domain": "tjut.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津美术学院",
+      "aliases": [],
+      "domain": "tjarts.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津商业大学",
+      "aliases": [],
+      "domain": "tjcu.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津师范大学",
+      "aliases": [],
+      "domain": "tjnu.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津体育学院",
+      "aliases": [],
+      "domain": "tjus.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津外国语大学",
+      "aliases": [],
+      "domain": "tjfsu.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津医科大学",
+      "aliases": [],
+      "domain": "tmu.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津职业技术师范大学",
+      "aliases": [],
+      "domain": "tute.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "天津中医药大学",
+      "aliases": [],
+      "domain": "tjutcm.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "中国民航大学",
+      "aliases": [],
+      "domain": "cauc.edu.cn",
+      "province": "天津",
+      "push_qualified": true
+    },
+    {
+      "name": "西藏大学",
+      "aliases": [],
+      "domain": "utibet.edu.cn",
+      "province": "西藏",
+      "push_qualified": true
+    },
+    {
+      "name": "西藏民族大学",
+      "aliases": [],
+      "domain": "xzmu.edu.cn",
+      "province": "西藏",
+      "push_qualified": true
+    },
+    {
+      "name": "西藏农牧大学",
+      "aliases": [],
+      "domain": null,
+      "province": "西藏",
+      "push_qualified": true,
+      "_domain_note": "未确认官网域名，运行时按学校名发现"
+    },
+    {
+      "name": "喀什大学",
+      "aliases": [],
+      "domain": "ksu.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "石河子大学",
+      "aliases": [],
+      "domain": "shzu.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "塔里木大学",
+      "aliases": [],
+      "domain": "taru.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "新疆财经大学",
+      "aliases": [],
+      "domain": "xjufe.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "新疆大学",
+      "aliases": [],
+      "domain": "xju.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "新疆农业大学",
+      "aliases": [],
+      "domain": "xjau.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "新疆师范大学",
+      "aliases": [],
+      "domain": "xjnu.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "新疆医科大学",
+      "aliases": [],
+      "domain": "xjmu.edu.cn",
+      "province": "新疆",
+      "push_qualified": true
+    },
+    {
+      "name": "昆明理工大学",
+      "aliases": [],
+      "domain": "kust.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "昆明医科大学",
+      "aliases": [],
+      "domain": "kmmu.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "西南林业大学",
+      "aliases": [],
+      "domain": "swfu.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南财经大学",
+      "aliases": [],
+      "domain": "ynufe.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南大学",
+      "aliases": [],
+      "domain": "ynu.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南民族大学",
+      "aliases": [],
+      "domain": "ymu.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南农业大学",
+      "aliases": [],
+      "domain": "ynau.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南师范大学",
+      "aliases": [],
+      "domain": "ynnu.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "云南中医药大学",
+      "aliases": [],
+      "domain": "ynucm.edu.cn",
+      "province": "云南",
+      "push_qualified": true
+    },
+    {
+      "name": "杭州电子科技大学",
+      "aliases": [],
+      "domain": "hdu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "杭州师范大学",
+      "aliases": [],
+      "domain": "hznu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "宁波大学",
+      "aliases": [],
+      "domain": "nbu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "宁波诺丁汉大学",
+      "aliases": [],
+      "domain": "nottingham.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "温州医科大学",
+      "aliases": [],
+      "domain": "wmu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "西湖大学",
+      "aliases": [],
+      "domain": "westlake.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江财经大学",
+      "aliases": [],
+      "domain": "zufe.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江工商大学",
+      "aliases": [],
+      "domain": "zjgsu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江工业大学",
+      "aliases": [],
+      "domain": "zjut.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江理工大学",
+      "aliases": [],
+      "domain": "zstu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江农林大学",
+      "aliases": [],
+      "domain": "zafu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江师范大学",
+      "aliases": [],
+      "domain": "zjnu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "浙江中医药大学",
+      "aliases": [],
+      "domain": "zcmu.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
+    },
+    {
+      "name": "中国美术学院",
+      "aliases": [],
+      "domain": "caa.edu.cn",
+      "province": "浙江",
+      "push_qualified": true
     }
-  ]
+  ],
+  "_push_note": "push_qualified=true 的学校来自 2025 年推免资格高校名单（含新增 67 所，约 433 所；按省份整理）。域名为学校主域，批量校验结果见 data/archive_cache.json。"
 }

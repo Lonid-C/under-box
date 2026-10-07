@@ -104,9 +104,15 @@ class OfficialPlanTests(unittest.TestCase):
         self.assertEqual(enriched[1].entities["source_field_hint"], "计算机科学与技术")
         self.assertEqual(graduate.entities, {"org": "哈尔滨工业大学", "major": "仪器科学与技术"})
         queries = build_plan(enriched[1], "李四", ResumeProfile(identity="student")).queries
-        self.assertEqual(len(queries), 8)
-        self.assertEqual(queries[0].site, "hit.edu.cn")
-        self.assertEqual(queries[0].text, '"李四"')
+        # 推免陈述用类别的 exception_budget（10 次），整批名单先于姓名探针。
+        self.assertEqual(len(queries), 10)
+        self.assertEqual(queries[0].site, "hrbeu.edu.cn")
+        self.assertEqual(queries[0].text, "免试攻读2023年硕士学位研究生 资格")
+        name_probe = next(i for i, q in enumerate(queries)
+                          if q.site == "hit.edu.cn" and q.text == '"李四"')
+        roster = next(i for i, q in enumerate(queries)
+                      if q.site == "hit.edu.cn" and q.text == "2023 推免 拟录取 名单")
+        self.assertLess(roster, name_probe)
         self.assertTrue(any(q.site == "mp.weixin.qq.com" and q.text ==
                             '"哈尔滨工业大学" "李四"' for q in queries))
         self.assertTrue(any(q.site == "hrbeu.edu.cn" and q.text ==

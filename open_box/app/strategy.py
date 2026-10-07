@@ -22,17 +22,17 @@ from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .competitions import (catalog_query_specs, competition_for_claim,
+                           competition_site as _preset_competition_site, publication_note)
+
 DATA = Path(__file__).resolve().parent.parent / "data" / "strategies.json"
 
 WECHAT_HOST = "mp.weixin.qq.com"
 
 
 def competition_site(contest: str) -> str | None:
-    """已核对的赛事主站；子域上的官方获奖页也会纳入 site 限定。"""
-    value = (contest or "").lower()
-    if re.search(r"\bicpc\b", value) or "international collegiate programming contest" in value:
-        return "icpc.global"
-    return None
+    """赛事官网预设；保留旧入口，目录维护在 data/competitions.json。"""
+    return _preset_competition_site(contest)
 
 
 def publication_site(venue: str) -> str | None:
@@ -309,6 +309,10 @@ def _context(claim, candidate_name: str, terms: list[str],
     org_latin, org_han = _bilingual_org_parts(org)
     from .plan import claim_school
     school = claim_school(claim)
+    if claim.category == "竞赛" and not school:
+        school = e.get("school_search_hint") if isinstance(e.get("school_search_hint"), str) else ""
+        org = org or school
+        org_latin, org_han = _bilingual_org_parts(org)
     # 来源学校仅是检索线索，不能据此认定已获推免资格。
     source_school = e.get("source_school_hint") if isinstance(e.get("source_school_hint"), str) else ""
     source_field = e.get("source_field_hint") if isinstance(e.get("source_field_hint"), str) else ""
@@ -333,6 +337,9 @@ def _context(claim, candidate_name: str, terms: list[str],
     m = re.search(r"(\d{4}\s*[-—–至]?\s*\d{0,4}\s*学年)", claim.raw_text or "")
     period = m.group(1).replace(" ", "") if m else (claim.date_label or "").strip()
 
+    team = pick("team", "team")
+    if re.fullmatch(r"成员|队员|队长|负责人|参与者|个人|member|participant|leader", team, re.I):
+        team = ""
     return {
         "name": nvar[0] if nvar else "",
         "name2": nvar[1] if len(nvar) > 1 else "",
@@ -354,7 +361,7 @@ def _context(claim, candidate_name: str, terms: list[str],
         "contest_v": " OR ".join(f'"{x}"' for x in cvar[:2]) if cvar else "",
         "award": avar[0] if avar else pick("award", "award"),
         "award2": avar[1] if len(avar) > 1 else "",
-        "team": pick("team", "team"),
+        "team": team,
         "venue": pick("venue", "venue"),
         "paper": title,
         "title": tvar[0] if tvar else title,
@@ -454,6 +461,13 @@ def _claim_search_blob(claim) -> str:
     return blob + " " + " ".join(claim.elements or [])
 
 
+PUSH_TERMS = ("保研", "保送", "推免", "推荐免试", "免试攻读", "免试研究生")
+
+
+def _is_push_text(blob: str) -> bool:
+    return any(term in (blob or "") for term in PUSH_TERMS)
+
+
 def _search_exception(cat: dict, claim) -> bool:
     """never_search 类别的例外：命中 search_if_terms 里的词就恢复检索。
 
@@ -465,6 +479,38 @@ def _search_exception(cat: dict, claim) -> bool:
         return False
     blob = _claim_search_blob(claim)
     return any(t in blob for t in terms)
+
+
+def add_competition_school_hints(claims: list) -> list:
+    """从同期教育经历补学校检索线索；不新增参赛学校事实，不猜多个候选学校。"""
+    from .plan import claim_school
+    from .competitions import claim_year
+
+    def bounds(value, end=False):
+        m = re.search(r"((?:19|20)\d{2})(?:[-./年](\d{1,2}))?", value or "")
+        if not m:
+            return None
+        month = int(m.group(2)) if m.group(2) else (12 if end else 1)
+        return int(m.group(1))*12 + month if 1 <= month <= 12 else None
+
+    education = [c for c in claims if c.category == "学历" and claim_school(c)]
+    for c in claims:
+        if c.category != "竞赛" or claim_school(c) or (c.entities or {}).get("school_search_hint"):
+            continue
+        year = claim_year(c)
+        if not year:
+            continue
+        start = bounds(c.date_start) or year*12+1
+        end = bounds(c.date_start, True) or year*12+12
+        candidates = set()
+        for edu in education:
+            begin = bounds(edu.date_start)
+            finish = bounds(edu.date_end, True) if edu.date_end else None
+            if begin is not None and begin <= end and (finish is None or finish >= start):
+                candidates.add(claim_school(edu))
+        if len(candidates) == 1:
+            c.entities = dict(c.entities or {}, school_search_hint=candidates.pop())
+    return claims
 
 
 def add_admission_source_hints(claims: list) -> list:
@@ -566,9 +612,17 @@ def build_plan(
 
     profiles = match_profiles(doc, prof, claim.category, resume_categories)
     head = profiles[0] if profiles else {"id": "none", "name": "无匹配"}
+    # 推免/保送陈述：先查整批名单，再查姓名。名单公告的标题里没有人名，人名在
+    # PDF/XLSX 附件里——搜索索引对"姓名 + 官网"几乎从不命中（2026-10 实测连续
+    # 0 条），把它排第一只会烧掉时间预算，让名单查询来不及发出。
+    roster_first = exception and _is_push_text(_claim_search_blob(claim))
 
     terms = list(cat.get("terms") or [])
     ctx = _context(claim, candidate_name, terms, doc.get("elements_map"))
+    competition = competition_for_claim(claim)
+    if competition and not ctx.get("contest"):
+        # 模型漏填 contest 时，已识别的目录名称只补检索上下文，不改简历原文/待证明要素。
+        ctx["contest"] = competition["name"]
 
     # 组装候选表单：类别锚点 → 类别取证 → 档案追加
     forms: list[tuple[dict, str]] = []
@@ -664,16 +718,27 @@ def build_plan(
                 continue
             seen.add(key)
             els = _targets(form, claim)
+            push_override = roster_first and form.get("push_weight") is not None
             queries.append(Query(
                 text=text, site=site, kind=kind,
                 element=els[0] if len(els) == 1 else None,
                 purpose=form.get("purpose", ""),
-                round=int(form.get("round") or 2),
-                weight=int(form.get("weight") or 0) - variant_index * 3,
+                round=2 if push_override else int(form.get("round") or 2),
+                weight=(int(form["push_weight"]) if push_override
+                        else int(form.get("weight") or 0)) - variant_index * 3,
                 source=source,
                 expect_tier=form.get("expect_tier"),
                 variant=bool(variant_index),
             ))
+
+    if competition:
+        preset = [Query(**spec) for spec in catalog_query_specs(competition, claim, candidate_name)]
+        if preset:
+            # anchor_forms/forms 里也有旧的 organizer 表单，source 不一定以 organizer 开头。
+            # 保留学校/公众号和具体队伍查询，避免重复的泛赛事查询挤占学校补查预算。
+            domains = set(competition.get("official_domains", []))
+            queries = preset + [q for q in queries if not q.source.startswith("organizer:")
+                                and not (q.site in domains and q.source.startswith("category:"))]
 
     # 预算：档案说了算，但被硬天花板夹住；collect 的默认值只作兜底
     pb = head.get("budget") or {}
@@ -682,6 +747,13 @@ def build_plan(
         "reads": int(pb.get("reads") or MAX_PAGE_READS),
         "seconds": float(pb.get("seconds") or MAX_SECONDS),
     }
+    # 例外检索（推免/考研等）比普通学历多两个环节（推荐方 + 接收方），给类别自己的
+    # 预算下限；仍被下面的硬天花板夹住，写错也放大不了多少。
+    eb = cat.get("exception_budget") if exception else None
+    if isinstance(eb, dict):
+        budget["searches"] = max(budget["searches"], int(eb.get("searches") or 0))
+        budget["reads"] = max(budget["reads"], int(eb.get("reads") or 0))
+        budget["seconds"] = max(budget["seconds"], float(eb.get("seconds") or 0))
     if budget_searches is not None:
         budget["searches"] = min(budget["searches"], int(budget_searches))
     budget["searches"] = max(1, min(budget["searches"], CEILING_SEARCHES))
@@ -689,9 +761,14 @@ def build_plan(
     budget["seconds"] = max(5.0, min(budget["seconds"], CEILING_SECONDS))
 
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
+    regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))
     def priority(q: Query) -> int:
-        if q.source.startswith("school:"):
+        if regional_contest and q.source.startswith("school:"):
             return 0
+        if competition and q.source.startswith("organizer:竞赛:catalog:"):
+            return 1 if regional_contest else 0
+        if q.source.startswith("school:"):
+            return 2 if roster_first else (1 if competition else 0)
         if q.kind == "crossref":
             return 0
         if q.source.startswith(("organizer:", "publisher:")):
@@ -705,6 +782,10 @@ def build_plan(
     dropped = [q.text for q in queries[cap:]]
     plan = Plan(queries[:cap], head.get("id", "none"), head.get("name", "无匹配"),
                 notes=list(head.get("notes") or []), dropped=dropped, budget=budget)
+
+    if competition:
+        plan.notes.append(publication_note(competition))
+        plan.notes.append("赛事目录与名单可用性是检索提示，不构成本人获奖证据；名单缺席不等于经历不实。")
 
     if skipped:
         fields: list[str] = []

@@ -110,14 +110,65 @@ def _office_text(data: bytes) -> str | None:
         return None
 
 
+def _award_table_text(document) -> str:
+    """小型中文获奖表按行读取，仅延续已识别奖项列的合并单元格。"""
+    import unicodedata
+    if len(document) > 60:
+        return ""
+    first = unicodedata.normalize("NFKC", document[0].get_text())
+    if "姓名" not in first or not re.search(r"奖项|奖级|获奖等级|奖励等级", first):
+        return ""
+    headers = None
+    award_column = None
+    previous_award = ""
+    lines = []
+    for page_no, page in enumerate(document, 1):
+        try:
+            tables = page.find_tables().tables
+        except Exception:
+            previous_award = ""
+            continue
+        if not tables:
+            previous_award = ""
+        for table in tables:
+            for raw in table.extract():
+                row = [" ".join(unicodedata.normalize("NFKC", str(c or "")).split()) for c in raw]
+                if "姓名" in row and any(re.fullmatch(r"奖项|奖级|获奖等级|奖励等级", c) for c in row):
+                    new_headers = row
+                    if headers and headers != new_headers:
+                        previous_award = ""
+                    headers = new_headers
+                    award_column = next(i for i,c in enumerate(row) if re.fullmatch(r"奖项|奖级|获奖等级|奖励等级",c))
+                    continue
+                if not headers or len(row) != len(headers) or not row[headers.index("姓名")]:
+                    continue
+                merged = not row[award_column]
+                if row[award_column]:
+                    previous_award = row[award_column]
+                elif previous_award:
+                    row[award_column] = previous_award
+                if not row[award_column]:
+                    continue
+                lines.append(" | ".join(row) + f" ［第{page_no}页" + ("，奖项沿用合并单元格" if merged else "") + "］")
+    return ("\n［获奖表格按行读取；空白奖项列依据同表合并单元格延续］\n"
+            + " | ".join(headers) + "\n" + "\n".join(lines)) if lines else ""
+
+
 def _pdf_text(data: bytes) -> str | None:
     """公开名单常是 PDF；按文件签名解析，不能把二进制当网页文字。"""
     if not data[:1024].lstrip().startswith(b"%PDF-") or len(data) > MAX_PUBLIC_PDF_BYTES:
         return None
     try:
         import pymupdf
+        import unicodedata
         with pymupdf.open(stream=data, filetype="pdf") as document:
-            text = "\n".join(page.get_text() for page in document)
+            text = unicodedata.normalize("NFKC", "\n".join(page.get_text() for page in document))
+            try:
+                rows = _award_table_text(document)
+            except Exception:
+                rows = ""
+            if rows:
+                text = text[:1000] + rows + "\n［原始文本］\n" + text
         if text.strip():
             return text
     except Exception:
@@ -544,20 +595,50 @@ class FallbackSearcher:
 # --------------------------------------------------------------------------
 
 _robots_cache: dict[str, robotparser.RobotFileParser | None] = {}
+_robots_guard = threading.Lock()
+ROBOTS_TIMEOUT_SECONDS = 5.0
+
+
+def _load_robots(root: str) -> robotparser.RobotFileParser | None:
+    """用本项目的 UA 和短超时取 robots.txt。
+
+    以前直接调 `RobotFileParser.read()`，有两个实测会出事的行为：
+      1. 它走 urllib，**没有超时**。学校站点不回应时，一次页面读取会卡到系统 TCP
+         超时（macOS 上一分多钟），整条陈述的时间预算被它一口吃光，后面的名单
+         查询根本没机会发出——日志里只看到"回读失败/未完成"和"已触及预算"。
+      2. 它用 `Python-urllib` 的 UA，很多高校 WAF 对这个 UA 返回 403；而标准库把
+         401/403 解释成 **disallow_all**，于是整个站点的公示和附件都被判成
+         "robots 不允许"。这和"站长禁止抓取"完全是两回事。
+    现在按主流爬虫的口径：200 才解析规则；4xx（含 401/403/404）视为没有规则；
+    超时、连接失败、5xx 也按允许处理（与原注释"取不到时按允许"一致）。
+    """
+    import httpx
+    try:
+        r = httpx.get(root + "/robots.txt", headers={"User-Agent": UA},
+                      timeout=ROBOTS_TIMEOUT_SECONDS, follow_redirects=True)
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    ctype = r.headers.get("content-type", "").lower()
+    # 有些站点对不存在的 robots.txt 返回 200 + 首页 HTML，不能当规则解析。
+    if "html" in ctype or r.text.lstrip()[:15].lower().startswith(("<!doctype", "<html")):
+        return None
+    rp = robotparser.RobotFileParser()
+    rp.parse(r.text.splitlines())
+    return rp
 
 
 def robots_allows(url: str, ua: str = UA) -> bool:
     """遵守 robots.txt；取不到 robots.txt 时按允许处理（与主流爬虫一致）。"""
     parsed = urlparse(url)
     root = f"{parsed.scheme}://{parsed.netloc}"
-    if root not in _robots_cache:
-        rp = robotparser.RobotFileParser()
-        rp.set_url(root + "/robots.txt")
-        try:
-            rp.read()
-        except Exception:
-            rp = None
-        _robots_cache[root] = rp
+    with _robots_guard:
+        cached = root in _robots_cache
+    if not cached:
+        rp = _load_robots(root)
+        with _robots_guard:
+            _robots_cache[root] = rp
     rp = _robots_cache[root]
     return True if rp is None else rp.can_fetch(ua, url)
 
@@ -815,15 +896,67 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
     return out[:max(1, int(limit))]
 
 
-class PageFetcher:
-    """单域名限流 + robots 检查 + 有限重试的页面读取。"""
+_META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_\-]+)""", re.I)
 
-    def __init__(self, timeout: float = 20.0):
+
+def decode_html(r) -> str:
+    """按响应头 → <meta charset> → UTF-8 → GB18030 的顺序解码。
+
+    不少学校网站是 GBK/GB2312，但响应头不写 charset；httpx 这时默认按 UTF-8 解，
+    中文全成乱码（2026-10 批量发现：大连工业大学首页标题解出来是"������ҵ��ѧ"，
+    名单里的姓名也就匹配不上）。
+    """
+    content = getattr(r, "content", b"") or b""
+    if not isinstance(content, (bytes, bytearray)):
+        return getattr(r, "text", "") or ""
+    headers = getattr(r, "headers", {}) or {}
+    ctype = (headers.get("content-type", "") if hasattr(headers, "get") else "").lower()
+    declared = None
+    m = re.search(r"charset=([\w\-]+)", ctype)
+    if m:
+        declared = m.group(1)
+    else:
+        m = _META_CHARSET.search(content[:4096])
+        if m:
+            declared = m.group(1).decode("ascii", "ignore")
+    if declared:
+        d = declared.lower()
+        enc = "gb18030" if d in ("gb2312", "gbk", "gb18030", "x-gbk", "cp936") else d
+        try:
+            return content.decode(enc, errors="replace")   # 写明了编码就信它，个别坏字节替换掉
+        except LookupError:
+            pass
+    for enc in ("utf-8", "gb18030"):
+        try:
+            return content.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace")
+
+
+class PageFetcher:
+    """单域名限流 + robots 检查 + 有限重试的页面读取。
+
+    超时口径（2026-10 调整）：连接 5 秒、读取 12 秒，只对连接失败/5xx 重试一次。
+    原来是 20 秒 × 最多 3 次，一个不回应的页面最长能占掉一分钟，每条陈述只有
+    90–180 秒，读两三页失败就把后面的名单查询全部饿死。读超时重试几乎从不成功，
+    还要再等 12 秒，所以读超时不再重试。
+    """
+
+    PAGE_RETRIES = 1
+
+    def __init__(self, timeout: float = 12.0, connect_timeout: float = 5.0):
         self.timeout = timeout
+        self.connect_timeout = connect_timeout
         self._last: dict[str, float] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
         self.failures: dict[str, str] = {}
+        # 附件相对路径必须以重定向后的页面地址为基准，例如 results → results/。
+        self.resolved_urls: dict[str, str] = {}
+        # 连不上的站点（连接超时/拒绝）本次核验内不再重试：同一学院站点往往一次
+        # 搜出好几条链接，每条都等满连接超时，两三个站点就能吃掉整条陈述的时间。
+        self.dead_hosts: dict[str, str] = {}
 
     def _host_lock(self, host: str) -> threading.Lock:
         with self._locks_guard:
@@ -842,15 +975,27 @@ class PageFetcher:
         # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
         with self._host_lock(host):
             self.failures.pop(url, None)
+            if host in self.dead_hosts:
+                self.failures[url] = f"同一站点刚才{self.dead_hosts[host]}，已跳过"
+                return None
             if not robots_allows(url):
                 self.failures[url] = "robots.txt 不允许访问"
                 return None
             self._throttle(host)
-            for attempt in range(MAX_RETRIES + 1):
+            timeout = httpx.Timeout(self.timeout, connect=self.connect_timeout)
+            for attempt in range(self.PAGE_RETRIES + 1):
                 try:
-                    r = httpx.get(url, headers={"User-Agent": UA}, timeout=self.timeout,
+                    r = httpx.get(url, headers={"User-Agent": UA}, timeout=timeout,
                                   follow_redirects=True)
+                    status = getattr(r, "status_code", 200)
+                    if isinstance(status, int) and 400 <= status < 500:
+                        # 404/403 之类重试也不会变，直接记原因，别再等。
+                        self.failures[url] = f"HTTP {status}"
+                        return None
                     r.raise_for_status()
+                    resolved = str(getattr(r, "url", "") or "")
+                    if urlparse(resolved).scheme in ("http", "https"):
+                        self.resolved_urls[url] = resolved
                     if r.content[:1024].lstrip().startswith(b"%PDF-"):
                         text = _pdf_text(r.content)
                         if not text:
@@ -868,16 +1013,31 @@ class PageFetcher:
                         # 旧版 DOC/XLS 不作二进制文本解码。
                         self.failures[url] = "暂不支持旧版 DOC/XLS 文件"
                         return None
-                    if any(term in r.text for term in ("请输入验证码下载附件", "验证码下载",
-                                                       "请登录后下载", "您没有权限下载")):
+                    text = decode_html(r)
+                    if any(term in text for term in ("请输入验证码下载附件", "验证码下载",
+                                                     "请登录后下载", "您没有权限下载")):
                         self.failures[url] = "附件下载需要验证码、登录或额外权限"
                         return None
-                    return r.text
-                except Exception:
-                    if attempt >= MAX_RETRIES:
-                        self.failures[url] = "请求失败或超时"
-                        return None
-                    time.sleep(0.5 * (attempt + 1))
+                    return text
+                except httpx.ReadTimeout:
+                    self.failures[url] = f"读取超时（>{self.timeout:.0f} 秒）"
+                    return None
+                except httpx.ConnectTimeout:
+                    reason = f"连接超时（>{self.connect_timeout:.0f} 秒）"
+                except httpx.ConnectError as exc:
+                    text = str(exc)
+                    reason = ("证书校验失败（SSL）" if "CERTIFICATE" in text.upper() or "SSL" in text.upper()
+                              else "连接失败")
+                except httpx.HTTPStatusError as exc:
+                    reason = f"HTTP {exc.response.status_code}"
+                except Exception as exc:
+                    reason = f"请求失败（{type(exc).__name__}）"
+                if attempt >= self.PAGE_RETRIES:
+                    self.failures[url] = reason
+                    if reason.startswith(("连接超时", "连接失败")):
+                        self.dead_hosts[host] = reason
+                    return None
+                time.sleep(0.5 * (attempt + 1))
         return None
 
 

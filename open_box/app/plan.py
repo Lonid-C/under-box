@@ -32,9 +32,19 @@ DATA = Path(__file__).resolve().parent.parent / "data" / "schools.json"
 WECHAT_HOST = "mp.weixin.qq.com"
 
 
+_SCHOOLS_CACHE: tuple[float, list[dict]] | None = None
+
+
 def _load_schools() -> list[dict]:
+    """学校表有 400 多所，按文件修改时间缓存，改了 JSON 立即生效。"""
+    global _SCHOOLS_CACHE
     try:
-        return json.loads(DATA.read_text(encoding="utf-8")).get("schools", [])
+        mtime = DATA.stat().st_mtime
+        if _SCHOOLS_CACHE and _SCHOOLS_CACHE[0] == mtime:
+            return _SCHOOLS_CACHE[1]
+        schools = json.loads(DATA.read_text(encoding="utf-8")).get("schools", [])
+        _SCHOOLS_CACHE = (mtime, schools)
+        return schools
     except Exception:
         return []
 
@@ -46,7 +56,8 @@ def _school_record(name: str | None) -> dict | None:
     """先认全称，再认无歧义简称；院系/学生组织后缀不影响学校识别。"""
     if not name:
         return None
-    name = name.strip()
+    # 简历里括号半角全角混用：「中国矿业大学(北京)」若不归一，会先按前缀命中「中国矿业大学」。
+    name = name.strip().replace("(", "（").replace(")", "）")
     schools = _load_schools()
     # 优先匹配最长的机构全称，避免先命中另一个学校的短别名。
     matches = [s for s in schools if name.startswith(s["name"])]
@@ -123,3 +134,11 @@ def provided_urls(claim: Claim) -> list[str]:
     if isinstance(raw, str):
         raw = [raw]
     return [u.strip() for u in raw if isinstance(u, str) and u.strip().startswith("http")]
+
+
+def school_archives(name: str | None, role: str | None = None) -> list[dict]:
+    """该校已配置的官网通知栏目（见 app/archive.py）。没有配置就返回空列表。"""
+    record = _school_record(name)
+    archives = (record or {}).get("notice_archives") or []
+    return [a for a in archives if isinstance(a, dict) and a.get("first_page") and a.get("list_url")
+            and (role is None or a.get("role", "source") == role)]

@@ -639,6 +639,16 @@ function detailOf(c) {
       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
       c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
   }
+  if (c.sourceNotes && c.sourceNotes.length) {
+    const scope = el('div');
+    c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
+    const preset = c.competitionLookup || {};
+    (preset.official_urls || []).forEach(url => {
+      if (/^https?:\/\//i.test(url)) scope.appendChild(el('div', {},
+        el('a', {href:url, target:'_blank', rel:'noopener noreferrer', text:'赛事官网：' + url})));
+    });
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'官网名单范围'}), scope));
+  }
   if (c.evidence.length) {
     const box = el('div');
     c.evidence.forEach(ev => {

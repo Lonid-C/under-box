@@ -2,7 +2,7 @@ PY ?= python3
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: demo serve test fixture llm-check search-check verify clean help
+.PHONY: demo serve test fixture llm-check search-check competition-check verify clean help
 
 ## 离线演示：不需要任何 API key
 demo:
@@ -15,7 +15,7 @@ serve:
 ## 第 11 节验收
 test:
 	@$(PY) -m tests.test_rules
-	@$(PY) -m unittest tests.test_search_recall tests.test_school_search tests.test_document_gate tests.test_official_search tests.test_push_rosters -v
+	@$(PY) -m unittest tests.test_search_recall tests.test_school_search tests.test_document_gate tests.test_official_search tests.test_push_rosters tests.test_enrollment_search tests.test_discover tests.test_competitions -v
 
 ## 重新生成内置 fixture（状态由 app/judge.py 的规则算出）
 fixture:
@@ -28,6 +28,10 @@ llm-check:
 ## 验证搜索 key / 端点 / 引擎名
 search-check:
 	@$(PY) -m app.cli search-check
+
+## 检查竞赛公开官网和名单候选链接（不调用付费搜索或模型）
+competition-check:
+	@$(PY) check_competitions.py
 
 ## 真实核验（需要 DEEPSEEK_API_KEY / SEARCH_API_KEY）
 verify:

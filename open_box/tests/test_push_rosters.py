@@ -240,12 +240,19 @@ class PushRosterTests(unittest.TestCase):
 
         collect_for_claim(claim, "张三", SimpleNamespace(search=search), NoModel(),
                           queries=plan.queries, budget=Budget(max_searches=8, max_page_reads=0))
-        self.assertIn(("2026 硕士 拟录取 名单", "csu.edu.cn"), calls)
+        # 名单查询排在姓名查询前面：预算只有 8 次时，正式标题、公示年份、
+        # 免试资格和接收方推免拟录取四条整批名单路径都必须已经发出。
+        self.assertEqual(calls[0], ("免试攻读2026年硕士学位研究生 资格", "shu.edu.cn"))
         self.assertIn(("2025 推免 公示", "shu.edu.cn"), calls)
+        self.assertIn(("2026 免试 资格 名单", "shu.edu.cn"), calls)
+        self.assertIn(("2026 推免 拟录取 名单", "csu.edu.cn"), calls)
+        # 单个引号词（"张三"）不再追加"去引号"的同义重查。
+        self.assertNotIn(("张三", "csu.edu.cn"), calls)
         self.assertEqual(len(calls), 8)
 
     def test_verification_download_is_failure_not_roster_text(self):
-        response = SimpleNamespace(content=b"<html>captcha</html>",
+        # content 与 text 保持一致：PageFetcher 现在自己按 meta/GBK 解码 content。
+        response = SimpleNamespace(content="<html>请输入验证码下载附件</html>".encode(),
                                    text="<html>请输入验证码下载附件</html>", headers={},
                                    raise_for_status=lambda: None)
         url = "https://yz.csu.edu.cn/system/_content/download.jsp?id=2"

@@ -119,7 +119,9 @@ class RecallTests(unittest.TestCase):
 
     def test_full_school_name_beats_embedded_alias(self):
         self.assertEqual(school_domain("华南理工大学计算机学院"), "scut.edu.cn")
-        self.assertIsNone(school_domain("南昌大学"))
+        # 「南昌大学」不能被内嵌的「南大」别名吃成南京大学（学校表扩充后它有了自己的记录）。
+        self.assertEqual(school_domain("南昌大学"), "ncu.edu.cn")
+        self.assertIsNone(school_domain("示例南大附属学院"))
 
     def test_variants_do_not_push_out_original_search_channels(self):
         c = claim(contest="示例竞赛（ABC）")

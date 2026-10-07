@@ -171,6 +171,8 @@ class VerifiedClaim(BaseModel):
     question: str | None = None
     needs_human: bool = False
     search_exhausted: bool = False
+    source_notes: list[str] = Field(default_factory=list)
+    competition_lookup: dict | None = None
 
 
 class InputRisk(BaseModel):

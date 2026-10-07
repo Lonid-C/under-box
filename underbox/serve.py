@@ -81,6 +81,8 @@ def render_material(rep) -> str:
             out.append(f"  已证明：{'；'.join(v.proved)}")
         if v.unproved:
             out.append(f"  尚未证明：{'；'.join(v.unproved)}")
+        for note in getattr(v, "source_notes", []):
+            out.append(f"  官网名单范围：{note}")
         for e in v.evidence:
             out.append(f"  证据（{e.source_tier or '未定级'}）：{e.title}"
                        f"｜{e.publisher}｜{e.published_at or '未标注时间'}")
@@ -186,6 +188,8 @@ def to_presentation(rep) -> dict:
             "nextStep": v.next_step,
             "question": v.question or "",
             "searchExhausted": v.search_exhausted,
+            "sourceNotes": getattr(v, "source_notes", []),
+            "competitionLookup": getattr(v, "competition_lookup", None),
             "evidence": [{
                 "tier": e.source_tier,
                 "title": e.title,
@@ -322,6 +326,11 @@ def report_to_markdown(rep: dict) -> str:
             L.append(f"- 已证明：{'；'.join(c['proved'])}")
         if c.get("unproved"):
             L.append(f"- 尚未证明：{'；'.join(c['unproved'])}")
+        for note in c.get("sourceNotes", []):
+            L.append(f"- 官网名单范围：{note}")
+        competition = c.get("competitionLookup") or {}
+        if competition.get("official_urls"):
+            L.append(f"- 赛事官网：{'；'.join(competition['official_urls'])}")
         for e in c.get("evidence", []):
             L.append(f"- 证据（{e.get('tier') or '未定级'}）：{e.get('title', '')}"
                      f"｜{e.get('publisher', '')}｜{e.get('url', '')}")

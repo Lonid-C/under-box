@@ -106,6 +106,86 @@ body[data-stage="app"] #gateCard{display:none}
 #accountBadge[hidden],#heroAccount[hidden]{display:none}
 #gateCard.shake{animation:shake .34s}
 
+/* ══ 账户 · 配额 · 管理台 ═══════════════════════════ */
+.gate-field+.gate-field{margin-top:12px}
+
+.ad-chip{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12.5px;font-weight:600;
+  background:var(--paper);border:2px solid var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer}
+.ad-chip:hover{background:var(--pink-soft)}
+.ad-chip i{width:8px;height:8px;border-radius:50%;background:var(--pink);display:block;flex:none}
+.ad-chip.low i{background:#D85A30}
+.ad-chip em{font-style:normal;color:var(--ink-2);font-weight:500}
+.ad-chip[hidden]{display:none}
+
+/* 投料卡顶部的账户条：名字 + 配额 + 入口 */
+#heroAccount{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 16px;
+  border-bottom:2px solid var(--ink);font-size:12px;background:var(--cream)}
+#heroAccount .sp{flex:1}
+#heroAccount[hidden]{display:none}
+#heroAccount b{font-weight:600}
+
+.ad-sheet{position:fixed;inset:0;z-index:90;background:var(--cream);display:flex;flex-direction:column;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;animation:sheetIn .28s var(--ease) both}
+@keyframes sheetIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.ad-sheet[hidden]{display:none}
+.ad-head{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var(--paper);
+  border-bottom:2px solid var(--ink);flex:none}
+.ad-head h2{margin:0;font-family:var(--disp);font-size:18px;letter-spacing:-.01em}
+.ad-head h2 em{color:var(--pink);font-style:normal}
+.ad-head .who{font-size:12.5px;color:var(--ink-2)}
+.ad-head .sp{flex:1}
+.ad-body{flex:1;overflow-y:auto;padding:22px;width:100%;max-width:1180px;margin:0 auto}
+.ad-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px}
+.ad-kpi{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);
+  box-shadow:var(--shadow-sm);padding:14px}
+.ad-kpi b{display:block;font-family:var(--disp);font-size:26px;line-height:1.15;letter-spacing:-.02em}
+.ad-kpi span{display:block;font-size:11.5px;color:var(--ink-2);margin-top:5px}
+.ad-card{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);
+  box-shadow:var(--shadow);margin-top:18px;overflow:hidden}
+.ad-card>h3{margin:0;padding:12px 15px;font-size:13.5px;border-bottom:2px solid var(--ink);
+  background:var(--cream);display:flex;align-items:center;gap:10px}
+.ad-card>h3 .n{margin-left:auto;font-size:11.5px;color:var(--ink-2);font-weight:500}
+.ad-card .bd{padding:14px 15px}
+.ad-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.ad-tbl th,.ad-tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid #E3DFD4;white-space:nowrap}
+.ad-tbl th{font-size:11px;color:var(--ink-2);letter-spacing:.03em;font-weight:600}
+.ad-tbl tr:last-child td{border-bottom:0}
+.ad-tbl td.num{font-variant-numeric:tabular-nums}
+.ad-tbl .wide{white-space:normal;min-width:180px}
+.ad-pill{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;
+  border:1.5px solid var(--ink);background:var(--cream)}
+.ad-pill.admin{background:var(--ink);color:#fff}
+.ad-pill.ok{background:#E4F3ED;border-color:#0F6E56;color:#0F6E56}
+.ad-pill.wait{background:var(--pink-soft);border-color:var(--pink)}
+.ad-pill.no{background:#FAECE7;border-color:#D85A30;color:#712B13}
+.ad-pill.off{background:#EFEEE8;color:var(--ink-3);border-color:var(--ink-3)}
+.ad-bar{height:9px;background:var(--cream);border:1.5px solid var(--ink);border-radius:999px;overflow:hidden}
+.ad-bar i{display:block;height:100%;background:var(--pink)}
+.ad-mini{height:46px;display:flex;align-items:flex-end;gap:3px}
+.ad-mini i{flex:1;background:var(--ink);min-height:2px;border-radius:1px 1px 0 0;opacity:.72}
+.ad-mini i:hover{opacity:1;background:var(--pink)}
+.ad-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--paper);border:1.5px solid var(--ink);
+  border-radius:999px;padding:3px 11px;cursor:pointer;white-space:nowrap}
+.ad-act:hover{background:var(--pink-soft)}
+.ad-act.primary{background:var(--pink);color:#fff}
+.ad-act.primary:hover{background:#F01C8C}
+.ad-act:disabled{opacity:.5;cursor:not-allowed}
+.ad-in{width:100%;font:inherit;font-size:13px;background:var(--cream);border:2px solid var(--ink);
+  border-radius:var(--rad);padding:9px 11px}
+.ad-in:focus{outline:none;background:var(--paper)}
+.ad-inline{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.ad-note{font-size:11.5px;color:var(--ink-2);line-height:1.65}
+.ad-empty{font-size:12.5px;color:var(--ink-3);padding:6px 0}
+@media(max-width:600px){
+  .ad-body{padding:14px}
+  .ad-head{padding:11px 14px;gap:9px}
+  .ad-head h2{font-size:16px}
+  .ad-head .who{display:none}
+  .ad-kpi b{font-size:22px}
+  .ad-tbl th,.ad-tbl td{padding:6px 7px}
+}
+
 /* ══ 落地页：品牌 ═══════════════════════════════════ */
 .hero-wrap{text-align:center;padding:0 28px;margin-bottom:38px}
 .hero-mark{font-family:var(--disp);font-size:clamp(38px,7.4vw,74px);line-height:1;letter-spacing:-.02em;margin:0}
@@ -589,21 +669,30 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
         <span class="n">仅限受邀使用</span>
       </div>
       <div class="card-b">
+        <label class="gate-field" for="gateUser">
+          <span>用户名</span>
+          <input type="text" id="gateUser" name="username" placeholder="请输入用户名"
+                 autocomplete="username" autocapitalize="off" spellcheck="false">
+        </label>
         <label class="gate-field" for="gatePw">
-          <span>你的专属口令</span>
-          <input type="password" id="gatePw" name="password" placeholder="请输入你的登录口令"
+          <span>密码</span>
+          <input type="password" id="gatePw" name="password" placeholder="请输入密码"
                  autocomplete="current-password" enterkeyhint="go" spellcheck="false">
         </label>
         <button class="gate-btn" id="gateGo" type="button"><span id="gateBtnTxt">登录并进入核验台</span></button>
         <p class="gate-msg" id="gateMsg" role="alert" aria-live="polite"></p>
-        <p class="gate-note">输入你的专属口令登录，核验记录仅对当前账户可见。登录状态最长保留 7 天。</p>
+        <p class="gate-note">账号由管理员分配，核验记录与配额仅对当前账户生效。登录状态最长保留 7 天，忘记密码请联系管理员重置。</p>
       </div>
     </section>
 
     <section class="card" id="intake">
-      <div id="heroAccount" hidden style="padding:10px 20px;border-bottom:2px solid var(--ink);font-size:12px;background:var(--cream)">
+      <div id="heroAccount" hidden>
         <span id="heroAccountName"></span>
-        <button class="ghost" id="heroLogout" type="button" style="float:right;padding:2px 10px;font-size:11px" title="登出当前用户，返回口令登录页">用户登出</button>
+        <span class="ad-pill" id="heroQuota"></span>
+        <span class="sp"></span>
+        <button class="ad-act" id="acctOpen" type="button">我的配额</button>
+        <button class="ad-act primary" id="adminOpen" type="button" hidden>管理台</button>
+        <button class="ghost" id="heroLogout" type="button" title="退出当前账号，返回登录页">退出登录</button>
       </div>
       <div class="pulse"></div>
       <div class="card-h">
@@ -737,6 +826,19 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false">
     <span class="dot"></span>问问这份报告
   </button>
+</div>
+
+<!-- 账户 / 管理台：全屏浮层。内容按角色渲染——
+     user 看到自己的配额与申请，admin 看到访问看板、审批与账号管理。 -->
+<div class="ad-sheet" id="adSheet" hidden role="dialog" aria-modal="true" aria-label="账户与管理">
+  <div class="ad-head">
+    <h2 id="adTitle">UNDER<em>BOX</em></h2>
+    <span class="who" id="adWho"></span>
+    <span class="sp"></span>
+    <button class="ghost" id="adRefresh" type="button" title="重新拉取最新数据">刷新</button>
+    <button class="ghost" id="adClose" type="button" title="关闭（Esc）">关闭</button>
+  </div>
+  <div class="ad-body" id="adBody"></div>
 </div>
 
 <!-- 面板放在 dock 之外：dock 上有入场动画的 transform，会把后代的 position:fixed
@@ -2547,6 +2649,13 @@ window.fetch = async function(input, init = {}) {
     const data = await response.clone().json().catch(() => ({}));
     if (data.loginRequired && ACCOUNT) location.reload();
   }
+  // 配额用尽：网关拦下核验并给了 402。直接把"我的配额"面板推到眼前，
+  // 用户不用去猜为什么点不动。
+  if (response.status === 402) {
+    response.clone().json().catch(() => ({})).then(data => {
+      if (data.quotaExhausted && ACCOUNT && ACCOUNT.role !== 'admin') Sheet.open();
+    });
+  }
   return response;
 };
 
@@ -2558,8 +2667,28 @@ async function activateAccount(user, gate = true) {
   const label = ACCOUNT ? `当前用户：${ACCOUNT.name}` : '';
   $('accountBadge').textContent = label;
   $('heroAccountName').textContent = label;
+  renderQuota();
   await probeMode();
   await restoreReport();
+}
+
+/** 账户条上的配额胶囊与入口按钮。admin 看"管理台"，user 看剩余额度。 */
+function renderQuota() {
+  const q = ACCOUNT && ACCOUNT.quota;
+  const pill = $('heroQuota'), adminBtn = $('adminOpen'), mineBtn = $('acctOpen');
+  $('adminOpen').hidden = !ACCOUNT || ACCOUNT.role !== 'admin';
+  $('acctOpen').hidden = !ACCOUNT || ACCOUNT.role === 'admin';
+  if (!q) { pill.hidden = true; return; }
+  pill.hidden = false;
+  if (q.unlimited) {
+    pill.textContent = '额度不限';
+    pill.className = 'ad-pill admin';
+  } else {
+    // 余量低于两成转橙、用尽转红——和报告里的状态色区分开，这里只表达"快不够了"
+    const low = q.total > 0 ? Math.max(1, Math.round(q.total * 0.2)) : 1;
+    pill.textContent = `剩余 ${q.left} / ${q.total} 次`;
+    pill.className = 'ad-pill ' + (q.left <= 0 ? 'no' : q.left <= low ? 'wait' : 'ok');
+  }
 }
 
 const Gate = {
@@ -2597,14 +2726,16 @@ const Gate = {
   },
   async submit() {
     if ($('gateGo').disabled) return;
-    const pw = $('gatePw').value.trim();
-    if (!pw) return this.fail('请输入口令');
+    const username = $('gateUser').value.trim();
+    const pw = $('gatePw').value;
+    if (!username) { $('gateUser').focus(); return this.fail('请输入用户名'); }
+    if (!pw) { $('gatePw').focus(); return this.fail('请输入密码'); }
     const btn = $('gateGo'), txt = $('gateBtnTxt');
     btn.disabled = true; txt.textContent = '验证中…';
     try {
       const r = await fetch('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
+        body: JSON.stringify({ username, password: pw }),
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.ok) {
@@ -2612,12 +2743,199 @@ const Gate = {
         await activateAccount(d.user, d.gate !== false);
         return this.pass();
       }
-      this.fail(d.error || '口令不正确');
+      this.fail(d.error || '用户名或密码不正确');
     } catch {
       this.fail('连接失败，请检查网络后重试');
     } finally {
       btn.disabled = false; txt.textContent = '登录并进入核验台';
     }
+  },
+};
+
+/* ══ 配额 · 管理台 ═══════════════════════════════
+   一个浮层两种角色：user 看自己的额度与申请，admin 看访问看板、审批与账号管理。
+   页面上所有数字都来自 /api/*，前端不做任何推算。 */
+const Sheet = {
+  open() {
+    if (!ACCOUNT) return;
+    $('adSheet').hidden = false;
+    this.refresh();
+  },
+  close() { $('adSheet').hidden = true; },
+  async refresh() {
+    if (!ACCOUNT) return;
+    $('adWho').textContent = `${ACCOUNT.name}（${ACCOUNT.id}）`;
+    $('adTitle').innerHTML = ACCOUNT.role === 'admin'
+      ? 'UNDER<em>BOX</em> 管理台' : 'UNDER<em>BOX</em> 我的账户';
+    const body = $('adBody');
+    body.replaceChildren(el('p', { class: 'ad-empty', text: '正在载入…' }));
+    try {
+      const parts = ACCOUNT.role === 'admin' ? await this.adminView() : await this.mineView();
+      body.replaceChildren(...parts);
+    } catch (e) {
+      body.replaceChildren(el('p', { class: 'ad-empty', text: `载入失败：${e.message || e}` }));
+    }
+  },
+
+  // ── 小部件 ──────────────────────────────────────────────────────────
+  kpi(value, label) {
+    return el('div', { class: 'ad-kpi' }, el('b', { text: String(value) }), el('span', { text: label }));
+  },
+  card(title, note, ...kids) {
+    return el('div', { class: 'ad-card' },
+      el('h3', {}, el('span', { text: title }), note ? el('span', { class: 'n', text: note }) : null),
+      el('div', { class: 'bd' }, ...kids));
+  },
+  table(head, rows) {
+    return el('table', { class: 'ad-tbl' },
+      el('thead', {}, el('tr', {}, ...head.map(h => el('th', { text: h })))),
+      el('tbody', {}, ...rows));
+  },
+  act(label, fn, primary) {
+    const b = el('button', { class: primary ? 'ad-act primary' : 'ad-act', type: 'button', text: label });
+    b.addEventListener('click', () => fn(b));
+    return b;
+  },
+  mini(values) {
+    const max = Math.max(1, ...values);
+    return el('div', { class: 'ad-mini' }, ...values.map(v =>
+      el('i', { style: `height:${Math.max(2, Math.round(v / max * 46))}px`, title: String(v) })));
+  },
+  statusPill(status) {
+    const map = { approved: ['ok', '已批准'], rejected: ['no', '已拒绝'] };
+    const [cls, label] = map[status] || ['wait', '待审批'];
+    return el('span', { class: `ad-pill ${cls}`, text: label });
+  },
+  async api(method, path, data) {
+    const r = await fetch(path, {
+      method,
+      headers: data ? { 'Content-Type': 'application/json' } : undefined,
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  },
+
+  // ── 普通用户：我的配额 ──────────────────────────────────────────────
+  async mineView() {
+    const d = await this.api('GET', '/api/quota');
+    const q = d.user.quota, u = d.usage || {};
+    const out = [el('div', { class: 'ad-kpis' },
+      this.kpi(q.unlimited ? '不限' : q.left, '剩余核验次数'),
+      this.kpi(q.used, '累计已用'),
+      this.kpi(u.runs || 0, '近 30 天核验'),
+      this.kpi(`¥${Number(u.yuan || 0).toFixed(2)}`, '近 30 天用量'))];
+
+    if (!q.unlimited) {
+      const pct = q.total > 0 ? Math.min(100, Math.round(q.used / q.total * 100)) : 0;
+      out.push(this.card('配额使用', `${q.used} / ${q.total} 次`,
+        el('div', { class: 'ad-bar' }, el('i', { style: `width:${pct}%` })),
+        el('p', { class: 'ad-note', text: '每次核验消耗 1 次额度；拆分陈述与问答不消耗额度。' })));
+    }
+
+    const amount = el('input', { class: 'ad-in', type: 'number', min: '1', max: '1000',
+                                 value: '20', style: 'max-width:130px' });
+    const reason = el('input', { class: 'ad-in', type: 'text', placeholder: '用途说明（可选）',
+                                 style: 'flex:1;min-width:170px' });
+    out.push(this.card('申请更多额度', '',
+      el('div', { class: 'ad-inline' }, amount, reason,
+        this.act('提交申请', async btn => {
+          btn.disabled = true;
+          try {
+            await this.api('POST', '/api/quota/request',
+                           { amount: Number(amount.value), reason: reason.value.trim() });
+            btn.textContent = '已提交，等待审批';
+            setTimeout(() => this.refresh(), 600);
+          } catch (e) {
+            btn.disabled = false;
+            alert(`申请失败：${e.message}`);
+          }
+        }, true)),
+      el('p', { class: 'ad-note', text: '提交后由管理员审批，批准即刻生效。已有待审申请时不会重复提交。' })));
+
+    const rs = d.requests || [];
+    const reqTable = rs.length ? this.table(
+      ['提交时间', '申请次数', '状态', '审批时间', '备注'],
+      rs.map(r => el('tr', {},
+        el('td', { class: 'num', text: r.created_at }),
+        el('td', { class: 'num', text: `+${r.amount}` }),
+        el('td', {}, this.statusPill(r.status)),
+        el('td', { class: 'num', text: r.decided_at || '—' }),
+        el('td', { class: 'wide', text: r.note || r.reason || '—' })))
+    ) : el('p', { class: 'ad-empty', text: '还没有提交过申请。' });
+    out.push(this.card('我的申请', `${rs.length} 条`, reqTable));
+    return out;
+  },
+
+  // ── 管理员：数据看板 + 审批 + 账号 ──────────────────────────────────
+  async adminView() {
+    const d = await this.api('GET', '/api/admin/overview');
+    const a = d.access || {};
+    const out = [el('div', { class: 'ad-kpis' },
+      this.kpi(a.total_views || 0, '总访问量'),
+      this.kpi(a.today_views || 0, '今日访问'),
+      this.kpi(a.unique_ips || 0, '今日独立 IP'),
+      this.kpi(a.online || 0, '在线会话'),
+      this.kpi(d.pending || 0, '待审批申请'))];
+
+    const trend = a.trend || [];
+    out.push(this.card('最近 14 天访问量', `合计 ${trend.reduce((s, t) => s + t.views, 0)} 次`,
+      this.mini(trend.map(t => t.views)),
+      el('p', { class: 'ad-note', text: `${trend[0]?.day || ''} 起，柱高表示当天访问次数。` })));
+
+    const usage = d.usage || [];
+    out.push(this.card('最近 14 天核验量', `合计 ${usage.reduce((s, t) => s + t.runs, 0)} 次`,
+      this.mini(usage.map(t => t.runs))));
+
+    const reqs = d.requests || [];
+    const reqTable = reqs.length ? this.table(
+      ['申请人', '申请次数', '理由', '提交时间', '操作'],
+      reqs.map(r => el('tr', {},
+        el('td', { text: r.user_name || r.user_id }),
+        el('td', { class: 'num', text: `+${r.amount}` }),
+        el('td', { class: 'wide', text: r.reason || '—' }),
+        el('td', { class: 'num', text: r.created_at }),
+        el('td', {}, this.act('批准', () => this.decide(r.id, true), true), ' ',
+                    this.act('拒绝', () => this.decide(r.id, false)))))
+    ) : el('p', { class: 'ad-empty', text: '没有待审批的申请。' });
+    out.push(this.card('待审批的配额申请', `${reqs.length} 条`, reqTable));
+
+    const users = d.users || [];
+    out.push(this.card('账号与配额', `${users.length} 个`, this.table(
+      ['账号', '姓名', '角色', '配额', '已用', '30 天核验', '30 天用量', '最近活动', ''],
+      users.map(u => el('tr', {},
+        el('td', {}, el('b', { text: u.id })),
+        el('td', { text: u.name }),
+        el('td', {}, el('span', { class: `ad-pill${u.role === 'admin' ? ' admin' : ''}`,
+                                  text: u.role === 'admin' ? '管理员' : '用户' })),
+        el('td', { class: 'num', text: u.quota_total < 0 ? '不限' : u.quota_total }),
+        el('td', { class: 'num', text: u.quota_used }),
+        el('td', { class: 'num', text: u.runs || 0 }),
+        el('td', { class: 'num', text: `¥${Number(u.yuan || 0).toFixed(2)}` }),
+        el('td', { class: 'num', text: u.last_at || '—' }),
+        el('td', {}, this.act('调配额', () => this.setQuota(u)))))
+    ), el('p', { class: 'ad-note', text: '配额为 -1 表示不限额（管理员默认不限额）。' })));
+    return out;
+  },
+
+  async decide(id, approve) {
+    try {
+      await this.api('POST', '/api/admin/decide',
+                     { id, approve, note: approve ? '批准' : '拒绝' });
+      this.refresh();
+    } catch (e) { alert(`操作失败：${e.message}`); }
+  },
+  async setQuota(u) {
+    const cur = u.quota_total < 0 ? -1 : u.quota_total;
+    const raw = prompt(`把「${u.name}」的配额设为多少次？（填 -1 表示不限额）`, String(cur));
+    if (raw === null) return;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < -1) return alert('请输入 -1 或非负整数');
+    try {
+      await this.api('POST', '/api/admin/quota', { userId: u.id, total: n });
+      this.refresh();
+    } catch (e) { alert(`设置失败：${e.message}`); }
   },
 };
 
@@ -2685,6 +3003,13 @@ async function logoutAccount() {
 }
 $('logoutBtn').addEventListener('click', logoutAccount);
 $('heroLogout').addEventListener('click', logoutAccount);
+$('acctOpen').addEventListener('click', () => Sheet.open());
+$('adminOpen').addEventListener('click', () => Sheet.open());
+$('adClose').addEventListener('click', () => Sheet.close());
+$('adRefresh').addEventListener('click', () => Sheet.refresh());
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('adSheet').hidden) Sheet.close();
+});
 
 /* 先确认服务端会话，再读取当前用户的报告和服务状态。 */
 (async () => {

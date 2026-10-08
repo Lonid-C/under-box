@@ -579,15 +579,63 @@ STATUS_CN = {"ok": "已证实", "part": "部分证实", "ask": "待澄清",
 
 # ── HTTP ─────────────────────────────────────────────────────────────────
 
+# ── 每用户状态 ────────────────────────────────────────────────────────────
+# 网关模式下所有用户共享**同一个**工作进程（13 个独立进程会 OOM），
+# 所以"最近一次报告 / 画像 / 台账"必须按人分存——否则 A 刷新会看到 B 的报告。
+# 身份来自网关转发的 X-Underbox-User；单机模式没有这个头，统一落到 'local'。
+_STATE_LOCK = threading.Lock()
+_STATES: dict[str, dict] = {}
+
+
+def user_state(user_id: str) -> dict:
+    with _STATE_LOCK:
+        return _STATES.setdefault(user_id, {"presentation": None, "oby": None, "profile": None})
+
+
+def record_gateway_usage(kind: str, ev: dict, user_id: str) -> None:
+    """网关模式下，把这一次任务的用量写进库；核验成功再消耗一次配额。
+
+    user_id 由调用方从请求头取（共享进程里没有 UNDERBOX_USER_ID 这个环境变量了）。
+    只有被网关拉起的工作进程才会设 UNDERBOX_GATEWAY_WORKER —— 单机模式没有它，直接返回。
+    （注意别拿 UNDERBOX_GATEWAY_DB 当开关：那是"我是网关"的标记，用在这里会递归。）
+
+    记账失败绝不能让核验结果丢掉，所以整段吞异常，只打一行日志。
+    """
+    if not os.environ.get("UNDERBOX_GATEWAY_WORKER"):
+        return
+    db = os.environ.get("UNDERBOX_DB")
+    if not user_id or user_id == "local" or not db:
+        return
+    try:
+        import store                                     # noqa: PLC0415  只有网关模式需要
+        report = ev.get("report")
+        claims = len(report.get("claims") or []) if isinstance(report, dict) else 0
+        ok = not ev.get("failed") and (kind != "verify" or isinstance(report, dict))
+        with store.connect(db) as conn:
+            store.record_usage(conn, user_id, kind=kind or "task", claims=claims,
+                               seconds=float(ev.get("seconds") or 0),
+                               usage=ev.get("usage"), ok=ok)
+            if kind == "verify" and ok:
+                store.consume_quota(conn, user_id)
+            conn.commit()
+    except Exception as exc:                              # noqa: BLE001
+        print(f"[usage] 记账失败（不影响核验结果）：{exc}", file=sys.stderr, flush=True)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "underbox"
 
-    # 最近一次**真实核验**的结果。/api/verify 写入，其余端点读取。
+    # 最近一次**真实核验**的结果放在 user_state() 里按用户分存（见模块顶部说明）：
+    # 网关模式下多人共享这一个进程，类属性会被互相覆盖。
     # 页面本身不预置任何数据——没有核验就没有报告。
-    oby_report: object | None = None        # open_box 的 Report 对象（对话材料、检索计划用）
-    last_presentation: dict | None = None   # 网页端形状（导出用）
-    resume_profile: object | None = None    # 画像（检索计划必须用同一份，重新派生会漂移）
+
+    def uid(self) -> str:
+        """这次请求属于谁。网关转发时带 X-Underbox-User；单机模式没有，算 'local'。"""
+        return (self.headers.get("X-Underbox-User") or "local").strip() or "local"
+
+    def _st(self) -> dict:
+        return user_state(self.uid())
 
     def log_message(self, fmt, *args):        # 安静一点，只留自己的日志
         pass
@@ -680,12 +728,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "缺少 token：先上传简历拆分条目"}, 400)
             if not ids:
                 return self._json({"error": "没有勾选要核验的条目"}, 400)
-            return self._sse(run_verify_selected_job, (token, ids))
+            return self._sse(run_verify_selected_job, (token, ids), kind="verify")
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
         fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
-        return self._sse(run_verify_job, (data, fname))
+        return self._sse(run_verify_job, (data, fname), kind="verify")
 
     def _split_stream(self) -> None:
         """流式拆分（SSE）：上传简历 → 解析、画像、拆成陈述，结束时给出陈述清单与 token。不检索。
@@ -696,15 +744,18 @@ class Handler(BaseHTTPRequestHandler):
             url = str(self._read_json().get("url") or "").strip()
             if not url:
                 return self._json({"error": "请粘贴个人主页的网址"}, 400)
-            return self._sse(run_split_url_job, (url,))
+            return self._sse(run_split_url_job, (url,), kind="split")
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
         fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
-        return self._sse(run_split_job, (data, fname))
+        return self._sse(run_split_job, (data, fname), kind="split")
 
-    def _sse(self, target, args: tuple) -> None:
-        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。"""
+    def _sse(self, target, args: tuple, kind: str = "") -> None:
+        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。
+
+        kind 供网关模式记账用：verify 完成后消耗一次配额，split / 其余只记用量不扣。
+        """
         from app.usage import METER                       # noqa: PLC0415
         events: queue.Queue = queue.Queue()
         holder: dict = {}
@@ -736,12 +787,14 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 if ev.get("done"):
                     ev["usage"] = METER.since(base)
+                    record_gateway_usage(kind, ev, self.uid())   # 写流水；核验成功再扣一次配额
                 push(ev)
                 if ev.get("done"):
-                    if "report" in ev:               # 存到**类**上（实例随请求销毁）
-                        Handler.last_presentation = ev["report"]
-                        Handler.oby_report = holder.get("oby")
-                        Handler.resume_profile = holder.get("profile")
+                    if "report" in ev:               # 存到**该用户**名下（实例随请求销毁）
+                        st = self._st()
+                        st["presentation"] = ev["report"]
+                        st["oby"] = holder.get("oby")
+                        st["profile"] = holder.get("profile")
                     break
         except (BrokenPipeError, ConnectionResetError):
             pass                                     # 用户关了页面 / 中断了连接
@@ -764,14 +817,14 @@ class Handler(BaseHTTPRequestHandler):
                 "chat": True,
                 "llmConfigured": _llm_ready(),
                 "searchConfigured": _search_configured(),
-                "hasReport": self.last_presentation is not None,
+                "hasReport": self._st()["presentation"] is not None,
                 "model": "deepseek-flash",
             })
         if path == "/api/report":
             # 页面刷新后把最近一次真实报告交还——不然用户一刷新就"丢"了报告
-            if self.last_presentation is None:
+            if self._st()["presentation"] is None:
                 return self._json({"error": "还没有核验任何简历"}, 404)
-            return self._json({"report": self.last_presentation})
+            return self._json({"report": self._st()["presentation"]})
         if path == "/api/export":
             fmt = (self.path.split("?", 1)[1] if "?" in self.path else "").lower()
             return self.do_GET_export("md" if "md" in fmt else "json")
@@ -810,13 +863,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "问题不能为空"}, 400)
         if len(question) > 2000:
             return self._json({"error": "问题太长了（上限 2000 字）"}, 400)
-        if self.oby_report is None:
+        if self._st()["oby"] is None:
             return self._json({"error": "还没有核验任何简历——先上传一份，问答才有材料"}, 409)
 
         # 材料整理必须放在**发响应头之前**并兜住异常：一旦头发出去了再崩，
         # 浏览器只会看到无声断连（"Failed to fetch"），永远不知道服务端发生了什么。
         try:
-            material = render_material(self.oby_report)
+            material = render_material(self._st()["oby"])
         except Exception as exc:
             return self._json({"error": f"整理对话材料失败：{type(exc).__name__}: {exc}"}, 500)
 
@@ -852,14 +905,14 @@ class Handler(BaseHTTPRequestHandler):
         from app.plan import plan_with_notes               # noqa: PLC0415
         payload = self._read_json()
         cid = payload.get("claimId") or ""
-        rep = self.oby_report
+        rep = self._st()["oby"]
         if rep is None:
             return self._json({"error": "还没有核验任何简历"}, 409)
         vc = next((v for v in rep.claims if v.claim.id == cid), None)
         if vc is None:
             return self._json({"error": f"报告里没有 {cid}"}, 404)
         cats = [v.claim.category for v in rep.claims]
-        plan = plan_with_notes(vc.claim, rep.candidate_name, self.resume_profile, cats)
+        plan = plan_with_notes(vc.claim, rep.candidate_name, self._st()["profile"], cats)
         return self._json({
             "claimId": cid,
             "strategy": {"id": plan.profile_id, "name": plan.profile_name},
@@ -872,7 +925,7 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def do_GET_export(self, fmt: str) -> None:      # noqa: N802
-        rep = self.last_presentation
+        rep = self._st()["presentation"]
         if rep is None:
             return self._json({"error": "还没有核验任何简历"}, 409)
         no = re.sub(r"[^\w.-]", "", rep.get("reportNo") or "report") or "report"
@@ -896,10 +949,12 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8787)
     args = ap.parse_args()
 
-    accounts_file = os.environ.get("UNDERBOX_ACCOUNTS_FILE")
-    if accounts_file:
+    # 网关模式：本进程只做账号/权限/配额，真正的核验交给每个用户自己的工作进程。
+    # 变量名从 UNDERBOX_ACCOUNTS_FILE 换成 UNDERBOX_GATEWAY_DB——取值由 JSON 文件变成了 SQLite 库。
+    gateway_db = os.environ.get("UNDERBOX_GATEWAY_DB")
+    if gateway_db:
         from accounts import serve_accounts
-        return serve_accounts(Handler, accounts_file, args.host, args.port)
+        return serve_accounts(Handler, gateway_db, args.host, args.port)
 
     print(f"underbox  http://{args.host}:{args.port}/", flush=True)
     print(f"  模型     {'deepseek-flash' if _llm_ready() else '⚠ 未配置 DEEPSEEK_API_KEY'}", flush=True)

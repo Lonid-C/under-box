@@ -1,16 +1,25 @@
-"""口令登录网关；每位用户的流水线、密钥、报告、用量运行在独立进程。
+"""账户网关：用户名 + 密码登录、角色权限、API 配额与审批。
 
-UNDERBOX_ACCOUNTS_FILE 指定只读用户配置，密钥放在静态目录外的独立 .env。
-网关不运行核验，不在请求间改 os.environ。线程池沿用各自进程的环境。
+架构（沿用原有设计，只把"配置"换成"数据库"）：
+
+    浏览器 ──HTTPS/HTTP──> 网关(本文件) ──转发──> 每个用户一个独立工作进程
+                             │                      (serve.py，各自端口/env)
+                             └── SQLite(store.py): 账号·会话·配额·用量·申请·访问
+
+为什么仍然"每用户一个工作进程"：核验是分钟级的长任务，共用一个进程会让 A 的长核验
+把 B 卡住；而且报告存在进程内存里，共用会互相覆盖。隔离的代价是内存（本机 13 个
+进程约 600MB，服务器 3.7G 够用）。
+
+配额口径：一次**核验**（/api/verify/stream）算一次配额；拆分与问答只记用量不扣配额。
+  · 网关在转发核验请求**前**检查余额，不足直接 402 并提示申请；
+  · 由工作进程在核验**真正完成后**记账并扣减（见 serve.py），
+    这样"启动了但立刻失败"的请求不会白扣一次。
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import http.client
 import json
 import os
-import secrets
 import signal
 import socket
 import subprocess
@@ -18,189 +27,177 @@ import sys
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import store  # 同目录
+
 COOKIE = "ub_account"
-SESSION_SECONDS = 7 * 86400
 MAX_UPLOAD = 20 * 1024 * 1024
-
-
-def password_hash(password: str, salt: str | None = None) -> str:
-    salt = salt or secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 600000).hex()
-    return f"pbkdf2-sha256${salt}${digest}"
-
-
-def password_matches(password: str, encoded: str) -> bool:
-    try:
-        kind, salt, _ = encoded.split("$")
-        return kind == "pbkdf2-sha256" and hmac.compare_digest(password_hash(password, salt), encoded)
-    except (ValueError, TypeError):
-        return False
-
-
-@dataclass(frozen=True)
-class Account:
-    id: str
-    name: str
-    password_hash: str
-    env_file: Path
-    port: int
-
-    def public(self) -> dict:
-        return {"id": self.id, "name": self.name}
+VERIFY_PATHS = ("/api/verify/stream",)          # 扣配额的路由
+ACCESS_SKIP = (".css", ".js", ".png", ".jpg", ".svg", ".ico", ".woff2", ".pdf")
 
 
 class Accounts:
-    def __init__(self, path: str | Path):
-        path = Path(path).resolve()
-        data = json.loads(path.read_text())
-        self.users = []
-        for item in data["users"]:
-            env_file = Path(item["env_file"])
-            if not env_file.is_absolute():
-                env_file = path.parent / env_file
-            user = Account(item["id"], item["name"], item["password_hash"],
-                           env_file.resolve(), int(item["port"]))
-            if not user.env_file.is_file() or not 1024 <= user.port <= 65535:
-                raise ValueError(f"用户配置不可用：{user.id}")
-            if any(u.id == user.id or u.port == user.port for u in self.users):
-                raise ValueError("用户标识与工作端口必须唯一")
-            self.users.append(user)
-        if not self.users:
-            raise ValueError("必须配置至少一个用户")
-        self.sessions: dict[str, tuple[Account, float]] = {}
+    """账号与会话。真正的存储都在 SQLite，这里只做业务判断。"""
+
+    def __init__(self, db: str | Path | None = None):
+        self.path = store.init(db)
         self.attempts: dict[str, deque] = {}
         self.lock = threading.Lock()
 
-    def authenticate(self, password: str) -> Account | None:
-        for user in self.users:
-            if password_matches(password, user.password_hash):
-                return user
-        return None
-
-    def session(self, token: str) -> Account | None:
-        with self.lock:
-            item = self.sessions.get(token)
-            if not item:
+    # -- 登录 ---------------------------------------------------------------
+    def authenticate(self, username: str, password: str):
+        """用户名 + 密码。用户名大小写不敏感（输错大小写很常见）。"""
+        with store.connect(self.path) as conn:
+            row = conn.execute("SELECT * FROM users WHERE lower(id) = lower(?)",
+                               (username.strip(),)).fetchone()
+            if row is None or not row["enabled"]:
                 return None
-            user, expires = item
-            if expires <= time.time():
-                self.sessions.pop(token, None)
+            if not store.password_matches(password, row["password_hash"]):
                 return None
-            return user
+            return dict(row)
 
-    def login(self, user: Account, previous: str = "") -> str:
-        with self.lock:
-            now = time.time()
-            self.sessions = {k: v for k, v in self.sessions.items() if v[1] > now}
-            self.sessions.pop(previous, None)
-            if len(self.sessions) >= 10000:
-                self.sessions.pop(next(iter(self.sessions)))
-            token = secrets.token_urlsafe(32)
-            self.sessions[token] = (user, now + SESSION_SECONDS)
-            return token
+    def login(self, user_id: str, *, ip: str = "", ua: str = "") -> str:
+        with store.connect(self.path) as conn:
+            token = store.create_session(conn, user_id, ip=ip, ua=ua)
+            store.touch_login(conn, user_id)
+            conn.commit()
+        return token
+
+    def session(self, token: str):
+        if not token:
+            return None
+        with store.connect(self.path) as conn:
+            row = store.session_user(conn, token)
+            return dict(row) if row else None
 
     def logout(self, token: str) -> None:
-        with self.lock:
-            self.sessions.pop(token, None)
+        with store.connect(self.path) as conn:
+            store.delete_session(conn, token)
+            conn.commit()
 
+    # -- 登录限速（内存即可，重启清零无妨）----------------------------------
     def allow_attempt(self, ip: str) -> bool:
         with self.lock:
             now = time.monotonic()
             self.attempts = {k: v for k, v in self.attempts.items() if v and v[-1] > now - 60}
-            attempts = self.attempts.setdefault(ip, deque())
-            while attempts and attempts[0] <= now - 60:
-                attempts.popleft()
-            if len(attempts) >= 10:
+            q = self.attempts.setdefault(ip, deque())
+            while q and q[0] <= now - 60:
+                q.popleft()
+            if len(q) >= 10:
                 return False
-            attempts.append(now)
+            q.append(now)
             return True
 
 
 class Workers:
-    def __init__(self, accounts: Accounts, script: Path):
-        self.accounts, self.script = accounts, script
-        self.processes: dict[str, subprocess.Popen] = {}
+    """所有用户**共享一个**工作进程；挂了自动拉起。
+
+    原设计是"每用户一个进程"（密钥隔离 + 故障隔离）。但实测在 3.7G 内存的机器上，
+    13 个解释器会被 OOM killer 连锅端掉——systemd 再拉起，又 OOM，load average
+    冲到 500+，连 SSH 都连不上。而这些账号的密钥本来就来自同一份 env 文件，
+    真正要防的是"报告与画像串台"，那在 serve.py 里按请求头 X-Underbox-User
+    分存就够了，不需要多进程。
+
+    代价：一个人跑长核验时其他人要排队（原来是进程间并行）。13 人的内部工具，
+    这笔取舍划算——先保证机器活着。
+    """
+
+    def __init__(self, accounts: Accounts, script: Path, port: int = 8788):
+        self.accounts, self.script, self.port = accounts, script, port
+        self.process: subprocess.Popen | None = None
         self.stopping = threading.Event()
 
-    def environment(self, user: Account) -> dict:
-        # 不继承网关中 app.__init__ 可能加载的默认密钥和业务参数。
-        # 每个用户完整读取自己的 env，空缺字段沿用程序默认值。
+    def _env_file(self) -> Path:
+        with store.connect(self.accounts.path) as conn:
+            row = conn.execute(
+                "SELECT env_file FROM users WHERE enabled = 1 AND env_file IS NOT NULL "
+                "ORDER BY id LIMIT 1").fetchone()
+        if row is None:
+            raise ValueError("没有任何启用中的用户，拿不到可用的密钥文件")
+        return Path(row["env_file"])
+
+    def environment(self) -> dict:
+        # 不继承网关里可能加载的默认密钥；整份读用户的 env 文件。
         from app.env import parse_env_text
+        env_file = self._env_file()
         env = {k: v for k, v in os.environ.items()
                if k in {"PATH", "HOME", "LANG", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR"}
                or k.startswith("LC_")}
-        env.update(parse_env_text(user.env_file.read_text()))
-        env.update(UNDERBOX_ENV_FILE=str(user.env_file), UNDERBOX_PASSWORD="",
-                   UNDERBOX_USER_ID=user.id, UNDERBOX_USER_NAME=user.name,
-                   OPEN_BOX_ROOT=str(self.script.parent.parent / "open_box"),
-                   PYTHONUNBUFFERED="1", MODE="live")
-        # 用户 env 不能将工作进程再次变成网关。
+        env.update(parse_env_text(env_file.read_text()))
+        env.update(
+            UNDERBOX_ENV_FILE=str(env_file),
+            UNDERBOX_PASSWORD="",                    # 单实例口令门禁已由本网关取代
+            # ⚠ 这里**绝对不能**设 UNDERBOX_GATEWAY_DB —— serve.py 用那个变量判断
+            # "我自己是不是网关"，设了就递归启动下一层网关（曾经因此 13 个用户
+            # 变成 26+ 个进程，把 3.7G 内存撑爆、被 OOM killer 连锅端）。
+            # 工作进程只需要这两样：库在哪、以及"该记账"这个标记。
+            UNDERBOX_DB=str(self.accounts.path),
+            UNDERBOX_GATEWAY_WORKER="1",
+            OPEN_BOX_ROOT=str(self.script.parent.parent / "open_box"),
+            PYTHONUNBUFFERED="1", MODE="live")
         env.pop("UNDERBOX_ACCOUNTS_FILE", None)
+        # 共享进程不预设身份：每个请求由网关带上 X-Underbox-User，
+        # serve.py 据此分存报告/画像，也据此记账。
+        env.pop("UNDERBOX_USER_ID", None)
+        env.pop("UNDERBOX_USER_NAME", None)
         if not (env.get("SEARCH_API_KEY") or env.get("BRAVE_SEARCH_API_KEY")):
-            raise ValueError(f"用户缺少搜索配置：{user.id}")
+            raise ValueError("缺少搜索配置")
         if not (env.get("DEEPSEEK_API_KEY") or env.get("LLM_API_KEY") or env.get("ZHIPU_API_KEY")):
-            raise ValueError(f"用户缺少模型配置：{user.id}")
+            raise ValueError("缺少模型配置")
         return env
 
-    def launch(self, user: Account) -> None:
-        self.processes[user.id] = subprocess.Popen(
-            [sys.executable, str(self.script), "--host", "127.0.0.1", "--port", str(user.port)],
-            cwd=self.script.parent, env=self.environment(user))
+    def launch(self) -> None:
+        self.process = subprocess.Popen(
+            [sys.executable, str(self.script), "--host", "127.0.0.1", "--port", str(self.port)],
+            cwd=self.script.parent, env=self.environment())
 
     def start(self) -> None:
-        for user in self.accounts.users:
-            # 端口被占用时失败，不能代理到不属于该用户的旧进程。
-            with socket.socket() as probe:
-                # 与 HTTPServer 一样允许复用已关闭连接的 TIME_WAIT 端口。
-                # 活跃的监听进程仍会使 bind 失败，不能放宽用户进程隔离。
-                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                probe.bind(("127.0.0.1", user.port))
-            self.environment(user)
-        for user in self.accounts.users:
-            self.launch(user)
-        deadline = time.monotonic() + 20
-        for user in self.accounts.users:
-            while True:
-                if self.processes[user.id].poll() is not None:
-                    raise RuntimeError(f"用户工作进程启动失败：{user.id}")
-                try:
-                    with socket.create_connection(("127.0.0.1", user.port), timeout=.3):
-                        break
-                except OSError:
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError("用户工作进程启动超时")
-                    self.stopping.wait(.1)
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(("127.0.0.1", self.port))
+        self.environment()                       # 缺密钥就在这里失败，别等进程起来
+        self.launch()
+        deadline = time.monotonic() + 60
+        while True:
+            if self.process.poll() is not None:
+                raise RuntimeError("工作进程启动失败")
+            try:
+                with socket.create_connection(("127.0.0.1", self.port), timeout=.3):
+                    break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("工作进程启动超时")
+                self.stopping.wait(.1)
         threading.Thread(target=self.supervise, daemon=True).start()
 
     def supervise(self) -> None:
         while not self.stopping.wait(3):
-            for user in self.accounts.users:
-                if self.processes[user.id].poll() is not None:
-                    print(f"重新启动用户工作进程：{user.id}", flush=True)
-                    self.launch(user)
+            if self.process and self.process.poll() is not None:
+                print("重新启动工作进程", flush=True)
+                self.launch()
 
     def stop(self) -> None:
         self.stopping.set()
-        for proc in self.processes.values():
-            if proc.poll() is None:
-                proc.terminate()
-        for proc in self.processes.values():
+        if self.process and self.process.poll() is None:
+            self.process.terminate()
             try:
-                proc.wait(timeout=5)
+                self.process.wait(timeout=8)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                self.process.kill()
+                self.process.wait()
 
 
-def account_handler(base, accounts: Accounts):
+def account_handler(base, accounts: Accounts, worker_port: int):
     class Gateway(base):
-        def user(self) -> Account | None:
+        # -- 身份 ----------------------------------------------------------
+        def user(self) -> dict | None:
             return accounts.session(self._cookie(COOKIE))
+
+        def _is_admin(self, user: dict | None) -> bool:
+            return bool(user and user.get("role") == "admin")
 
         def _same_origin(self) -> bool:
             origin = self.headers.get("Origin")
@@ -212,7 +209,8 @@ def account_handler(base, accounts: Accounts):
 
         def _cookie_header(self, value: str, age: int) -> dict:
             secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
-            return {"Set-Cookie": f"{COOKIE}={value}; Path=/; Max-Age={age}; HttpOnly; SameSite=Strict{secure}"}
+            return {"Set-Cookie": f"{COOKIE}={value}; Path=/; Max-Age={age}; "
+                                  f"HttpOnly; SameSite=Strict{secure}"}
 
         def _body(self, limit: int = MAX_UPLOAD) -> bytes | None:
             try:
@@ -225,28 +223,66 @@ def account_handler(base, accounts: Accounts):
                 return None
             return self.rfile.read(n)
 
-        def _login(self) -> None:
-            if not self._same_origin():
-                return
-            raw = self._body(4096)
+        def _payload(self, limit: int = 65536) -> dict:
+            raw = self._body(limit)
             if raw is None:
-                return
+                return {}
+            try:
+                data = json.loads(raw or b"{}")
+                return data if isinstance(data, dict) else {}
+            except (ValueError, AttributeError):
+                return {}
+
+        def _client_ip(self) -> str:
             ip = self.client_address[0]
             if ip == "127.0.0.1":
                 ip = self.headers.get("X-Real-IP") or ip
-            if not accounts.allow_attempt(ip):
-                return self._json({"error": "尝试次数过多，请一分钟后重试"}, 429)
+            return ip
+
+        def _public(self, user: dict) -> dict:
+            """交给前端的账号信息。不含密码哈希，只带该角色该看的字段。"""
+            total, used = int(user.get("quota_total") or 0), int(user.get("quota_used") or 0)
+            return {
+                "id": user["id"], "name": user["name"], "role": user.get("role", "user"),
+                "quota": {"total": total, "used": used,
+                          "left": -1 if total < 0 else max(0, total - used),
+                          "unlimited": total < 0},
+            }
+
+        def _log_access(self, user_id: str | None, status: int) -> None:
+            path = self.path.split("?", 1)[0]
+            if path.endswith(ACCESS_SKIP):
+                return
             try:
-                payload = json.loads(raw)
-                password = str(payload.get("password") or "").strip()
-            except (ValueError, AttributeError):
-                password = ""
-            user = accounts.authenticate(password) if password and len(password) <= 256 else None
+                with store.connect(accounts.path) as conn:
+                    store.record_access(conn, user_id=user_id, ip=self._client_ip(),
+                                        method=self.command, path=path, status=status)
+                    conn.commit()
+            except Exception:
+                pass                     # 统计绝不能影响正常请求
+
+        # -- 登录 / 登出 ----------------------------------------------------
+        def _login(self) -> None:
+            if not self._same_origin():
+                return
+            data = self._payload(4096)
+            ip = self._client_ip()
+            if not accounts.allow_attempt(ip):
+                self._log_access(None, 429)
+                return self._json({"error": "尝试次数过多，请一分钟后重试"}, 429)
+            username = str(data.get("username") or "").strip()
+            password = str(data.get("password") or "")
+            if not username or not password or len(password) > 256 or len(username) > 64:
+                self._log_access(None, 401)
+                return self._json({"ok": False, "error": "请输入用户名与密码"}, 401)
+            user = accounts.authenticate(username, password)
             if user is None:
-                return self._json({"ok": False, "error": "口令不正确"}, 401)
-            token = accounts.login(user, self._cookie(COOKIE))
-            return self._json({"ok": True, "gate": True, "user": user.public()},
-                              headers=self._cookie_header(token, SESSION_SECONDS))
+                self._log_access(None, 401)
+                return self._json({"ok": False, "error": "用户名或密码不正确"}, 401)
+            token = accounts.login(user["id"], ip=ip, ua=self.headers.get("User-Agent", ""))
+            self._log_access(user["id"], 200)
+            return self._json({"ok": True, "gate": True, "user": self._public(user)},
+                              headers=self._cookie_header(token, 7 * 86400))
 
         def _logout(self) -> None:
             if not self._same_origin():
@@ -256,17 +292,136 @@ def account_handler(base, accounts: Accounts):
             accounts.logout(self._cookie(COOKIE))
             return self._json({"ok": True}, headers=self._cookie_header("", 0))
 
-        def _forward(self, user: Account) -> None:
+        # -- 用户自己的配额与申请 -------------------------------------------
+        def _quota(self, user: dict) -> None:
+            with store.connect(accounts.path) as conn:
+                stats = store.user_usage(conn, user["id"], days=30)
+                mine = [dict(r) for r in conn.execute(
+                    "SELECT id, amount, reason, status, created_at, decided_at, note "
+                    "FROM quota_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+                    (user["id"],))]
+            return self._json({"user": self._public(user), "usage": stats, "requests": mine})
+
+        def _quota_request(self, user: dict) -> None:
+            data = self._payload(8192)
+            try:
+                amount = int(data.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0
+            if not 1 <= amount <= 1000:
+                return self._json({"error": "申请次数需在 1–1000 之间"}, 400)
+            reason = str(data.get("reason") or "").strip()
+            with store.connect(accounts.path) as conn:
+                req = store.create_request(conn, user["id"], amount, reason)
+                conn.commit()
+            return self._json({"ok": True, "id": req, "message": "申请已提交，等待管理员审批"})
+
+        # -- 管理员 ---------------------------------------------------------
+        def _admin(self, user: dict) -> None:
+            """所有 /api/admin/* 的唯一入口。先验角色，再分发。"""
+            path = self.path.split("?", 1)[0]
+            with store.connect(accounts.path) as conn:
+                if path == "/api/admin/overview" and self.command == "GET":
+                    fresh = store.get_user(conn, user["id"])
+                    data = {
+                        "access": store.access_summary(conn, days=14),
+                        "usage": store.usage_daily(conn, days=14),
+                        "users": store.usage_by_user(conn, days=30),
+                        "pending": store.pending_count(conn),
+                        "requests": store.list_requests(conn, "pending"),
+                    }
+                    return self._json({**data, "me": self._public(dict(fresh or user))})
+
+                if path == "/api/admin/users" and self.command == "GET":
+                    return self._json({"users": [
+                        {**self._public(dict(r)),
+                         "enabled": bool(r["enabled"]),
+                         "last_login_at": r["last_login_at"]}
+                        for r in store.list_users(conn)]})
+
+                if path == "/api/admin/requests" and self.command == "GET":
+                    return self._json({"requests": store.list_requests(conn, None, 200)})
+
+                if self.command != "POST":
+                    return self._json({"error": "not found"}, 404)
+                data = self._payload()
+
+                if path == "/api/admin/quota":
+                    target = str(data.get("userId") or "")
+                    if store.get_user(conn, target) is None:
+                        return self._json({"error": "账号不存在"}, 404)
+                    try:
+                        total = int(data.get("total"))
+                    except (TypeError, ValueError):
+                        return self._json({"error": "配额必须是整数（-1 表示不限）"}, 400)
+                    store.set_quota(conn, target, total)
+                    conn.commit()
+                    return self._json({"ok": True, "user": self._public(dict(store.get_user(conn, target)))})
+
+                if path == "/api/admin/decide":
+                    try:
+                        rid = int(data.get("id"))
+                    except (TypeError, ValueError):
+                        return self._json({"error": "缺少申请编号"}, 400)
+                    ok = store.decide_request(conn, rid, approve=bool(data.get("approve")),
+                                              admin_id=user["id"], note=str(data.get("note") or ""))
+                    conn.commit()
+                    if not ok:
+                        return self._json({"error": "该申请已被处理过"}, 409)
+                    return self._json({"ok": True, "pending": store.pending_count(conn)})
+
+                if path == "/api/admin/user":
+                    target = str(data.get("userId") or "")
+                    row = store.get_user(conn, target)
+                    if row is None:
+                        return self._json({"error": "账号不存在"}, 404)
+                    if target == user["id"] and ("enabled" in data and not data["enabled"]
+                                                 or "password" in data):
+                        return self._json({"error": "不能停用或改自己的密码，请让另一位管理员操作"}, 400)
+                    if "enabled" in data:
+                        store.set_enabled(conn, target, bool(data["enabled"]))
+                        if not data["enabled"]:
+                            conn.execute("DELETE FROM sessions WHERE user_id = ?", (target,))
+                    if data.get("password"):
+                        if len(str(data["password"])) < 8:
+                            return self._json({"error": "新密码至少 8 位"}, 400)
+                        store.set_password(conn, target, str(data["password"]))
+                    if data.get("role") in ("admin", "user"):
+                        if target == user["id"] and data["role"] != "admin":
+                            return self._json({"error": "不能取消自己的管理员身份"}, 400)
+                        conn.execute("UPDATE users SET role = ? WHERE id = ?", (data["role"], target))
+                    conn.commit()
+                    return self._json({"ok": True})
+
+                return self._json({"error": "not found"}, 404)
+
+        # -- 转发到该用户的工作进程 -----------------------------------------
+        def _quota_left(self, user: dict) -> bool:
+            if user.get("role") == "admin":
+                return True
+            total = int(user.get("quota_total") or 0)
+            return total < 0 or int(user.get("quota_used") or 0) < total
+
+        def _forward(self, user: dict) -> None:
             expected = self.headers.get("X-Underbox-User")
-            if expected and expected != user.id:
+            if expected and expected != user["id"]:
                 self.close_connection = True
                 return self._json({"error": "当前账户已切换，请重新载入页面",
                                    "accountChanged": True, "loginRequired": True}, 409)
+            path = self.path.split("?", 1)[0]
+            # 配额闸门放在这里：核验开始前就拦住，不让用户跑完才发现超额
+            if self.command == "POST" and path in VERIFY_PATHS and not self._quota_left(user):
+                return self._json({"error": "本周期配额已用完，可提交申请由管理员审批",
+                                   "quotaExhausted": True, "user": self._public(user)}, 402)
             body = self._body() if self.command == "POST" else None
             if self.command == "POST" and body is None:
                 return
             headers = {k: self.headers[k] for k in ("Content-Type", "X-Filename") if k in self.headers}
-            conn = http.client.HTTPConnection("127.0.0.1", user.port, timeout=1800)
+            # 关键：告诉工作进程"这次是谁在用"。共享进程靠这个头把报告、画像、
+            # 台账按用户分存，记账时也靠它认人（不能再依赖进程自己的环境变量）。
+            headers["X-Underbox-User"] = user["id"]
+            headers["X-Underbox-Name"] = user["name"]
+            conn = http.client.HTTPConnection("127.0.0.1", int(worker_port), timeout=1800)
             sent = False
             try:
                 conn.request(self.command, self.path, body=body, headers=headers)
@@ -294,25 +449,44 @@ def account_handler(base, accounts: Accounts):
             finally:
                 conn.close()
 
+        # -- 静态资源 -------------------------------------------------------
         def _asset(self, name: str) -> None:
             # Python 源码、配置文件、备份与隐藏文件不能由静态路由下载。
             if any(p.startswith(".") for p in Path(name).parts) or Path(name).suffix.lower() not in {
-                ".html", ".css", ".js", ".pdf", ".png", ".jpg", ".svg", ".ico", ".woff2"}:
+                    ".html", ".css", ".js", ".pdf", ".png", ".jpg", ".svg", ".ico", ".woff2"}:
                 return self._send(b"not found", "text/plain", 404)
             return super()._asset(name)
 
+        # -- 路由 -----------------------------------------------------------
         def do_GET(self):
             path = self.path.split("?", 1)[0]
             user = self.user()
             if path == "/api/session":
-                return self._json({"gate": True, "authed": user is not None,
-                                   "user": user.public() if user else None})
+                if user is None:
+                    return self._json({"gate": True, "authed": False, "user": None})
+                with store.connect(accounts.path) as conn:      # 每次取新的配额数字
+                    fresh = store.get_user(conn, user["id"])
+                return self._json({"gate": True, "authed": True,
+                                   "user": self._public(dict(fresh or user))})
             if path == "/api/health" and user is None:
                 return self._json({"ok": True, "loginRequired": True})
+            if path.startswith("/api/admin/"):
+                if user is None:
+                    return self._json({"error": "请先登录", "loginRequired": True}, 401)
+                if not self._is_admin(user):
+                    self._log_access(user["id"], 403)
+                    return self._json({"error": "仅管理员可访问"}, 403)
+                self._log_access(user["id"], 200)
+                return self._admin(user)
             if path.startswith("/api/"):
                 if user is None:
-                    return self._json({"error": "请先输入你的登录口令", "loginRequired": True}, 401)
+                    return self._json({"error": "请先登录", "loginRequired": True}, 401)
+                if path == "/api/quota":
+                    self._log_access(user["id"], 200)
+                    return self._quota(user)
+                self._log_access(user["id"], 200)
                 return self._forward(user)
+            self._log_access(user["id"] if user else None, 200)
             return self._asset("index.html" if path == "/" else path.lstrip("/"))
 
         def do_POST(self):
@@ -326,8 +500,17 @@ def account_handler(base, accounts: Accounts):
             user = self.user()
             if user is None:
                 self.close_connection = True
-                return self._json({"error": "请先输入你的登录口令", "loginRequired": True}, 401)
+                return self._json({"error": "请先登录", "loginRequired": True}, 401)
+            if path.startswith("/api/admin/"):
+                if not self._is_admin(user):
+                    self._log_access(user["id"], 403)
+                    return self._json({"error": "仅管理员可访问"}, 403)
+                return self._admin(user)
+            if path == "/api/quota/request":
+                self._log_access(user["id"], 200)
+                return self._quota_request(user)
             if path.startswith("/api/"):
+                self._log_access(user["id"], 200)
                 return self._forward(user)
             self.close_connection = True
             return self._json({"error": "not found"}, 404)
@@ -335,18 +518,22 @@ def account_handler(base, accounts: Accounts):
     return Gateway
 
 
-def serve_accounts(base, config: str, host: str, port: int) -> int:
-    accounts = Accounts(config)
+def serve_accounts(base, db: str, host: str, port: int) -> int:
+    accounts = Accounts(db)
     script = Path(__file__).with_name("serve.py")
     workers = Workers(accounts, script)
     server = None
+
     def terminate(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
     try:
         workers.start()
-        server = ThreadingHTTPServer((host, port), account_handler(base, accounts))
-        print(f"underbox 用户登录网关 http://{host}:{port}/，用户数 {len(accounts.users)}", flush=True)
+        server = ThreadingHTTPServer((host, port), account_handler(base, accounts, workers.port))
+        with store.connect(accounts.path) as conn:
+            n = conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
+        print(f"underbox 账户网关 http://{host}:{port}/，账号 {n} 个，"
+              f"共享工作进程 127.0.0.1:{workers.port}，库 {accounts.path}", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass

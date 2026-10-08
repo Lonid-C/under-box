@@ -391,6 +391,18 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
 #statusDock.collapsed .status-pill{display:inline-flex}
 #statusDock[hidden]{display:none}
 
+/* ── 状态窗口可拖动 ───────────────────────────────
+   抓手是面板标题栏（收起时是那颗胶囊）。位置由 JS 写进 left/bottom，
+   所以这里只管光标与"拖的时候别选中文字"。touch-action:none 让手机上
+   的拖动不被页面滚动抢走。 */
+.sp-h{cursor:grab;touch-action:none;user-select:none}
+.status-pill{touch-action:none;user-select:none}
+.status-dock.dragging .sp-h,
+.status-dock.dragging .status-pill{cursor:grabbing}
+.status-dock.dragging,
+.status-panel.dragging{user-select:none}
+.sp-h .sp-btn{cursor:pointer}
+
 /* ══ 入场动画 ═══════════════════════════════════════ */
 .anim{opacity:0}
 .anim.run{animation-fill-mode:both;animation-duration:.56s;animation-timing-function:var(--ease)}
@@ -2021,6 +2033,120 @@ const StatusDock = {
   },
 };
 
+/* ══ 状态窗口可拖动 ═══════════════════════════════
+   抓手是面板标题栏（收起时是那颗胶囊）。
+
+   两个必须一起处理的点：
+   1) dock 与 panel 是**兄弟节点**——panel 不能放进 dock 里，因为 dock 身上有
+      入场动画的 transform，会把后代的 fixed 定位捕获成"相对 dock"。所以拖动
+      要让两者同步位移。
+   2) 拖动中只写 transform（合成层，跟手不掉帧），松手才落到 left/bottom。
+      但 panel 有 animation-fill-mode:both 的入场动画，它会盖住 inline
+      transform，所以开拖前先把 animation 清掉、松手再还回去。
+
+   位置记在 localStorage，刷新后仍在原处；窗口变小/转屏会自动收回可视区。 */
+const DockDrag = {
+  KEY: 'ub.dockpos.v1',
+  PAD: 8,
+  THRESHOLD: 3,                 // 位移小于这么多算"点击"，不算拖
+  gap: 54,                      // 展开面板底边比 dock 多出的一段，启动时从 CSS 读
+  dragging: false, moved: false,
+  sx: 0, sy: 0, sl: 22, sb: 22, l: 22, b: 22,
+  dock() { return $('statusDock'); },
+  panel() { return $('statusPanel'); },
+  expanded() { return !this.panel().hidden; },
+  /** 当前真正可见的那个，边界按它的尺寸算 */
+  visibleEl() { return this.expanded() ? this.panel() : $('statusPill'); },
+  clampPos(l, b) {
+    const el = this.visibleEl();
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const extra = this.expanded() ? this.gap : 0;     // 面板还要再往上占一段
+    const maxL = Math.max(this.PAD, innerWidth - w - this.PAD);
+    const maxB = Math.max(0, innerHeight - extra - h - this.PAD);
+    return { l: Math.min(Math.max(l, this.PAD), maxL), b: Math.min(Math.max(b, 0), maxB) };
+  },
+  apply(l, b, live) {
+    const d = this.dock(), p = this.panel();
+    if (live) {                                       // 跟手：只动 transform
+      const dx = l - this.sl, dy = this.sb - b;       // 手指向下 = bottom 变小
+      d.style.transform = `translate(${dx}px, ${-dy}px)`;
+      p.style.transform = `translate(${dx}px, ${-dy}px)`;
+    } else {                                          // 落地：写 left/bottom，清掉 transform
+      d.style.transform = p.style.transform = '';
+      d.style.left = l + 'px'; d.style.bottom = b + 'px';
+      p.style.left = l + 'px'; p.style.bottom = (b + this.gap) + 'px';
+    }
+    this.l = l; this.b = b;
+  },
+  restore() {
+    try {
+      const v = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (v && Number.isFinite(v.l) && Number.isFinite(v.b)) { this.l = v.l; this.b = v.b; }
+    } catch { /* 读不到就用默认位置 */ }
+    const c = this.clampPos(this.l, this.b);
+    this.apply(c.l, c.b, false);
+  },
+  start(e) {
+    if (e.button) return;                             // 只认左键 / 触摸
+    if (e.target.closest('.sp-btn')) return;          // 点"收起"不算拖
+    this.dragging = true;
+    this.moved = false;
+    this.sx = e.clientX; this.sy = e.clientY;
+    const d = this.dock();
+    this.sl = parseFloat(getComputedStyle(d).left) || this.l;
+    this.sb = parseFloat(getComputedStyle(d).bottom) || this.b;
+    this.apply(this.sl, this.sb, false);              // 先固化，之后用 transform 做位移
+    this.panel().style.animation = 'none';            // 否则入场动画会盖住 transform
+    d.classList.add('dragging');
+    this.panel().classList.add('dragging');
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 合成事件没有真实 pointerId */ }
+    e.preventDefault();
+  },
+  move(e) {
+    if (!this.dragging) return;
+    const dx = e.clientX - this.sx, dy = e.clientY - this.sy;
+    if (!this.moved && Math.abs(dx) < this.THRESHOLD && Math.abs(dy) < this.THRESHOLD) return;
+    this.moved = true;
+    const c = this.clampPos(this.sl + dx, this.sb - dy);
+    this.apply(c.l, c.b, true);
+  },
+  end() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    const d = this.dock(), p = this.panel();
+    d.classList.remove('dragging');
+    p.classList.remove('dragging');
+    p.style.animation = '';                           // 还回 CSS 的入场动画
+    this.apply(this.l, this.b, false);
+    if (this.moved) {
+      try { localStorage.setItem(this.KEY, JSON.stringify({ l: this.l, b: this.b })); }
+      catch { /* 隐私模式存不了，位置只在本次会话有效 */ }
+      setTimeout(() => { this.moved = false; }, 0);   // 留到本轮 click 之后，好拦住它
+    }
+  },
+  bind() {
+    const d = this.dock(), p = this.panel();
+    // 底边差值从 CSS 读，不写死——以后改样式不会静默错位
+    this.gap = (parseFloat(getComputedStyle(p).bottom) || 76)
+             - (parseFloat(getComputedStyle(d).bottom) || 22);
+    const handles = [$('statusPill'), p.querySelector('.sp-h')];
+    handles.forEach(node => {
+      node.addEventListener('pointerdown', e => this.start(e));
+      node.addEventListener('pointermove', e => this.move(e));
+      node.addEventListener('pointerup', () => this.end());
+      node.addEventListener('pointercancel', () => this.end());
+    });
+    // 拖完松手常会顺带触发一次 click——那一下不该被当成"展开/收起"
+    const guard = e => { if (this.moved) { e.stopImmediatePropagation(); e.preventDefault(); } };
+    handles.forEach(node => node.addEventListener('click', guard, true));
+    addEventListener('resize', () => {
+      const c = this.clampPos(this.l, this.b);
+      this.apply(c.l, c.b, false);
+    });
+    this.restore();
+  },
+};
+
 /* 读后端的 SSE：每个 `data:` 一条事件。上传简历与提交勾选共用。 */
 async function sseRequest(url, init, onEv) {
   const epoch = QUERY_EPOCH;
@@ -2513,6 +2639,7 @@ $('statusPill').addEventListener('click', () => {
   $('statusPanel').hidden = false;
   $('statusPill').hidden = true;
 });
+DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）
 $('navTier').addEventListener('click', toggleTierPanel);
 $('pickGo').addEventListener('click', runVerify);
 $('repick').addEventListener('click', () => {

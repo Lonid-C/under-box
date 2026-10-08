@@ -166,12 +166,12 @@ body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
 .pending .dots::after{content:'';animation:dots 1.4s steps(4,end) infinite}
 @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 
-.claims{list-style:none;margin:0;padding:0;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);box-shadow:var(--shadow);overflow:hidden}
+.claims{list-style:none;margin:0;padding:0;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);box-shadow:var(--shadow);overflow:clip}
 .claims[hidden]{display:none}
 .claims li+li{border-top:1.5px solid #E4E0D6}
 .row{display:grid;grid-template-columns:14px 104px 62px 58px minmax(0,1fr) 34px 20px;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;background:none;border:0;padding:13px 16px;cursor:pointer;transition:background .1s}
 .row:hover{background:#FCFAF6}
-.row[aria-expanded="true"]{background:var(--pink-soft)}
+.row[aria-expanded="true"]{background:var(--pink-soft);position:sticky;top:0;z-index:2;border-bottom:1.5px solid #D8D4C9}
 .row .dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--ink)}
 .row .st{font-size:11px;font-weight:600;padding:3px 8px;border:2px solid var(--ink);border-radius:999px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .dt{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
@@ -184,7 +184,13 @@ body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
 .flag{display:inline-block;font-size:10px;font-weight:600;margin-left:7px;padding:1px 6px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);vertical-align:1px}
 
 .detail{display:none;padding:4px 16px 20px;background:#FCFAF6;border-top:1.5px dashed #D8D4C9}
-.detail.on{display:block}
+.detail.on{display:block;max-height:min(62vh,560px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.ev.more[hidden]{display:none}
+.evmore{margin-top:10px}
+.dclose{position:sticky;bottom:0;display:flex;justify-content:center;padding:10px 0 2px;margin-top:16px;background:linear-gradient(to top,#FCFAF6 70%,rgba(252,250,246,0))}
+.claims{padding-bottom:0}
+#claims{scroll-margin-top:8px}
+.claims>li{scroll-margin-top:8px}
 .dsec{margin-top:16px}
 .dsec>h4{margin:0 0 7px;font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--ink-2);text-transform:uppercase}
 .raw{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);padding:11px 13px;font-size:13.5px}
@@ -763,8 +769,10 @@ function detailOf(c) {
   }
   if (c.evidence.length) {
     const box = el('div');
-    c.evidence.forEach(ev => {
-      const card = el('div', {class:'ev'});
+    const FOLD = 2;
+    c.evidence.forEach((ev, idx) => {
+      const card = el('div', {class:'ev' + (idx >= FOLD ? ' more' : '')});
+      if (idx >= FOLD) card.hidden = true;
       const tint = ev.tier==='A' ? '#E1F5EE' : ev.tier==='B' ? '#FAEEDA' : ev.tier==='C' ? '#E6F1FB' : '#F0EDE6';
       card.appendChild(el('div', {class:'ev-h'},
         el('span', {class:'t', text:ev.tier || '—', style:`background:${tint}`}),
@@ -779,6 +787,16 @@ function detailOf(c) {
       card.appendChild(el('div', {class:'sig'}, sig));
       box.appendChild(card);
     });
+    if (c.evidence.length > FOLD) {
+      const rest = c.evidence.length - FOLD;
+      const more = el('button', {class:'ghost evmore', type:'button', text:`展开其余 ${rest} 条证据`});
+      more.addEventListener('click', () => {
+        const folded = box.querySelector('.ev.more').hidden;
+        box.querySelectorAll('.ev.more').forEach(n => n.hidden = !folded);
+        more.textContent = folded ? '收起其余证据' : `展开其余 ${rest} 条证据`;
+      });
+      box.appendChild(more);
+    }
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
@@ -801,6 +819,9 @@ function detailOf(c) {
   pbtn.addEventListener('click', () => loadClaimPlan(c.id, pout, pbtn));
   psec.append(pbtn, pout);
   d.appendChild(psec);
+  const close = el('button', {class:'ghost', type:'button', text:'收起 ▴'});
+  close.dataset.close = '1';
+  d.appendChild(el('div', {class:'dclose'}, close));
   return d;
 }
 
@@ -818,11 +839,17 @@ function renderClaims() {
       el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);
+    const setOpen = on => {
+      row.setAttribute('aria-expanded', String(on));
+      det.classList.toggle('on', on);
+    };
     row.addEventListener('click', () => {
-      const open = row.getAttribute('aria-expanded') === 'true';
-      row.setAttribute('aria-expanded', String(!open));
-      det.classList.toggle('on', !open);
+      const on = row.getAttribute('aria-expanded') !== 'true';
+      if (on) ul.querySelectorAll('.row[aria-expanded="true"]').forEach(r => r.click()); // 同时只展开一条，避免互相顶开
+      setOpen(on);
+      if (on) li.scrollIntoView({block:'nearest', behavior: reduceMotion() ? 'auto' : 'smooth'});
     });
+    det.querySelector('[data-close]').addEventListener('click', () => { setOpen(false); li.scrollIntoView({block:'nearest'}); });
     const li = el('li', {}, row, det);
     li.style.animationDelay = (i * 42) + 'ms';
     ul.appendChild(li);

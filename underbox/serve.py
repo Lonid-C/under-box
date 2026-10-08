@@ -20,6 +20,8 @@ sdk profile 是 stdio 上的 JSON-RPC，两者都不是浏览器能直接讲的�
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import queue
@@ -39,6 +41,25 @@ OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT") or (HERE.parent / "open_box"))
 if str(OPEN_BOX) not in sys.path:
     sys.path.insert(0, str(OPEN_BOX))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+# ── 登录门禁 ──────────────────────────────────────────────────────────────
+# 口令来自环境变量（部署方写进 open_box/.env 的 UNDERBOX_PASSWORD，app/env.py 会加载）。
+# **没设口令 = 门禁关闭**，服务就是开放的——本地开发不必每次登录。
+COOKIE_NAME = "ub_gate"
+
+
+def _gate_password() -> str:
+    return (os.environ.get("UNDERBOX_PASSWORD") or "").strip()
+
+
+def _session_token(password: str) -> str:
+    """由口令派生的会话值（cookie 里存这个，不存口令本身）。
+
+    服务端不保存任何会话状态：重启不掉线，也没有过期表要清理。
+    换来的是"改口令即让所有旧 cookie 失效"——对一个本地小服务，这笔划算。
+    """
+    return hmac.new(password.encode("utf-8"), b"underbox-session-v1", hashlib.sha256).hexdigest()
 
 
 # ── 报告 → 喂给模型的材料 ────────────────────────────────────────────────
@@ -567,17 +588,67 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):        # 安静一点，只留自己的日志
         pass
 
-    def _send(self, body: bytes, ctype: str, status: int = 200) -> None:
+    def _send(self, body: bytes, ctype: str, status: int = 200,
+              headers: dict | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, data: dict, status: int = 200) -> None:
+    def _json(self, data: dict, status: int = 200, headers: dict | None = None) -> None:
         self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"),
-                   "application/json; charset=utf-8", status)
+                   "application/json; charset=utf-8", status, headers)
+
+    # ── 门禁 ──────────────────────────────────────────────────────────────
+    def _cookie(self, name: str) -> str:
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == name:
+                return unquote(v)
+        return ""
+
+    def _authed(self) -> bool:
+        pw = _gate_password()
+        if not pw:
+            return True                        # 没设口令：门禁关闭
+        return hmac.compare_digest(self._cookie(COOKIE_NAME), _session_token(pw))
+
+    def _deny_api(self, path: str) -> bool:
+        """需要登录却被拦下就回 401，返回 True 表示已经处理完这个请求。
+
+        只拦 /api/*；页面本身（index.html 等静态资源）必须放行，
+        否则登录页自己都拿不到。拦住 API 就等于拦住了全部数据。
+        """
+        if not path.startswith("/api/"):
+            return False
+        if path in ("/api/login", "/api/logout", "/api/session", "/api/health"):
+            return False                       # 登录用 / 探活用，必须放行
+        if self._authed():
+            return False
+        self._json({"error": "未登录或登录已过期", "loginRequired": True}, 401)
+        return True
+
+    def _login(self) -> None:
+        pw = _gate_password()
+        given = str(self._read_json().get("password") or "")
+        if not pw:                             # 没设口令：门禁关闭，前端据此直接进主页
+            return self._json({"ok": True, "gate": False})
+        if not given or not hmac.compare_digest(given, pw):
+            time.sleep(0.35)                   # 轻微迟滞，压低暴力尝试的速率
+            return self._json({"ok": False, "error": "口令不正确"}, 401)
+        self._json({"ok": True}, 200, {
+            "Set-Cookie": f"{COOKIE_NAME}={_session_token(pw)}; Path=/; "
+                          f"Max-Age={7 * 86400}; HttpOnly; SameSite=Lax",
+        })
+
+    def _logout(self) -> None:
+        self._json({"ok": True}, 200, {
+            "Set-Cookie": f"{COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        })
 
     def _asset(self, name: str) -> None:
         p = (HERE / name).resolve()
@@ -669,6 +740,11 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             return self._asset("index.html")
+        if path == "/api/session":
+            # 页面靠它决定"显示登录屏还是主界面"
+            return self._json({"gate": bool(_gate_password()), "authed": self._authed()})
+        if self._deny_api(path):
+            return
         if path == "/api/health":
             return self._json({
                 "ok": True,
@@ -691,6 +767,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):                         # noqa: N802
         path = self.path.split("?", 1)[0]
+        if path == "/api/login":
+            return self._login()
+        if path == "/api/logout":
+            return self._logout()
+        if self._deny_api(path):
+            return
         if path == "/api/verify/stream":
             return self._verify_stream()
         if path == "/api/split/stream":

@@ -41,13 +41,62 @@ body[data-stage="hero"] .side-extra{display:none}
 body[data-stage="app"] .hero-wrap,
 body[data-stage="app"] .hero-foot{display:none}
 
+/* ══ 登录门禁 ═══════════════════════════════════════ */
+/* 布局规则与 hero 完全一致：品牌字（hero-wrap）在两个阶段里都显示且位置不变，
+   登录成功的过渡因此只是「卡片换了身份」——品牌字一动不动，观感最稳。 */
+body[data-stage="gate"]{display:flex;flex-direction:column;min-height:100vh;padding:5vh 0}
+body[data-stage="gate"] .hero-wrap{margin-top:auto}
+body[data-stage="gate"] .hero-foot{margin-bottom:auto}
+body[data-stage="gate"] > *{flex:0 0 auto}
+body[data-stage="gate"] .site,
+body[data-stage="gate"] .notice,
+body[data-stage="gate"] .risk-panel,
+body[data-stage="gate"] .col-right,
+body[data-stage="gate"] .side-extra,
+body[data-stage="gate"] #intake,
+body[data-stage="gate"] .status-dock,
+body[data-stage="gate"] .chat-dock{display:none}
+body[data-stage="gate"] main.grid{padding:0 28px}
+body[data-stage="gate"] .col-left{grid-column:1/-1;justify-self:center;width:var(--colw)}
+body[data-stage="gate"] #gateCard{box-shadow:var(--shadow-hero)}
+/* 出了门禁就不再需要它 */
+body[data-stage="hero"] #gateCard,
+body[data-stage="app"] #gateCard{display:none}
+
+#gateCard{transition:opacity .26s var(--ease),transform .26s var(--ease)}
+#gateCard.leaving{opacity:0;transform:translateY(-8px) scale(.994)}
+/* 投料卡的交叉淡入：FLIP 之外唯一允许动的属性就是 opacity/transform */
+#intake{transition:opacity .42s var(--ease),box-shadow .5s var(--ease)}
+#intake.fading{opacity:0}
+
+.gate-field{display:block}
+.gate-field>span{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--ink-2);margin-bottom:7px}
+.gate-field input{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--cream);
+  border:2px solid var(--ink);border-radius:var(--rad);padding:11px 13px;letter-spacing:.16em;transition:background .16s,box-shadow .16s}
+.gate-field input::placeholder{letter-spacing:.02em;color:var(--ink-3)}
+.gate-field input:focus{outline:none;background:var(--paper);box-shadow:var(--shadow-sm)}
+.gate-btn{margin-top:14px;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+  font:inherit;font-size:14px;font-weight:600;color:#fff;background:var(--pink);border:2px solid var(--ink);
+  border-radius:var(--rad);padding:12px 14px;cursor:pointer;box-shadow:var(--shadow-sm);
+  transition:transform .12s var(--ease),box-shadow .12s var(--ease),background .16s}
+.gate-btn:hover{background:#F01C8C}
+.gate-btn:active{transform:translate(3px,3px);box-shadow:none}
+.gate-btn[disabled]{cursor:progress;opacity:.72}
+.gate-btn[disabled]:active{transform:none;box-shadow:var(--shadow-sm)}
+.gate-msg{margin:12px 0 0;min-height:18px;font-size:12.5px;color:var(--pink);font-weight:500}
+.gate-note{margin:12px 0 0;font-size:11.5px;line-height:1.65;color:var(--ink-3)}
+#gateCard.shake{animation:shake .34s}
+
 /* ══ 落地页：品牌 ═══════════════════════════════════ */
 .hero-wrap{text-align:center;padding:0 28px;margin-bottom:38px}
 .hero-mark{font-family:var(--disp);font-size:clamp(38px,7.4vw,74px);line-height:1;letter-spacing:-.02em;margin:0}
 .hero-mark em{color:var(--pink);font-style:normal}
 .hero-slogan{margin:16px 0 0;font-size:clamp(15px,2.1vw,21px);color:var(--ink-2);letter-spacing:.02em}
 .hero-slogan em{color:var(--pink);font-style:normal;font-weight:500}
-.hero-foot{text-align:center;font-size:12.5px;color:var(--ink-3);margin:22px 28px 0;letter-spacing:.01em}
+/* 用 padding 而不是 margin 留边：margin 撑不掉宽度，窄屏上这行长句会顶出视口
+   （实测移动端被裁掉后半句）。改成 padding + 允许断行，任何宽度都收得住。 */
+.hero-foot{text-align:center;font-size:12.5px;color:var(--ink-3);margin:22px 0 0;padding:0 28px;
+  letter-spacing:.01em;overflow-wrap:anywhere}
 .hero-foot b{color:var(--ink-2);font-weight:500}
 
 /* ══ 主界面顶栏 ═════════════════════════════════════ */
@@ -447,12 +496,14 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 
 @media(max-width:980px){
   main.grid{grid-template-columns:minmax(0,1fr)}
-  body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left{width:100%}
+  body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left,body[data-stage="gate"] .col-left{width:100%}
   .top-nav{display:none}
   .top-right .badge,.top-right .ghost{white-space:nowrap}
   .row{grid-template-columns:14px 96px minmax(0,1fr) 20px}
 }
 @media(max-width:600px){
+  body[data-stage="gate"] main.grid{padding:0 16px}
+  body[data-stage="gate"] #gateCard{box-shadow:6px 6px 0 var(--ink)}
   .hdr-in{padding:12px 16px;gap:12px}
   .top-right{gap:10px}
   .top-right .rno{display:none}
@@ -463,7 +514,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 </style>
 </head>
-<body data-stage="hero">
+<body data-stage="gate">
 
 <div class="hero-wrap">
   <h1 class="hero-mark">UNDER<em>BOX</em></h1>
@@ -483,6 +534,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       <span class="badge" id="modeBadge"><i></i>载入中…</span>
       <span class="rno">报告 <b id="rno">—</b></span>
       <button class="ghost" id="reset" type="button">换一份简历</button>
+      <button class="ghost" id="logoutBtn" type="button" hidden>退出</button>
     </div>
   </div>
 </header>
@@ -497,6 +549,23 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 
 <main class="grid">
   <aside class="col-left">
+    <section class="card" id="gateCard">
+      <div class="card-h">
+        <h2>进入核验台</h2>
+        <span class="n">仅限受邀使用</span>
+      </div>
+      <div class="card-b">
+        <label class="gate-field" for="gatePw">
+          <span>访问口令</span>
+          <input type="password" id="gatePw" name="password" placeholder="请输入口令"
+                 autocomplete="current-password" enterkeyhint="go" spellcheck="false">
+        </label>
+        <button class="gate-btn" id="gateGo" type="button"><span id="gateBtnTxt">进入核验台</span></button>
+        <p class="gate-msg" id="gateMsg" role="alert" aria-live="polite"></p>
+        <p class="gate-note">口令由部署者设置。验证通过后本机保留 7 天登录状态。</p>
+      </div>
+    </section>
+
     <section class="card" id="intake">
       <div class="pulse"></div>
       <div class="card-h">
@@ -2194,6 +2263,66 @@ function renderRisksFrom(risks) {
   REPORT = saved;
 }
 
+/* ══ 登录门禁 ═══════════════════════════════════ */
+/* 这里只是"门"，不是"锁"：真正的判定在服务端——/api/login 校验口令后下发 httpOnly
+   cookie，前端既拿不到口令也无法伪造签名。改口令会让旧 cookie 立刻失效。 */
+const Gate = {
+  /** 通过 → 门禁卡淡出上浮、投料卡同期淡入。品牌字全程不动，所以看着像"卡片换了身份"。 */
+  pass() {
+    const card = $('gateCard'), intake = $('intake');
+    if (reduceMotion()) { this.settle(); return; }
+    intake.classList.add('fading');          // 先备成透明，切换那一刻不会闪
+    card.classList.add('leaving');
+    setTimeout(() => {
+      this.settle();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        intake.classList.remove('fading');
+        card.classList.remove('leaving');
+      }));
+    }, 280);
+  },
+  settle() {
+    document.body.dataset.stage = 'hero';
+    runEnter();
+  },
+  /** 已登录 / 服务端没设口令：直接进落地页，不播登录动画 */
+  skip() {
+    document.body.dataset.stage = 'hero';
+    $('gateCard').style.display = 'none';
+    runEnter();
+  },
+  fail(msg) {
+    $('gateMsg').textContent = msg;
+    const card = $('gateCard');
+    card.classList.remove('shake');
+    void card.offsetWidth;                   // 强制重排，动画才能重播
+    card.classList.add('shake');
+    $('gatePw').focus(); $('gatePw').select();
+  },
+  async submit() {
+    const pw = $('gatePw').value.trim();
+    if (!pw) return this.fail('请输入口令');
+    const btn = $('gateGo'), txt = $('gateBtnTxt');
+    btn.disabled = true; txt.textContent = '验证中…';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) { $('gateMsg').textContent = ''; authBadge(true); return this.pass(); }
+      this.fail(d.error || '口令不正确');
+    } catch {
+      this.fail('连接失败，请检查网络后重试');
+    } finally {
+      btn.disabled = false; txt.textContent = '进入核验台';
+    }
+  },
+};
+
+/** 顶栏「退出」只在门禁开启时才露面——没设口令的部署看到它反而困惑 */
+function authBadge(on) { const b = $('logoutBtn'); if (b) b.hidden = !on; }
+
 /* ══ 启动 ═══════════════════════════════════════ */
 renderRisks(); renderOverview(); buildFilters(); initFilters(); initIntake(); initChat(); initViewer();
 renderLeads();
@@ -2232,10 +2361,36 @@ document.body.dataset.noreport = '1';
 })();
 probeMode();
 
-if (location.hash === '#app') {              // 深链：直接进主界面，不播动画
-  document.body.dataset.stage = 'app';
-  runEnter(); renderClaims();
-}
+$('gateGo').addEventListener('click', () => Gate.submit());
+$('gatePw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); Gate.submit(); }   // 手机上 return 键直接提交
+});
+$('logoutBtn').addEventListener('click', async () => {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch { /* 清不掉也照重载 */ }
+  location.reload();
+});
+
+/* 进来先问服务端两件事：这个部署要不要口令、我这台机器登录过没有。
+   问不到（老后端 / 网络异常）就当门禁不存在——这里只管"显示哪一屏"，
+   真正的拦截在服务端的 cookie 校验上，前端放行并不会让 API 变得可访问。 */
+(async () => {
+  if (location.hash === '#app') {            // 深链：直接进主界面，不播动画
+    document.body.dataset.stage = 'app';
+    $('gateCard').style.display = 'none';
+    runEnter(); renderClaims();
+    return;
+  }
+  let gate = false, authed = false;
+  try {
+    const r = await fetch('/api/session');
+    if (r.ok) { const d = await r.json(); gate = !!d.gate; authed = !!d.authed; }
+  } catch { /* 没有这个端点：当门禁不存在 */ }
+  if (!gate || authed) {
+    if (gate && authed) authBadge(true);
+    return Gate.skip();
+  }
+  $('gatePw').focus();                       // 停在门禁屏，可以立刻打字
+})();
 </script>
 </body>
 </html>

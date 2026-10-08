@@ -787,39 +787,60 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
         )
     )
 
-    out: list[SearchHit] = []
-    for it in items:
-        paper_title = " ".join(it.get("title") or []).strip()
-        doi = (it.get("DOI") or "").strip()
-        if not paper_title or not doi:
-            continue
-        authors = []
-        for a in it.get("author") or []:
-            name = " ".join(x for x in (a.get("given"), a.get("family")) if x).strip()
-            if name:
-                authors.append(name)
-        venue = " ".join(it.get("container-title") or []).strip()
-        parts = ((it.get("published") or {}).get("date-parts") or [[]])[0]
-        published = "-".join(str(x) for x in parts) if parts else ""
-        content = (
-            f"Crossref 元数据\n题名：{paper_title}\n"
-            f"作者（按元数据顺序）：{'; '.join(authors) or '（未提供）'}\n"
-            f"刊物或会议：{venue or '（未提供）'}\n"
-            f"出版方：{it.get('publisher') or '（未提供）'}\n"
-            f"发表日期：{published or '（未提供）'}\nDOI：{doi}"
-        )
-        links = [((it.get("resource") or {}).get("primary") or {}).get("URL") or ""]
-        links.extend(link.get("URL") or "" for link in (it.get("link") or []))
-        official_url = next((u for u in links if u.startswith(("https://", "http://"))
-                             and not url_in_domain(u, "doi.org")), "")
-        out.append(SearchHit(
-            url=f"https://doi.org/{doi}", title=paper_title,
-            snippet=content.replace("\n", "；"),
-            publisher=it.get("publisher") or "Crossref", content=content,
-            official_url=official_url, authors=tuple(authors), venue=venue,
-            year=str(parts[0]) if parts else "",
-        ))
+    out = [hit for hit in (_crossref_hit(it) for it in items) if hit]
     return out[:max(1, int(limit))]
+
+
+def _crossref_hit(it: dict) -> SearchHit | None:
+    """Crossref 的一条 work 记录 → SearchHit（标题查询与 DOI 精确查询共用）。"""
+    paper_title = " ".join(it.get("title") or []).strip()
+    doi = (it.get("DOI") or "").strip()
+    if not paper_title or not doi:
+        return None
+    authors = []
+    for a in it.get("author") or []:
+        name = " ".join(x for x in (a.get("given"), a.get("family")) if x).strip()
+        if name:
+            authors.append(name)
+    venue = " ".join(it.get("container-title") or []).strip()
+    parts = ((it.get("published") or {}).get("date-parts") or [[]])[0]
+    published = "-".join(str(x) for x in parts) if parts else ""
+    content = (
+        f"Crossref 元数据\n题名：{paper_title}\n"
+        f"作者（按元数据顺序）：{'; '.join(authors) or '（未提供）'}\n"
+        f"刊物或会议：{venue or '（未提供）'}\n"
+        f"出版方：{it.get('publisher') or '（未提供）'}\n"
+        f"发表日期：{published or '（未提供）'}\nDOI：{doi}"
+    )
+    links = [((it.get("resource") or {}).get("primary") or {}).get("URL") or ""]
+    links.extend(link.get("URL") or "" for link in (it.get("link") or []))
+    official_url = next((u for u in links if u.startswith(("https://", "http://"))
+                         and not url_in_domain(u, "doi.org")), "")
+    return SearchHit(
+        url=f"https://doi.org/{doi}", title=paper_title,
+        snippet=content.replace("\n", "；"),
+        publisher=it.get("publisher") or "Crossref", content=content,
+        official_url=official_url, authors=tuple(authors), venue=venue,
+        year=str(parts[0]) if parts else "",
+    )
+
+
+def crossref_doi_hit(doi: str) -> SearchHit | None:
+    """简历写了 DOI 时按 DOI 精确取元数据。标题检索偶尔会被同名长标题挤掉，DOI 不会。"""
+    import httpx
+    from urllib.parse import quote
+
+    value = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", (doi or "").strip(), flags=re.I)
+    if not re.match(r"10\.\d{4,9}/\S+", value):
+        return None
+    try:
+        r = httpx.get(f"https://api.crossref.org/works/{quote(value, safe='/')}",
+                      headers={"User-Agent": UA, "Accept": "application/json"}, timeout=20.0)
+        if r.status_code != 200:
+            return None
+        return _crossref_hit((r.json() or {}).get("message") or {})
+    except Exception:
+        return None
 
 
 # 专利的免费检索面：中文专利没有可直接调用的免费公开 API——CNIPA 的公众查询系统
@@ -901,7 +922,7 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
 
 
 def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
-               year: str = "") -> list[SearchHit]:
+               year: str = "", doi: str = "") -> list[SearchHit]:
     """论文陈述的免费取证入口：Crossref + OpenAlex，按 DOI 去重并结合陈述排序。
 
     两个都是公开 API，不消耗搜索额度。Crossref 排前面——它的出版方和
@@ -913,12 +934,16 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
     out: list[SearchHit] = []
     positions: dict[str, int] = {}
     # 两个独立的元数据站并发请求；结果仍按 Crossref → OpenAlex 固定顺序合并。
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    # 简历写了 DOI 时再并发一路 DOI 精确查询，排在最前；它同样要过下面的标题相似度门槛——
+    # DOI 写错（指向别的论文）时不能拿别人的论文当证据。
+    with ThreadPoolExecutor(max_workers=3) as pool:
         crossref_future = pool.submit(crossref_hits, title, limit)
         openalex_future = pool.submit(openalex_hits, title, limit)
+        doi_future = pool.submit(crossref_doi_hit, doi) if doi else None
         crossref = crossref_future.result()
         openalex = openalex_future.result()
-    for hit in [*crossref, *openalex]:
+        by_doi = doi_future.result() if doi_future else None
+    for hit in [*([by_doi] if by_doi else []), *crossref, *openalex]:
         key = hit.url.lower().rstrip("/")
         if key in positions:
             previous = out[positions[key]]
@@ -1024,7 +1049,17 @@ class PageFetcher:
             time.sleep(wait)
         self._last[host] = time.monotonic()
 
-    def get(self, url: str) -> str | None:
+    def get_roster(self, url: str, claim) -> str | None:
+        from .competitions import competition_for_claim
+        from .plan import claim_school, school_domain
+        item = competition_for_claim(claim) or {}
+        school = school_domain(claim_school(claim) or (claim.entities or {}).get("school_search_hint", ""))
+        hints = [hint for p in item.get("school_result_pages", []) if p.get("school_domain") == school
+                 for hint in p.get("archive_hints", [])]
+        # 学校所在地只影响包内文件读取优先级，不据此声称候选人的参赛省份。
+        return self.get(url, archive_hint=str(claim.raw_text) + str(claim.entities) + " ".join(hints))
+
+    def get(self, url: str, *, archive_hint: str = "") -> str | None:
         import httpx
         host = urlparse(url).hostname or ""
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
@@ -1064,7 +1099,16 @@ class PageFetcher:
                     if r.content.startswith(b"PK\x03\x04"):
                         text = _office_text(r.content)
                         if not text:
+                            from .roster_archive import archive_text
+                            text = archive_text(r.content,hint=archive_hint,pdf_parser=_pdf_text,office_parser=_office_text)
+                        if not text:
                             self.failures[url] = "DOCX/XLSX 未提取到文本或文件格式不支持"
+                        return text
+                    if r.content.startswith(b"Rar!\x1a\x07"):
+                        from .roster_archive import archive_text
+                        text = archive_text(r.content,hint=archive_hint,pdf_parser=_pdf_text,office_parser=_office_text)
+                        if not text:
+                            self.failures[url] = "RAR名单包未读取到文档（本机解压工具不可用、超限或文件无文本）"
                         return text
                     if "application/pdf" in r.headers.get("content-type", "").lower():
                         self.failures[url] = "返回内容不是有效 PDF"
@@ -1073,10 +1117,33 @@ class PageFetcher:
                         # 旧版 DOC/XLS 不作二进制文本解码。
                         self.failures[url] = "暂不支持旧版 DOC/XLS 文件"
                         return None
+                    if (r.content.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"))
+                            or r.content[:4] == b"RIFF" and r.content[8:12] == b"WEBP"):
+                        from .ocr import recognize_image
+                        text = recognize_image(r.content)
+                        if not text:
+                            self.failures[url] = "名单图片OCR未读取到可靠文本（本机OCR不可用、超时或图片质量不足）"
+                        return text
                     text = decode_html(r)
                     if any(term in text for term in ("请输入验证码下载附件", "验证码下载",
                                                      "请登录后下载", "您没有权限下载")):
                         self.failures[url] = "附件下载需要验证码、登录或额外权限"
+                        return None
+                    # 官网公开公告正文由前端GET接口加载；只读固定公开接口，不执行JS。
+                    notice = re.fullmatch(r"/notices/(\d+)/?", urlparse(url).path)
+                    if host == "dasai.lanqiao.cn" and notice and "<h1" not in text.lower():
+                        import json
+                        from html import escape
+                        api = "https://www.guoxinlanqiao.com/api/web/news/selectone?nnid=" + notice.group(1)
+                        payload = self.get(api)
+                        try:
+                            news = json.loads(payload or "{}").get("news") or {}
+                            title, body = news.get("title"), news.get("content")
+                            if isinstance(title, str) and isinstance(body, str) and body.strip():
+                                return f"<html><title>{escape(title)}</title><article><h1>{escape(title)}</h1>" + body + "</article></html>"
+                        except (ValueError, AttributeError):
+                            pass
+                        self.failures[url] = "蓝桥杯动态公告正文未能读取；页面空壳不等于没有名单"
                         return None
                     return text
                 except httpx.ReadTimeout:

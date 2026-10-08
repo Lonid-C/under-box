@@ -249,6 +249,9 @@ def decide(claim: Claim, evidences: list[Evidence]) -> Status:
     # 只能到「部分证实(转人工)」，不冒认同名同校的人。
     if (proved >= set(claim.elements) and best in ("A", "B")
             and any(_has_identity_anchor(e) for e in valid)):
+        original_proof = set().union(*(set(e.supports) for e in valid if e.extraction_method == "text"))
+        if not original_proof >= set(claim.elements):
+            return "part"
         return "ok"
     return "part"
 
@@ -260,6 +263,8 @@ def needs_human(status: str, evidences: list[Evidence]) -> bool:
     对结论没有贡献，不应该把一条干净的 A 级公示拖进人工队列。
     """
     if status in ("ask", "who"):
+        return True
+    if any(e.extraction_method != "text" for e in dedupe_by_origin(evidences)):
         return True
     lo, hi = HUMAN_REVIEW_RANGE
     return any(lo <= e.identity_score <= hi for e in dedupe_by_origin(evidences))

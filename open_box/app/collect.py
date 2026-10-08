@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlun
 
 from . import judge
 from .competitions import (claim_year, competition_for_claim, competition_page_mismatch,
-                           roster_links, seed_pages, useful_roster_hit)
+                           roster_image_links, roster_links, seed_pages, useful_roster_hit)
 from .llm import LLM
 from .parse import extract_main_text, wrap_untrusted
 from .plan import (MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, Query,
@@ -270,6 +270,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
             supports=supports,
             contradicts=contradicts,
             origin_url=origin_url,
+            extraction_method="ocr" if "名单图片OCR识别" in (hit.title or "") else "text",
         )
     except Exception:
         # 兜底：单条证据不合规就丢弃，不让一个脏字段毁掉整份报告。
@@ -538,7 +539,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 budget.exhausted = True
                 break
             try:
-                html = hit.content or fetcher.get(hit.url)
+                reader = getattr(fetcher, "get_roster", None)
+                html = hit.content or (reader(hit.url, claim) if callable(reader) else fetcher.get(hit.url))
             except Exception:
                 html = None
             if html:
@@ -555,19 +557,18 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             for chunk in pool.map(fetch_group, list(groups.values())):
                 fetched.extend(chunk)
 
-    # robots.txt 不允许抓取的页面（典型是 mp.weixin.qq.com 公众号原文）不去硬读，
-    # 但搜索引擎已经收录并返回的摘要可以用：这不是抓取，只是使用检索结果本身。
+    # robots/超时/访问失败时，可保留引擎已公开收录的本人摘要；标注未回读，降级为线索。
     # 只在摘要里出现本人姓名时才送去抽取，并在标题上写明"摘要、未回读原文"。
     snippet_urls: set[str] = set()
     got_urls = {hit.url for hit, _ in fetched}
     for hit in selected:
         reason = getattr(fetcher, "failures", {}).get(hit.url) or ""
-        if hit.url in got_urls or not reason.startswith("robots") or not hit.snippet:
+        if hit.url in got_urls or not reason or not hit.snippet:
             continue
         compact = re.sub(r"\s+", "", f"{hit.title}{hit.snippet}")
         if not any(n.replace(" ", "") in compact for n in _name_variants(candidate_name)):
             continue
-        fetched.append((replace(hit, title=f"{hit.title} · 搜索引擎收录摘要（原文因 robots.txt 未回读）"),
+        fetched.append((replace(hit, title=f"{hit.title} · 搜索引擎收录摘要（原文因 {reason} 未回读）"),
                         f"{hit.title}\n{hit.snippet}"))
         snippet_urls.add(hit.url)
 
@@ -602,6 +603,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
         links = _official_roster_links(html, hit, claim, school_domains) if depth < 2 else []
         if claim.category == "竞赛" and depth < 2:
             links = [SearchHit(**p) for p in roster_links(html, hit, claim, school_domains=school_domains)]
+            if "<" in html[:2000]:
+                links += [SearchHit(**p) for p in roster_image_links(html, hit, claim)]
         compact_text = re.sub(r"\s+", "", text).casefold()
         has_name = any(name.replace(" ", "").casefold() in compact_text
                        for name in _name_variants(candidate_name))
@@ -615,6 +618,10 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
                                   candidate_name=candidate_name)
             if ev:
+                if hit.url in snippet_urls:
+                    ev.extraction_method = "search_snippet"
+                    if ev.source_tier == "A":
+                        ev.source_tier = "B"
                 evidences.append(ev)
         # 栏目 → 当年公告 → 附件，最多两层；赛事可按题目读取多份赛果，共用原读页预算。
         children = []
@@ -628,7 +635,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             follow_budget.note_read()
             followed += 1
             try:
-                roster = fetcher.get(linked.url)
+                reader = getattr(fetcher, "get_roster", None)
+                roster = reader(linked.url, claim) if callable(reader) else fetcher.get(linked.url)
             except Exception:
                 roster = None
             if not roster:
@@ -787,6 +795,12 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         usable = [h for h in hits if h.url.startswith(("https://", "http://"))]
         if competition:
             usable = [h for h in usable if not competition_page_mismatch(claim, h.title or "")]
+            year = claim_year(claim)
+            def wrong_year(hit):
+                years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)",hit.title or "")}
+                profile = re.search(r"人物|风采|榜样|毕业生|访谈|介绍|事迹|个人主页",hit.title or "")
+                return bool(year and years and year not in years and not profile)
+            usable = [h for h in usable if not wrong_year(h)]
         total_hits += len(usable)
         per_query.append(sorted(usable, key=lambda h: -_relevance(h, candidate_name, claim)))
 
@@ -937,7 +951,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 hits = outcome
             elif q.kind == "crossref":
                 hits = paper_hits(q.text, author=candidate_name, venue=venue,
-                                  year=claim.date_label)
+                                  year=claim.date_label,
+                                  doi=str(entities.get("doi") or "") if claim.category == "论文" else "")
             else:
                 # 只预取下一条独立查询：已知官网域或普通网页查询。
                 # 需要先发现域名的查询必须串行，预算不足时也不额外发请求。

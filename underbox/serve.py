@@ -99,6 +99,12 @@ def render_material(rep) -> str:
         if v.next_step:
             out.append(f"  下一步建议：{v.next_step}")
         out.append("")
+    skipped = getattr(rep, "skipped_claims", None) or []
+    if skipped:
+        out.append("按设置没有核验的条目（没有检索，报告对它们不下结论）：")
+        for c in skipped:
+            out.append(f"  [{c.id}] {c.category}　{c.raw_text}")
+        out.append("")
     if rep.input_risks:
         # 只报"检测到了什么、在哪"，**不带命中原文**——那些正是 open_box 从
         # 送入模型的内容里剔除的东西，传回去等于把刚筛掉的指令又递给模型。
@@ -173,6 +179,8 @@ def to_presentation(rep) -> dict:
         "searchConfigured": _search_configured(),
         "risks": [{"kind": r.kind, "locator": r.locator, "detail": r.detail, "excerpt": r.excerpt}
                   for r in rep.input_risks],
+        # 拆出来但按设置不核验的（默认实习经历）：如实列出，导出时写明没核
+        "skipped": [claim_brief(c) for c in getattr(rep, "skipped_claims", None) or []],
         "claims": [{
             "id": v.claim.id,
             "category": v.claim.category,
@@ -260,6 +268,186 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
         events.put(None)
 
 
+# ── 先拆分、再勾选、再核验 ──────────────────────────────────────────────
+# 页面先上传简历 → 服务端解析、画像、拆成陈述（不检索）→ 页面按类别分块展示，
+# 用户勾选要核验的条目 → 只检索勾选的那些。拆分结果按 token 暂存在内存里，只保留最近几份。
+
+PREPARED: dict[str, dict] = {}
+_PREPARED_LOCK = threading.Lock()
+_PREPARED_KEEP = 6
+
+
+def _remember_prepared(entry: dict) -> str:
+    import uuid                                        # noqa: PLC0415
+    token = uuid.uuid4().hex
+    with _PREPARED_LOCK:
+        PREPARED[token] = entry
+        while len(PREPARED) > _PREPARED_KEEP:
+            PREPARED.pop(next(iter(PREPARED)))
+    return token
+
+
+def claim_brief(c) -> dict:
+    return {"id": c.id, "category": c.category, "date": c.date_label, "rawText": c.raw_text,
+            "locator": c.raw_locator, "elements": c.elements}
+
+
+def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
+    """线程目标：解析 → 确认是简历 → 画像与拆分（同时进行）。结束时推送陈述清单和 token。"""
+    from app.parse import parse_document             # noqa: PLC0415
+    from app.pipeline import prepare_resume          # noqa: PLC0415
+    from app.llm import build_llm                    # noqa: PLC0415
+    from app.resume_gate import ensure_resume         # noqa: PLC0415
+
+    def say(*a, **k):
+        events.put({"log": " ".join(str(x) for x in a)})
+
+    suffix = Path(filename).suffix or ".upload"
+    tmp = Path(tempfile.NamedTemporaryFile(suffix=suffix, delete=False).name)
+    tmp.write_bytes(data)
+    started = time.monotonic()
+    try:
+        parsed = parse_document(tmp)
+        events.put({"log": f"识别文件格式：{parsed.kind.upper()}；正在判断是否为简历"})
+        llm = build_llm()
+        ensure_resume(parsed, llm)
+        events.put({"log": "已确认是个人简历"})
+        events.put({"log": "归纳候选人画像（身份/行业/层级），同时拆分陈述…"})
+
+        def on_profile(profile):
+            events.put({"log": f"画像完成：identity={profile.identity} level={profile.level} "
+                               f"industries={profile.industries or ['—']}"})
+            events.put({"stage": "profile"})
+
+        prepared = prepare_resume(str(tmp), parsed_document=parsed, llm=llm, progress=say,
+                                  on_profile=on_profile)
+        token = _remember_prepared({"prepared": prepared, "filename": filename,
+                                    "fileType": parsed.kind, "at": time.time()})
+        events.put({"log": f"已拆成 {len(prepared.claims)} 条陈述，等待勾选"
+                           + (f"（另有 {len(prepared.skipped)} 条按设置不核验）" if prepared.skipped else "")})
+        events.put({"done": True, "split": {
+            "token": token,
+            "candidate": prepared.name,
+            "fileType": parsed.kind,
+            "filename": filename,
+            "risks": [{"kind": r.kind, "locator": r.locator, "detail": r.detail, "excerpt": r.excerpt}
+                      for r in parsed.risks],
+            "claims": [claim_brief(c) for c in prepared.claims],
+            "skipped": [claim_brief(c) for c in prepared.skipped],
+        }, "seconds": round(time.monotonic() - started, 1)})
+    except Exception as exc:
+        events.put({"done": True, "failed": True, "error": _user_error(exc),
+                    "seconds": round(time.monotonic() - started, 1)})
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        events.put(None)
+
+
+def _user_error(exc: Exception) -> str:
+    """给页面看的错误：已知的输入问题只说原因，其余带上异常类型方便排查。"""
+    try:
+        from app.homepage import HomepageError            # noqa: PLC0415
+        from app.resume_gate import NotResumeError         # noqa: PLC0415
+        known = (HomepageError, NotResumeError)
+    except Exception:
+        known = ()
+    if known and isinstance(exc, known):
+        return str(exc)
+    return f"{type(exc).__name__}: {exc}"
+
+
+def run_split_url_job(url: str, events: queue.Queue, holder: dict) -> None:
+    """线程目标：个人主页 → 读取正文 → 确认是个人主页（防开盒）→ 画像与拆分。
+
+    读取守 robots.txt、如实 UA、同站限速，只取正文文字。确认不是个人主页就停，
+    不拆分、不检索。之后和上传文件完全同一条流水线。
+    """
+    from urllib.parse import urlparse                   # noqa: PLC0415
+    from app.homepage import ensure_personal_homepage, read_homepage, to_document  # noqa: PLC0415
+    from app.pipeline import prepare_resume             # noqa: PLC0415
+    from app.llm import build_llm                       # noqa: PLC0415
+
+    def say(*a, **k):
+        events.put({"log": " ".join(str(x) for x in a)})
+
+    started = time.monotonic()
+    try:
+        events.put({"log": f"读取网页：{urlparse(url if '://' in url else 'https://' + url).hostname or url}"
+                           "（守 robots.txt，只取正文文字）"})
+        snap = read_homepage(url)
+        doc = to_document(snap)
+        hidden = sum(1 for r in doc.risks if r.kind == "hidden_html")
+        events.put({"log": f"已读取正文 {len(snap.blocks)} 段"
+                           + (f"；发现 {hidden} 处隐藏文字，已剔除" if hidden else "")})
+        llm = build_llm()
+        events.put({"log": "判断这是不是个人主页（防止拿来查无关的人）…"})
+        verdict = ensure_personal_homepage(doc, llm, title=snap.title)
+        events.put({"log": f"已确认：{verdict['page_type']}"
+                           + (f"（{verdict['person']}）" if verdict.get("person") else "")
+                           + (f"——{verdict['reason']}" if verdict.get("reason") else "")})
+        events.put({"log": "归纳画像（身份/行业/层级），同时拆分陈述…"})
+
+        def on_profile(profile):
+            events.put({"log": f"画像完成：identity={profile.identity} level={profile.level} "
+                               f"industries={profile.industries or ['—']}"})
+            events.put({"stage": "profile"})
+
+        prepared = prepare_resume(doc.source, parsed_document=doc, llm=llm, progress=say,
+                                  on_profile=on_profile)
+        token = _remember_prepared({"prepared": prepared, "filename": snap.site or url,
+                                    "fileType": "web", "at": time.time()})
+        events.put({"log": f"已拆成 {len(prepared.claims)} 条陈述，等待勾选"
+                           + (f"（另有 {len(prepared.skipped)} 条按设置不核验）" if prepared.skipped else "")})
+        events.put({"done": True, "split": {
+            "token": token,
+            "candidate": prepared.name,
+            "fileType": "web",
+            "filename": snap.title or snap.site,
+            "risks": [{"kind": r.kind, "locator": r.locator, "detail": r.detail, "excerpt": r.excerpt}
+                      for r in doc.risks],
+            "claims": [claim_brief(c) for c in prepared.claims],
+            "skipped": [claim_brief(c) for c in prepared.skipped],
+            "preview": snap.preview(),
+            "verdict": verdict,
+        }, "seconds": round(time.monotonic() - started, 1)})
+    except Exception as exc:
+        events.put({"done": True, "failed": True, "error": _user_error(exc),
+                    "seconds": round(time.monotonic() - started, 1)})
+    finally:
+        events.put(None)
+
+
+def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, holder: dict) -> None:
+    """线程目标：只核验勾选的陈述（各条同时开始检索）。"""
+    from app.pipeline import verify_prepared         # noqa: PLC0415
+
+    def say(*a, **k):
+        events.put({"log": " ".join(str(x) for x in a)})
+
+    started = time.monotonic()
+    try:
+        with _PREPARED_LOCK:
+            entry = PREPARED.get(token)
+        if entry is None:
+            raise LookupError("这份简历的拆分结果已过期，请重新上传")
+        prepared = entry["prepared"]
+        rep = verify_prepared(prepared, claim_ids=claim_ids, progress=say)
+        holder["oby"] = rep
+        holder["profile"] = prepared.profile
+        events.put({"done": True, "report": to_presentation(rep),
+                    "seconds": round(time.monotonic() - started, 1),
+                    "filename": entry["filename"], "fileType": entry["fileType"]})
+    except Exception as exc:
+        events.put({"done": True, "failed": True,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "seconds": round(time.monotonic() - started, 1)})
+    finally:
+        events.put(None)
+
+
 # ── 对话：直连 DeepSeek 流式（SSE）───────────────────────────────────────
 # 之前经 dsh --profile headless 转发，但那是命令行调用，**天生无法流式**——
 # 回答要等全部生成完才一次性吐出来。改成同一模型、同一份材料、同一提示词，
@@ -343,6 +531,12 @@ def report_to_markdown(rep: dict) -> str:
         if c.get("question"):
             L.append(f"- 可问的问题：{c['question']}")
         L.append("")
+    if rep.get("skipped"):
+        L.append("## 未核验的条目")
+        L.append("以下条目按设置不进入核验（实习经历通常没有公开记录），报告对它们不下任何结论。")
+        for c in rep["skipped"]:
+            L.append(f"- {c.get('category', '')}：{c.get('rawText', '')}")
+        L.append("")
     if rep.get("risks"):
         L.append("## 输入风险")
         for k in rep["risks"]:
@@ -397,21 +591,48 @@ class Handler(BaseHTTPRequestHandler):
         self._send(p.read_bytes(), ctype)
 
     def _verify_stream(self) -> None:
-        """流式核验（SSE）：每条真实日志/阶段变化都推给页面。
+        """流式核验（SSE）。两种请求：
 
-        前端的状态窗口就是吃这个端点——所以窗口里的每一行都是流水线里真实发生的，
-        不是前端自己编的动画。
+        · JSON {"token", "claimIds"}：核验先前 /api/split/stream 拆好的、用户勾选的条目；
+        · 文件本体（旧接口）：一次跑完拆分 + 全部条目。
         """
+        ctype = (self.headers.get("Content-Type") or "").lower()
+        if "application/json" in ctype:
+            payload = self._read_json()
+            token = str(payload.get("token") or "")
+            ids = [str(x) for x in (payload.get("claimIds") or []) if str(x)]
+            if not token:
+                return self._json({"error": "缺少 token：先上传简历拆分条目"}, 400)
+            if not ids:
+                return self._json({"error": "没有勾选要核验的条目"}, 400)
+            return self._sse(run_verify_selected_job, (token, ids))
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
-        fname = unquote(self.headers.get("X-Filename") or "resume.pdf").strip()
-        fname = Path(fname).name
+        fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
+        return self._sse(run_verify_job, (data, fname))
 
+    def _split_stream(self) -> None:
+        """流式拆分（SSE）：上传简历 → 解析、画像、拆成陈述，结束时给出陈述清单与 token。不检索。
+
+        JSON {"url": ...} 是个人主页模式：读取网页、确认是个人主页后同样拆分。
+        """
+        if "application/json" in (self.headers.get("Content-Type") or "").lower():
+            url = str(self._read_json().get("url") or "").strip()
+            if not url:
+                return self._json({"error": "请粘贴个人主页的网址"}, 400)
+            return self._sse(run_split_url_job, (url,))
+        data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
+        if not data:
+            return self._json({"error": "没有收到文件"}, 400)
+        fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
+        return self._sse(run_split_job, (data, fname))
+
+    def _sse(self, target, args: tuple) -> None:
+        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。"""
         events: queue.Queue = queue.Queue()
         holder: dict = {}
-        threading.Thread(target=run_verify_job, args=(data, fname, events, holder),
-                         daemon=True).start()
+        threading.Thread(target=target, args=(*args, events, holder), daemon=True).start()
 
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -472,6 +693,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/api/verify/stream":
             return self._verify_stream()
+        if path == "/api/split/stream":
+            return self._split_stream()
         if path == "/api/ask/stream":
             return self._ask_stream()
         if path == "/api/plan":

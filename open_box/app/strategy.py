@@ -332,6 +332,8 @@ def _context(claim, candidate_name: str, terms: list[str],
     cvar = _paren_variants(pick("contest", "contest"))
     avar = _paren_variants(pick("award", "award"))
     tvar = _paren_variants(title)
+    # 会议名常写成「中文全称（英文缩写 年份）」，程序册和报道往往只写其中一种。
+    confvar = _paren_variants(pick("conference", "conference", "venue"))
 
     # 学年/期间：**用简历里写明的原词，不做任何换算或变体**。
     # "2025 学年校二等学术奖学金"——查询就该带着"2025 学年"这个原词；
@@ -365,6 +367,11 @@ def _context(claim, candidate_name: str, terms: list[str],
         "award2": avar[1] if len(avar) > 1 else "",
         "team": team,
         "venue": pick("venue", "venue"),
+        "conference": confvar[0] if confvar else "",
+        "conference2": confvar[1] if len(confvar) > 1 else "",
+        "doi": pick("doi", "doi"),
+        "arxiv": pick("arxiv", "arxiv"),
+        "patent_no": pick("patent_no", "patent_no"),
         "paper": title,
         "title": tvar[0] if tvar else title,
         "title2": tvar[1] if len(tvar) > 1 else "",
@@ -675,6 +682,11 @@ def build_plan(
         when_terms = form.get("when_terms") or []
         if when_terms and not any(term in _claim_search_blob(claim) for term in when_terms):
             continue
+        # 反向条件：原文含这些词时这条查询没有意义（如软件著作权不在专利库里，
+        # 不该把查询限定到专利站去烧预算）。
+        unless_terms = form.get("unless_terms") or []
+        if unless_terms and any(term in _claim_search_blob(claim) for term in unless_terms):
+            continue
         # 表单可以声明只对哪些类别有意义（如"学年评奖公示"只对荣誉/奖学金类）。
         # 没有这层限定，给学生工作发的查询里会混进"评奖公示"——它证不了职务，
         # 只是把预算烧在一个不可能出结果的查询上。
@@ -690,7 +702,7 @@ def build_plan(
         # 同一事实的中英文名/括号缩写分开检索。搜索供应商对复杂 OR 查询的支持并不
         # 稳定，两个短而精确的查询比一条长查询更可控；预算排序会保留最重要的变体。
         contexts = [ctx]
-        variant_key = next((k for k in ("name", "contest", "award", "title")
+        variant_key = next((k for k in ("name", "contest", "award", "title", "conference")
                             if "{" + k + "}" in tpl and ctx.get(k + "2")), None)
         if variant_key:
             alt = dict(ctx)
@@ -765,10 +777,10 @@ def build_plan(
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
     regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))
     def priority(q: Query) -> int:
-        if regional_contest and q.source.startswith("school:"):
+        if (regional_contest or competition and competition.get("school_search_first")) and q.source.startswith("school:"):
             return 0
         if competition and q.source.startswith("organizer:竞赛:catalog:"):
-            return 1 if regional_contest else 0
+            return 1 if regional_contest or competition.get("school_search_first") else 0
         if q.source.startswith("school:"):
             return 2 if roster_first else (1 if competition else 0)
         if q.kind == "crossref":

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 Category = Literal[
     "学历", "校内荣誉", "奖学金", "学生工作", "竞赛",
-    "论文", "专利", "项目", "开源项目", "实习", "任职",
+    "论文", "专利", "会议", "项目", "开源项目", "实习", "任职",
 ]
 Tier = Literal["A", "B", "C", "D"]
 Status = Literal["ok", "part", "ask", "none", "who"]
@@ -142,6 +142,7 @@ class Evidence(BaseModel):
     supports: list[str] = Field(default_factory=list)
     contradicts: list[str] = Field(default_factory=list)
     origin_url: str | None = None   # 转载时填原始出处，用于去重
+    extraction_method: Literal["text", "ocr", "search_snippet"] = "text"
 
     @field_validator("identity_signals", "identity_conflicts", "supports", "contradicts",
                      mode="before")
@@ -178,7 +179,7 @@ class VerifiedClaim(BaseModel):
 class InputRisk(BaseModel):
     """输入风险（第 6.1 节）。命中的文本一律不送入 LLM。"""
 
-    kind: Literal["tiny_font", "low_contrast", "offscreen", "injection_pattern"]
+    kind: Literal["tiny_font", "low_contrast", "offscreen", "injection_pattern", "hidden_html"]
     detail: str
     excerpt: str
     locator: str = ""
@@ -197,6 +198,8 @@ class Report(BaseModel):
     fictional_notice: str = ""
     input_risks: list[InputRisk] = Field(default_factory=list)
     claims: list[VerifiedClaim] = Field(default_factory=list)
+    # 拆出来了、但按设置不核验的条目（默认是实习经历）。如实列出，不让人以为漏看了。
+    skipped_claims: list[Claim] = Field(default_factory=list)
     disclaimer: str = (
         "本报告仅汇总公开来源与候选人提交的材料，不构成录用决定的唯一依据；"
         "候选人可对任一条结论提交解释与更正。"

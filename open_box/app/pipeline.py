@@ -22,6 +22,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from .plan import MAX_PAGE_READS, MAX_SEARCHES, MAX_SECONDS, plan_with_notes
 from .profile import derive_profile
 from .resume_gate import ensure_resume
 from .questions import default_next_step, generate_question
+from .homepage import same_page
 from .schema import STATUS_LABEL, Report
 from .search import CachedSearcher, PageFetcher, Searcher, build_searcher
 from .split import split_claims
@@ -91,37 +93,46 @@ def _llm_limit() -> int:
         return 10
 
 
-def run_pipeline(
+def skip_categories() -> set[str]:
+    """拆出来但不进入核验的类别。默认跳过「实习」：企业实习几乎没有公开记录，
+    检索只会烧预算、给出一排「未找到」。SKIP_CATEGORIES 可改（逗号分隔；设为 - 表示都核验）。"""
+    raw = os.environ.get("SKIP_CATEGORIES")
+    if raw is None:
+        raw = "实习"
+    return {x.strip() for x in re.split(r"[,，、\s]+", raw) if x.strip() and x.strip() != "-"}
+
+
+@dataclass
+class PreparedResume:
+    """拆分完、还没检索的一份简历：网页端先给用户看这些陈述、勾选要核验哪些，再检索。"""
+    resume_path: str
+    doc: ParsedDocument
+    llm: object
+    profile: object
+    claims: list
+    name: str
+    skipped: list = None          # 按 SKIP_CATEGORIES 跳过、不核验的陈述（默认实习）
+
+    def __post_init__(self):
+        if self.skipped is None:
+            self.skipped = []
+
+
+def prepare_resume(
     resume_path: str | Path,
     *,
     candidate_name: str = "",
-    position: str = "",
-    report_id: str = "live",
     profile=None,
     llm: LLM | None = None,
-    searcher: Searcher | None = None,
-    budget_factory=None,
-    fetcher: PageFetcher | None = None,
     progress=None,
     parsed_document: ParsedDocument | None = None,
     on_profile=None,
-) -> Report:
-    """live 模式。judge.assess 是唯一的判定入口，与 fixture 走的是同一套规则。
-
-    profile 是简历画像（身份/行业/层级/技能），决定用哪套检索策略。
-    不给就走兜底档案——预算更低，因为不知道去哪找时广撒网只换噪音。
-    """
+) -> PreparedResume:
+    """第 1–2 步：解析、确认是简历、画像与陈述拆分。不做任何检索。"""
     # 解析必须先于画像、拆分和检索；网页端已经解析过时直接复用，避免 PDF 读两遍。
     doc = parsed_document if parsed_document is not None else parse_document(resume_path)
     llm = llm or build_llm()
     ensure_resume(doc, llm)
-    searcher = CachedSearcher(searcher or build_searcher())
-    fetcher = fetcher or PageFetcher()
-    # 调用方显式给了预算工厂，就完全照它走（验收里就是用它把预算压到 1 次来跑断路场景）；
-    # 没给的话才由**检索计划自己带预算**——档案说 8 次检索、执行层却仍用默认 6 的话，
-    # 多出来的查询永远不会执行，差异化策略就成了装饰。
-    explicit_budget = budget_factory is not None
-    budget_factory = budget_factory or Budget
     say = progress or (lambda *a, **k: None)
 
     # 1 解析 + 输入风险检测
@@ -156,7 +167,53 @@ def run_pipeline(
 
     # 姓名：调用方给的 > 画像里的（模型读的原词）> 实体里的。都空才留空——
     # 之前这里直接落到"（未标注姓名）"，导致检索计划里的 `{name}` 查询全部废掉。
+    from .split import LAST_SPLIT
+    if LAST_SPLIT.get("dropped") or not claims:
+        dropped = LAST_SPLIT.get("dropped") or []
+        say(f"    拆分：模型给出 {LAST_SPLIT.get('given', 0)} 条，保留 {len(claims)} 条"
+            + (f"；丢弃 {len(dropped)} 条：{'、'.join(dropped[:6])}" if dropped else ""))
     name = candidate_name or profile.name or (claims[0].entities.get("name", "") if claims else "")
+    skip = skip_categories()
+    skipped = [c for c in claims if c.category in skip]
+    if skipped:
+        claims = [c for c in claims if c.category not in skip]
+        kinds = "、".join(dict.fromkeys(c.category for c in skipped))
+        say(f"    {kinds} {len(skipped)} 条按设置不核验（SKIP_CATEGORIES）")
+    return PreparedResume(resume_path=str(resume_path), doc=doc, llm=llm, profile=profile,
+                          claims=claims, name=name, skipped=skipped)
+
+
+def verify_prepared(
+    prepared: PreparedResume,
+    *,
+    claim_ids=None,
+    position: str = "",
+    report_id: str = "live",
+    searcher: Searcher | None = None,
+    budget_factory=None,
+    fetcher: PageFetcher | None = None,
+    progress=None,
+) -> Report:
+    """第 3–6 步：只核验勾选的陈述（claim_ids 为 None 时核验全部），报告按简历原顺序排列。"""
+    doc, llm, profile, name = prepared.doc, prepared.llm, prepared.profile, prepared.name
+    resume_path = prepared.resume_path
+    say = progress or (lambda *a, **k: None)
+    searcher = CachedSearcher(searcher or build_searcher())
+    fetcher = fetcher or PageFetcher()
+    # 调用方显式给了预算工厂，就完全照它走（验收里就是用它把预算压到 1 次来跑断路场景）；
+    # 没给的话才由**检索计划自己带预算**——档案说 8 次检索、执行层却仍用默认 6 的话，
+    # 多出来的查询永远不会执行，差异化策略就成了装饰。
+    explicit_budget = budget_factory is not None
+    budget_factory = budget_factory or Budget
+    if claim_ids is None:
+        claims = list(prepared.claims)
+    else:
+        wanted = set(claim_ids)
+        claims = [c for c in prepared.claims if c.id in wanted]
+        if not claims:
+            raise ValueError("没有选择要核验的条目")
+        if len(claims) < len(prepared.claims):
+            say(f"    只核验勾选的 {len(claims)} 条（共 {len(prepared.claims)} 条）")
 
     # 同一份简历里常有多条来自同一所学校的陈述。未知学校的官网一旦确认，后续陈述
     # 直接复用，避免重复跑“学校名 + 官网”发现查询，既省时间也省搜索额度。
@@ -165,7 +222,9 @@ def run_pipeline(
     organizer_domains: dict[str, str] = {}
     publisher_domains: dict[str, str] = {}
     # 档案匹配要用整份简历的类别集合，不能只看当前这一条——见 strategy._matches
-    resume_categories = [c.category for c in claims]
+    # （跳过不核验的条目也算：它们照样说明这是一份什么样的简历）
+    resume_categories = [c.category for c in [*prepared.claims, *prepared.skipped]]
+    source_page = doc.source if getattr(doc, "kind", "") == "web" else ""
     total = len(claims)
     workers = claim_workers(total)
     done = 0
@@ -206,6 +265,12 @@ def run_pipeline(
             organizer_domains=organizer_domains,
             publisher_domains=publisher_domains,
         )
+        if source_page:
+            # 网页输入：陈述就是从这个主页拆出来的，再拿它当证据等于自己证明自己
+            dropped = [e for e in evidences if same_page(e.url, source_page)]
+            if dropped:
+                evidences = [e for e in evidences if not same_page(e.url, source_page)]
+                csay("检索结果里有提交的主页本身，不作为证据（自述不能自证）")
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)
         competition = competition_for_claim(claim)
@@ -224,6 +289,10 @@ def run_pipeline(
             if not evidences and re.search(r"[A-Za-z]", name) and not re.search(r"[\u3400-\u9fff]", name):
                 vc.source_notes.append("当前只提供英文姓名；中文名单中的同名拼音不能自动认定为本人，可补充中文姓名或参赛队号建立关联。")
         vc.next_step = default_next_step(vc)
+        if any(e.extraction_method == "ocr" for e in evidences):
+            vc.source_notes.append("已读取官方名单图片的OCR文本；姓名、奖级及合并单元格可能识别错位，需人工核对原图，不能仅据OCR升级为已证实。")
+        if any(e.extraction_method == "search_snippet" for e in evidences):
+            vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")
         # 6 澄清问题
         vc.question = generate_question(vc, llm)
         if workers > 1:
@@ -267,7 +336,35 @@ def run_pipeline(
         fictional=False,
         input_risks=doc.risks,
         claims=verified,
+        skipped_claims=list(prepared.skipped),
     )
+
+
+def run_pipeline(
+    resume_path: str | Path,
+    *,
+    candidate_name: str = "",
+    position: str = "",
+    report_id: str = "live",
+    profile=None,
+    llm: LLM | None = None,
+    searcher: Searcher | None = None,
+    budget_factory=None,
+    fetcher: PageFetcher | None = None,
+    progress=None,
+    parsed_document: ParsedDocument | None = None,
+    on_profile=None,
+) -> Report:
+    """live 模式。judge.assess 是唯一的判定入口，与 fixture 走的是同一套规则。
+
+    profile 是简历画像（身份/行业/层级/技能），决定用哪套检索策略。
+    不给就走兜底档案——预算更低，因为不知道去哪找时广撒网只换噪音。
+    = prepare_resume（解析、画像、拆分）+ verify_prepared（全部陈述）。
+    """
+    prepared = prepare_resume(resume_path, candidate_name=candidate_name, profile=profile, llm=llm,
+                              progress=progress, parsed_document=parsed_document, on_profile=on_profile)
+    return verify_prepared(prepared, position=position, report_id=report_id, searcher=searcher,
+                           budget_factory=budget_factory, fetcher=fetcher, progress=progress)
 
 
 def run(resume_path: str | Path | None = None, **kw) -> Report:

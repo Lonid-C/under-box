@@ -94,6 +94,35 @@ class ParallelClaimsTests(unittest.TestCase):
         self.assertEqual(seen, [profile])
         self.assertEqual(len(report.claims), 1)
 
+    def test_only_selected_claims_are_searched(self):
+        searched = []
+        lock = threading.Lock()
+
+        def collect(claim, name, searcher, llm, **kw):
+            with lock:
+                searched.append(claim.id)
+            return [], False
+
+        profile = ResumeProfile(identity="student", name="某候选人")
+        logs = []
+        with patch.dict(os.environ, {"CLAIM_WORKERS": "0"}), \
+             patch.object(pipeline, "ensure_resume", lambda doc, llm: None), \
+             patch.object(pipeline, "derive_profile", lambda text, llm: profile), \
+             patch.object(pipeline, "split_claims", lambda text, llm: _claims(5)), \
+             patch.object(pipeline, "collect_for_claim", collect), \
+             patch.object(pipeline, "generate_question", lambda vc, llm: "问题"):
+            prepared = pipeline.prepare_resume(RESUME, llm=_NoLLM(), progress=logs.append)
+            self.assertEqual(searched, [])                       # 拆分阶段不检索
+            self.assertEqual([c.id for c in prepared.claims], ["c01", "c02", "c03", "c04", "c05"])
+            # 勾选顺序打乱也按简历原顺序出报告
+            report = pipeline.verify_prepared(prepared, claim_ids=["c04", "c02"], searcher=object(),
+                                              fetcher=object(), progress=logs.append)
+            with self.assertRaises(ValueError):
+                pipeline.verify_prepared(prepared, claim_ids=[], searcher=object(), fetcher=object())
+        self.assertEqual(sorted(searched), ["c02", "c04"])
+        self.assertEqual([v.claim.id for v in report.claims], ["c02", "c04"])
+        self.assertTrue(any("只核验勾选的 2 条（共 5 条）" in line for line in logs), logs)
+
     def test_llm_calls_are_capped(self):
         active, peak = [0], [0]
         lock = threading.Lock()

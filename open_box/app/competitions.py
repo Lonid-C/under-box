@@ -135,19 +135,26 @@ def allowed_official_url(item: dict, url: str) -> bool:
 def seed_pages(item: dict, claim, *, limit: int = 2) -> list[dict]:
     year = claim_year(claim)
     level = competition_level(str(claim.raw_text) + str(claim.entities))
-    pages = [p for p in item.get("result_pages", [])
-             if allowed_official_url(item, p["url"])
+    from .plan import claim_school, school_domain
+    school_host = school_domain(claim_school(claim) or (claim.entities or {}).get("school_search_hint", ""))
+    school_pages = [p for p in item.get("school_result_pages", [])
+                    if school_host and p.get("school_domain") == school_host and _in_domains(p["url"], [school_host])]
+    pages = [p for p in [*school_pages, *item.get("result_pages", [])]
+             if (allowed_official_url(item, p["url"]) or p in school_pages)
              and not p.get("requires_login")
              and not p.get("inactive")
              and not (level == "provincial" and p.get("level") == "national")
              and not (level == "national" and p.get("level") == "provincial")
              and not competition_page_mismatch(claim, p.get("title", ""))
              and (not p.get("province") or p["province"] == claim_province(claim))
+             and (year is None or p.get("min_year", 1900) <= year <= p.get("max_year", 2100))
              and ((p.get("year") is None and p.get("kind") == "index")
                   or year is not None and p.get("year") == year)]
     # 对应年度的直接名单优先；没写年份时只访问通用索引，不把最近一年当作本人年份。
     pages.sort(key=lambda p: (p.get("year") is None, p.get("kind") != "roster"))
     specific = [p for p in pages if p.get("year") == year and p.get("kind") == "roster"] if year else []
+    if item.get("prefer_official_rosters"):
+        specific.sort(key=lambda p: bool(p.get("school_domain")))
     return (specific or pages)[:limit]
 
 
@@ -256,7 +263,57 @@ def catalog_query_specs(item: dict, claim, name: str) -> list[dict]:
         out.append(dict(text=" ".join(f'{school_label} {year} {scope} 获奖名单'.split()),site=school_host,
                         source="school:竞赛:catalog-roster",purpose="补查学校官网整批名单及内嵌附件，再核对本人",
                         round=1,weight=120,expect_tier="A",confirm_empty=True))
+        if name:
+            out.append(dict(text=f'"{name}" {label}',site=school_host,
+                            source="school:竞赛:catalog-person",purpose="学校人物介绍/历年汇总中找本人，再核对获奖年份",
+                            round=1,weight=115,expect_tier="A"))
+        if item.get("edition_year_offset") and claim_year(claim):
+            edition = (claim.entities or {}).get("edition") or f"第{_chinese_number(claim_year(claim)-item['edition_year_offset'])}届"
+            out.append(dict(text=f'{label} {edition} 获奖',site=school_host,
+                            source="school:竞赛:catalog-edition",purpose="补查只写届次、不写公历年份的学校公告",
+                            round=1,weight=110,expect_tier="A"))
     return out
+
+
+def _chinese_number(n: int) -> str:
+    digits = "零一二三四五六七八九"
+    if not 1 <= n < 100:
+        return str(n)
+    return digits[n] if n < 10 else (digits[n//10] if n >= 20 else "") + "十" + (digits[n%10] if n%10 else "")
+
+
+def roster_image_links(html: str, page, claim) -> list[dict]:
+    """仅识别已确认官网/该校正文中的名单图片，不把Logo、二维码和头像作为名单。"""
+    item = competition_for_claim(claim)
+    if not item or not _RESULT_WORDS.search(page.title or "") or competition_page_mismatch(claim, page.title or ""):
+        return []
+    from .plan import claim_school, school_domain
+    school_host = school_domain(claim_school(claim) or (claim.entities or {}).get("school_search_hint", ""))
+    if not allowed_official_url(item, page.url) and not (school_host and _in_domains(page.url, [school_host])):
+        return []
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "lxml")
+    root = soup.select_one("article, .wp_articlecontent, .v_news_content, #vsb_content, .news-content, .content") or soup
+    result = []
+    requested = str(claim.raw_text) + str(claim.entities) + str(claim.elements)
+    for img in root.select("img[src], img[data-src]"):
+        url = urljoin(page.url, img.get("data-src") or img.get("src", ""))
+        if (not re.search(r"/(?:[^/?]*(?:upload|__local)|ueditor)/", url, re.I)
+                or not re.search(r"\.(?:png|jpe?g|webp)(?:$|[?#])", url, re.I)
+                or re.search(r"logo|qrcode|avatar|icon", url, re.I)):
+            continue
+        if not allowed_official_url(item, url) and not (school_host and _in_domains(url, [school_host])):
+            continue
+        label = ""
+        for previous in img.find_all_previous(["p", "h2", "h3", "h4"],limit=5):
+            label = previous.get_text(" ", strip=True)
+            if label:
+                break
+        if "非英语专业组" in requested and label in ("【英语专业组】", "【专科生组】"):
+            continue
+        if url not in [p["url"] for p in result]:
+            result.append(dict(url=url,title=f"{page.title} · {label} 名单图片OCR识别（需核对原图）"))
+    return result[:3]
 
 
 _RESULT_WORDS = re.compile(r"获奖|授奖|公示|赛果|成绩|结果|名单|\b(?:results?|winners?|awards?|standings|rankings?|scoreboard)\b", re.I)
@@ -290,6 +347,9 @@ def roster_links(html: str, page, claim, *, limit: int | None = None,
     track_terms += [e.partition("=")[2] for e in claim.elements
                     if e.partition("=")[0].strip() in ("赛道", "组别", "赛区", "级别")]
     track_terms = [term for term in track_terms if len(term) >= 2]
+    edition = (claim.entities or {}).get("edition")
+    if not edition and item.get("edition_year_offset") and year:
+        edition = f"第{_chinese_number(year-item['edition_year_offset'])}届"
     nodes = list(soup.select("a[href], [pdfsrc]"))
     # VSB 公告常把附件放在函数的字面量参数里。只读取网址，不执行网页 JavaScript。
     for script in soup.find_all("script"):
@@ -323,6 +383,7 @@ def roster_links(html: str, page, claim, *, limit: int | None = None,
                 and not re.search(r"指导教师奖|教师奖|组织奖", claim.raw_text)):
             continue
         document = bool(re.search(r"\.(?:pdf|docx?|xlsx?)(?:$|[?#&\s])", unquote(url), re.I))
+        document = document or bool(re.search(r"\.(?:zip|rar)(?:$|[?#&\s])",unquote(url),re.I))
         if (item["id"] == "mcm-icm" and document and not school_page
                 and not any((claim.entities or {}).get(k) for k in ("team_id", "team_number"))):
             # 主办方完整名单按队号列结果，缺队号时读六个题组会先耗光学校补查预算。
@@ -332,6 +393,9 @@ def roster_links(html: str, page, claim, *, limit: int | None = None,
         # COMAP “2023 → Results”这样的索引中，年份在同一列表项/表格行或 URL 中。
         context = node.find_parent(["tr", "li"])
         local = context.get_text(" ", strip=True) if context else ""
+        editions = re.findall(r"第(?:[零一二三四五六七八九十百]+|\d+)届",label+" "+local)
+        if edition and editions and str(edition) not in editions:
+            continue
         local_years = {int(v) for v in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", local)} if not years else set()
         url_years = {int(v) for v in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", unquote(urlparse(url).path))}
         if any(found and (year is None or year not in found) for found in (local_years, url_years)):
@@ -346,6 +410,7 @@ def roster_links(html: str, page, claim, *, limit: int | None = None,
         score = (4*document + 12*bool(year and year in (years | url_years))
                  + 3*bool(year and local_years == {year} and not navigation)
                  + 10*sum(term in label for term in track_terms) + int(relevant))
+        score += 12 * bool(edition and str(edition) in label)
         if item["id"] == "mcm-icm" and document:
             # 按题目的完整赛果比 COMAP 奖学金新闻更适合核对普通美赛获奖。
             if re.search(r"\b(?:complete|full)\b.*\bresults?\b", label, re.I):

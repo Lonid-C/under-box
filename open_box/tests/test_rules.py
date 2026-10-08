@@ -639,7 +639,9 @@ def test_18_full_live_pipeline_over_deepseek_wire():
         # 每次调用都包着 untrusted_data
         assert "<untrusted_data>" in sent
 
-    assert len(report.claims) == 2, f"拆出 {len(report.claims)} 条，应为 2 条"
+    # 实习默认不进入核验（SKIP_CATEGORIES）：拆出来了，但只记在 skipped_claims 里，不检索
+    assert len(report.claims) == 1, f"核验 {len(report.claims)} 条，应为 1 条（实习跳过）"
+    assert [c.id for c in report.skipped_claims] == ["c02"]
     assert report.mode == "live"
     # 没有检索到任何公开来源 → 老实说未找到，不猜
     assert all(v.status == "none" for v in report.claims)

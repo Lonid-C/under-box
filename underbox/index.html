@@ -106,13 +106,26 @@ body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
 .drop b{display:block;font-family:var(--disp);font-size:22px;letter-spacing:-.01em;margin-bottom:7px}
 .drop span.s{margin:0;display:block;font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .drop span.s.ok{color:var(--pink);font-weight:600}
-.urlrow{margin-top:12px;text-align:center}
-.urlrow button{font:inherit;font-size:12px;color:var(--ink-2);background:none;border:0;border-bottom:1.5px dashed var(--ink-3);padding:1px 2px;cursor:pointer}
-.urlrow button:hover{color:var(--ink);border-color:var(--ink)}
-.urlbox{display:none;margin-top:11px}
-.urlbox.on{display:block}
-.urlbox input{width:100%;font:inherit;font-size:13px;padding:9px 11px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper)}
-.urlbox .tip{font-size:11.5px;color:var(--ink-2);margin-top:7px}
+/* 输入方式开关：简历文件 ⇄ 个人主页。粉色滑块压在当前选项下面，切换时滑过去 */
+.mode-sw{margin-left:auto;position:relative;display:inline-grid;grid-template-columns:1fr 1fr;border:2px solid var(--ink);border-radius:999px;background:var(--cream);padding:2px;isolation:isolate}
+.mode-sw::before{content:"";position:absolute;z-index:-1;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);border-radius:999px;background:var(--pink);border:2px solid var(--ink);box-sizing:border-box;transition:transform .22s var(--ease)}
+#intake[data-mode="url"] .mode-sw::before{transform:translateX(100%)}
+.mode-sw button{font:inherit;font-size:12px;font-weight:600;padding:4px 12px;border:0;background:none;color:var(--ink-2);cursor:pointer;border-radius:999px;white-space:nowrap}
+.mode-sw button[aria-checked="true"]{color:#fff}
+.mode-sw button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.mode-sw[aria-disabled="true"]{opacity:.55;pointer-events:none}
+#intake[data-mode="url"] .drop{display:none}
+#intake:not([data-mode="url"]) .urlbox{display:none}
+.urlbox{border:2px dashed var(--ink);border-radius:var(--rad);background:var(--cream);padding:24px 18px 16px;text-align:center}
+.urlbox b{display:block;font-family:var(--disp);font-size:22px;letter-spacing:-.01em;margin-bottom:12px}
+.url-row{display:flex;gap:8px}
+.url-row input{flex:1;min-width:0;font:inherit;font-size:13px;padding:10px 11px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper)}
+.url-row input:focus{outline:2px solid var(--pink);outline-offset:1px}
+.url-row .btn{width:auto;margin:0;flex:none;padding:10px 16px}
+.urlbox .tip{font-size:11.5px;color:var(--ink-2);margin:10px 0 0;line-height:1.6;text-align:left}
+.urlbox .tip.bad{color:#712B13;font-weight:600}
+.urlbox.nope{animation:shake .34s}
+#intake.accepted .urlbox{border-style:solid;background:var(--pink-soft)}
 .btn{display:block;width:100%;margin-top:11px;font:inherit;font-size:13px;font-weight:600;padding:11px 14px;border:2px solid var(--ink);border-radius:var(--rad);background:var(--pink);color:#fff;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s}
 .btn:hover{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink)}
 .btn:active{transform:translate(3px,3px);box-shadow:none}
@@ -198,6 +211,61 @@ body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
 .next::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;background:var(--pink);border:1.5px solid var(--ink);border-radius:2px}
 .empty{font-size:13px;color:var(--ink-2);background:var(--paper);border:2px dashed #D8D4C9;border-radius:var(--rad);padding:13px}
 
+/* ══ 分拣台：上传后先按类别分块，勾选要核验的条目 ══════ */
+.pick[hidden]{display:none}
+.pick-h{margin:2px 0 22px}
+.pick-h h2{font-size:24px;line-height:1.25;letter-spacing:.01em;margin:0 0 8px;font-weight:700}
+.pick-h p{margin:0;max-width:62ch;font-size:13.5px;color:var(--ink-2)}
+.blk{position:relative;background:var(--paper);border:2px solid var(--ink);border-radius:0 var(--rad) var(--rad) var(--rad);box-shadow:var(--shadow);margin:34px 0 0}
+.blk:first-of-type{margin-top:30px}
+/* 文件夹页签：类别名 + 条数。整块都没选时页签变灰，一眼看出哪类被跳过了 */
+.blk-tab{position:absolute;left:-2px;top:-30px;height:30px;display:flex;align-items:center;gap:9px;padding:0 14px;background:var(--ink);color:#fff;border-radius:var(--rad) var(--rad) 0 0;font-size:13.5px;font-weight:600}
+.blk-tab b{font-family:var(--disp);font-weight:400;font-size:14px;color:var(--pink)}
+.blk.off .blk-tab{background:#C9C4B8;color:var(--ink)}
+.blk.off .blk-tab b{color:var(--ink)}
+.blk-all{position:absolute;right:12px;top:-27px;font:inherit;font-size:12px;font-weight:500;background:var(--paper);border:2px solid var(--ink);border-radius:999px;padding:1px 11px;cursor:pointer}
+.blk-all:hover{background:var(--pink-soft)}
+.blk ul{list-style:none;margin:0;padding:0}
+.blk li+li{border-top:1.5px solid #E4E0D6}
+.pk{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 16px;cursor:pointer;transition:background .1s}
+.pk:hover{background:#FCFAF6}
+.pk input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.pk .box{width:20px;height:20px;margin-top:1px;border:2px solid var(--ink);border-radius:3px;background:var(--paper);display:grid;place-items:center;transition:background .12s}
+.pk .box svg{width:13px;height:13px;opacity:0}
+.pk input:checked+.box{background:var(--pink)}
+.pk input:checked+.box svg{opacity:1}
+.pk input:focus-visible+.box{outline:2px solid var(--pink);outline-offset:2px}
+.pk .tx{min-width:0;font-size:14px;line-height:1.55}
+.pk .tx small{display:block;margin-top:3px;font-size:12px;color:var(--ink-3)}
+.pk .meta{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pk .pg{font:inherit;font-size:11.5px;color:var(--ink);background:var(--cream);border:1.5px solid var(--ink);border-radius:3px;padding:0 6px;cursor:pointer}
+.pk .pg:hover{background:var(--pink-soft)}
+.pk:not(.on) .tx{color:var(--ink-3)}
+/* 底部常驻的合计栏：一直看得到选了几条，按钮就在手边 */
+.pick-bar{position:sticky;bottom:18px;z-index:5;margin-top:30px;display:flex;align-items:center;gap:16px;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);padding:12px 14px 12px 18px}
+.pick-bar .tally{display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--ink-2)}
+.pick-bar .tally b{font-family:var(--disp);font-weight:400;font-size:30px;line-height:1;color:var(--ink)}
+.pick-bar .tally span{white-space:nowrap}
+.pick-bar .btn{width:auto;margin:0 0 0 auto;padding:11px 20px;font-size:14px}
+.pick-wait{border:2px dashed #D8D4C9;border-radius:var(--rad);background:var(--paper);padding:26px;text-align:center;color:var(--ink-2);font-size:13px}
+.pick-wait .dots::after{content:'';animation:dots 1.4s steps(4,end) infinite}
+.toolbar .ghost.repick{margin-left:6px}
+/* 按设置不核验的条目（默认实习）：灰色虚线框，写明没核、为什么没核 */
+.skip-box{margin:22px 0 0;padding:10px 14px;border:2px dashed #D8D4C9;border-radius:var(--rad);background:var(--paper);font-size:12.5px;line-height:1.65;color:var(--ink-2)}
+.skip-box b{color:var(--ink);font-weight:600}
+.skip-box[hidden]{display:none}
+/* 写了 display 的元素，hidden 属性会被盖掉，得显式补上 */
+.toolbar[hidden],.pick-wait[hidden]{display:none}
+/* 勾选时还没有报告，问答胶囊会挡住「核验」按钮——先收起来 */
+body[data-picking] .chat-dock,body[data-picking] .chat{display:none}
+@media(max-width:980px){
+  body[data-picking] #statusDock{display:none}
+  .pk{grid-template-columns:22px minmax(0,1fr)}
+  .pk .meta{grid-column:2;flex-direction:row;align-items:center;gap:10px}
+  .pick-bar{flex-wrap:wrap}
+  .pick-bar .btn{width:100%;margin:0}
+}
+
 /* ══ 来源分级面板 / 空态 / 流式 ════════════════════ */
 .navlink{color:inherit;text-decoration:none;padding-bottom:2px}
 .navlink:hover{color:var(--ink)}
@@ -241,6 +309,7 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
 .sp-step.done{color:var(--ink-2)}
 .sp-step.done .d{background:var(--ink);border-color:var(--ink)}
 .sp-log{flex:1;min-height:110px;max-height:240px;overflow-y:auto;margin:6px 12px;padding:9px 10px;background:var(--cream);border:1.5px solid #D8D4C9;border-radius:3px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.7;color:var(--ink-2);white-space:pre-wrap;word-break:break-all}
+.sp-log .ln{display:block}
 .sp-foot{padding:8px 12px;border-top:1.5px solid #D8D4C9;font-size:11.5px;color:var(--ink-2);flex:none}
 #statusDock.failed .sp-foot{color:#712B13}
 #statusDock .status-pill{display:none}
@@ -344,8 +413,19 @@ body[data-stage="hero"] .chat{display:none}          /* 落地页不出现，出
 
 /* 已经拿到 PDF 之后，另外两条投料路径就该让位给查看器 */
 #intake.has-file .drop,
-#intake.has-file .urlrow,
 #intake.has-file .urlbox{display:none}
+
+/* 网页预览：只放正文文字的「阅读视图」，不加载原站的脚本和图片 */
+.pdf-view.web #pdfPrev,.pdf-view.web #pdfNext,.pdf-view.web .pg,.pdf-view.web #pdfOut,.pdf-view.web #pdfIn,
+.pdf-view.web .zoom,.pdf-view.web #pdfFit,.pdf-view.web #pdfFitPage,.pdf-view.web .div{display:none}
+.web-host{display:none;min-width:0;font-size:11.5px;font-weight:600;color:var(--ink);background:var(--paper);border:2px solid var(--ink);border-radius:3px;padding:2px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-view.web .web-host{display:inline-block}
+.web-page{width:100%;max-width:680px;background:#fff;border:1px solid #C9C4B8;box-shadow:2px 2px 0 rgba(20,19,15,.12);padding:22px 26px 28px;font-size:13.5px;line-height:1.75;color:var(--ink);overflow-wrap:anywhere}
+.web-page h1{font-size:18px;line-height:1.35;margin:0 0 14px;font-weight:700}
+.web-page h2{font-size:14px;margin:18px 0 6px;padding-bottom:4px;border-bottom:2px solid var(--ink);font-weight:700}
+.web-page p{margin:0 0 6px}
+.web-page ul{margin:0 0 6px;padding-left:20px}
+.web-page .hit{background:var(--pink-soft);box-shadow:0 0 0 2px var(--pink);border-radius:2px}
 
 /* 放大阅读：一个居中的阅读窗口，而不是铺满屏幕。
    A4 是竖版，铺满 1400px 宽只会得到"页面窄窄一条、两边大片死白"；
@@ -363,7 +443,13 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   main.grid{grid-template-columns:minmax(0,1fr)}
   body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left{width:100%}
   .top-nav{display:none}
+  .top-right .badge,.top-right .ghost{white-space:nowrap}
   .row{grid-template-columns:14px 96px minmax(0,1fr) 20px}
+}
+@media(max-width:600px){
+  .hdr-in{padding:12px 16px;gap:12px}
+  .top-right{gap:10px}
+  .top-right .rno{display:none}
   .row .dt,.row .ct,.row .tr{display:none}
 }
 @media(prefers-reduced-motion:reduce){
@@ -389,7 +475,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="tierpanel" id="tierPanel" hidden></div>
     <div class="top-right">
       <span class="badge" id="modeBadge"><i></i>载入中…</span>
-      <span>报告 <b id="rno">—</b></span>
+      <span class="rno">报告 <b id="rno">—</b></span>
       <button class="ghost" id="reset" type="button">换一份简历</button>
     </div>
   </div>
@@ -407,7 +493,13 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   <aside class="col-left">
     <section class="card" id="intake">
       <div class="pulse"></div>
-      <div class="card-h"><h2>上传简历</h2><span class="n">PDF / DOCX / 个人网页</span></div>
+      <div class="card-h">
+        <h2 id="intakeTitle">上传简历</h2>
+        <div class="mode-sw" id="modeSw" role="radiogroup" aria-label="选择输入方式">
+          <button type="button" role="radio" aria-checked="true" data-mode="file">简历文件</button>
+          <button type="button" role="radio" aria-checked="false" data-mode="url">个人主页</button>
+        </div>
+      </div>
       <div class="card-b">
         <div class="drop" id="drop" tabindex="0" role="button" aria-label="把简历拖到这里，或点击选择文件">
           <div class="ico">
@@ -437,6 +529,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
             <button id="pdfIn" type="button" title="放大" aria-label="放大">＋</button>
             <button id="pdfFit" type="button" title="按宽度铺满" class="on">适宽</button>
             <button id="pdfFitPage" type="button" title="整页放进视口">适页</button>
+            <span class="web-host" id="webHost"></span>
             <span class="gap"></span>
             <button id="pdfGrow" type="button" title="放大阅读（铺满整屏）" aria-label="放大阅读">⤢</button>
             <button id="pdfOpen" type="button" title="在新标签打开原文件" aria-label="在新标签打开">↗</button>
@@ -447,16 +540,20 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
           <div class="cap" id="pdfCap"></div>
         </div>
 
-        <div class="urlrow"><button type="button" id="urltoggle">或者，粘贴个人网页地址</button></div>
-        <div class="urlbox" id="urlbox">
-          <input type="url" id="url" placeholder="https://example.edu.cn/~you">
-          <div class="tip">只读公开页面；登录墙后的内容不抓取。</div>
-        </div>
+        <form class="urlbox" id="urlbox" novalidate>
+          <b>把主页网址贴进来</b>
+          <div class="url-row">
+            <input type="url" id="url" placeholder="https://www.xxx.edu.cn/info/…/….htm" autocomplete="off" spellcheck="false" aria-label="个人主页网址">
+            <button class="btn" id="urlGo" type="submit">读取主页</button>
+          </div>
+          <p class="tip" id="urlTip">只读公开页面，守 robots.txt，不登录。读取后先确认这是本人或所在单位发布的个人主页，再拆分经历；新闻报道、名单、含身份证号或住址的页面会被拒绝。</p>
+        </form>
         <div class="steps" id="steps">
           <div class="step" data-s="0"><span class="b"></span><span class="t">解析并检测输入风险</span></div>
           <div class="step" data-s="1"><span class="b"></span><span class="t">画像归纳并拆成可独立证伪的陈述</span></div>
-          <div class="step" data-s="2"><span class="b"></span><span class="t">按策略检索并取证</span></div>
-          <div class="step" data-s="3"><span class="b"></span><span class="t">逐条判定（身份 · 分级 · 状态）</span></div>
+          <div class="step" data-s="2"><span class="b"></span><span class="t">勾选要核验的条目</span></div>
+          <div class="step" data-s="3"><span class="b"></span><span class="t">按策略检索并取证</span></div>
+          <div class="step" data-s="4"><span class="b"></span><span class="t">逐条判定（身份 · 分级 · 状态）</span></div>
         </div>
       </div>
     </section>
@@ -479,10 +576,25 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="toolbar" id="toolbar" hidden>
       <div class="filters" id="filters"></div>
       <span class="count" id="shown">—</span>
+      <button class="ghost repick" id="repick" type="button" hidden>重新选择条目</button>
     </div>
-    <div class="pending" id="emptyFirst">把简历拖进左边的窗口，这里会出现逐条核验结果。</div>
+    <div class="pending" id="emptyFirst">把简历拖进左边的窗口，这里会先把它分成几块，让你勾选要核验的条目。</div>
+    <div class="pick-wait" id="pickWait" hidden>正在把简历拆成一条条陈述<span class="dots"></span></div>
+    <section class="pick" id="pick" hidden aria-labelledby="pickTitle">
+      <div class="pick-h">
+        <h2 id="pickTitle">选出要核验的条目</h2>
+        <p id="pickLead"></p>
+      </div>
+      <div id="pickBlocks"></div>
+      <p class="skip-box" id="pickSkipped" hidden></p>
+      <div class="pick-bar">
+        <div class="tally"><b id="pickN">0</b><span id="pickOf">/ 0 条已选</span></div>
+        <button class="btn" id="pickGo" type="button" disabled>核验已选条目</button>
+      </div>
+    </section>
     <div class="pending" id="pending" hidden>正在逐条核验<span class="dots"></span></div>
     <ul class="claims" id="claims" hidden></ul>
+    <p class="skip-box" id="skipNote" hidden></p>
   </section>
 </main>
 
@@ -587,7 +699,7 @@ function renderRisks() {
   const rs = REPORT.risks || [];
   const kinds = {};
   for (const r of rs) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
-  const NM = {tiny_font:'极小字号', low_contrast:'低对比度', offscreen:'画到页面外', injection_pattern:'提示词注入'};
+  const NM = {tiny_font:'极小字号', low_contrast:'低对比度', offscreen:'画到页面外', injection_pattern:'提示词注入', hidden_html:'网页隐藏文字'};
   $('risk-line').textContent = rs.length
     ? `${rs.length} 处 · ${Object.entries(kinds).map(([k,v])=>`${NM[k]||k} ${v}`).join(' · ')} · 已从送入模型的内容中剔除`
     : '未检测到输入风险';
@@ -717,6 +829,7 @@ function renderClaims() {
   });
   ul.hidden = false;
   $('pending').hidden = true;
+  renderSkipped($('skipNote'), REPORT.skipped);
 }
 
 let activeStatus = null;
@@ -789,7 +902,7 @@ function flip(card, ms, before, after) {
 function morphToApp() {
   flip($('intake'), 880,
     () => { document.body.dataset.stage = 'app'; },
-    () => { runEnter(); setTimeout(() => runFlow(pendingFile), 900); });
+    () => { runEnter(); setTimeout(() => runSplit(pendingUrl ? { url: pendingUrl } : pendingFile), 900); });
 }
 function morphToHero() {
   flip($('intake'), 760,
@@ -822,7 +935,9 @@ function runSteps() {
 
 /* ══ 投料交互 ═══════════════════════════════════ */
 let started = false;
+let pendingUrl = null;           // 个人主页模式下用户贴的网址
 const HINT_DEFAULT = '支持 PDF / DOCX / TXT / MD · 或点击选择文件';
+const URL_TIP = '只读公开页面，守 robots.txt，不登录。读取后先确认这是本人或所在单位发布的个人主页，再拆分经历；新闻报道、名单、含身份证号或住址的页面会被拒绝。';
 
 function reject(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
@@ -854,12 +969,69 @@ async function accept(name, file = null) {
   $('fname').textContent = name;
   $('hint').textContent = `✓ 已接收 ${name.length > 28 ? name.slice(0, 28) + '…' : name}`;
   $('hint').classList.add('ok');
+  $('modeSw').setAttribute('aria-disabled', 'true');
   $('intake').classList.add('accepted');
   setTimeout(morphToApp, 210);
 }
 
+/* 个人主页：前端只做格式检查；是不是个人主页、能不能读，由服务端读取后判断 */
+function acceptUrl(raw) {
+  if (started) return;
+  const tip = $('urlTip');
+  let text = (raw || '').trim();
+  if (text && !/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = 'https://' + text;
+  let u = null;
+  try { u = new URL(text); } catch { u = null; }
+  if (!u || !/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) {
+    const box = $('urlbox');
+    box.classList.remove('nope'); void box.offsetWidth; box.classList.add('nope');
+    tip.classList.add('bad');
+    tip.textContent = text ? '这不像一个网页地址，请粘贴完整网址，例如 https://www.xxx.edu.cn/…' : '先粘贴个人主页的网址';
+    return;
+  }
+  started = true;
+  pendingUrl = u.href;
+  pendingFile = null;
+  pendingKind = 'WEB';
+  $('url').value = u.href;
+  $('url').disabled = true; $('urlGo').disabled = true;
+  $('modeSw').setAttribute('aria-disabled', 'true');
+  $('fname').textContent = u.hostname + u.pathname;
+  tip.classList.remove('bad');
+  tip.textContent = `✓ 已接收 ${u.hostname}，读取后先确认是不是个人主页`;
+  $('intake').classList.add('accepted');
+  // 读取失败后改了网址再读：已经在主界面，就不用再播一遍进场动画
+  setTimeout(document.body.dataset.stage === 'app' ? () => runSplit({ url: pendingUrl }) : morphToApp, 210);
+}
+
+function setIntakeMode(mode) {
+  if (started) return;
+  const card = $('intake');
+  card.dataset.mode = mode;
+  $('intakeTitle').textContent = mode === 'url' ? '粘贴个人主页' : '上传简历';
+  document.querySelectorAll('#modeSw [role=radio]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+  if (mode === 'url') setTimeout(() => $('url').focus(), 60);
+}
+
 function initIntake() {
   const drop = $('drop'), file = $('file');
+  $('intake').dataset.mode = 'file';
+  document.querySelectorAll('#modeSw [role=radio]').forEach(b => {
+    b.addEventListener('click', () => setIntakeMode(b.dataset.mode));
+    b.addEventListener('keydown', e => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      e.preventDefault();
+      const next = $('intake').dataset.mode === 'url' ? 'file' : 'url';
+      setIntakeMode(next);
+      document.querySelector(`#modeSw [data-mode="${next}"]`).focus();
+    });
+  });
+  $('urlbox').addEventListener('submit', e => { e.preventDefault(); acceptUrl($('url').value); });
+  $('url').addEventListener('input', () => {
+    if (started) return;
+    const tip = $('urlTip');
+    if (tip.classList.contains('bad')) { tip.classList.remove('bad'); tip.textContent = URL_TIP; }
+  });
   drop.addEventListener('click', () => file.click());
   drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
   ['dragenter','dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('hot'); }));
@@ -878,15 +1050,6 @@ function initIntake() {
     pendingKind = null;
   });
 
-  $('urltoggle').addEventListener('click', () => {
-    const box = $('urlbox');
-    box.classList.toggle('on');
-    if (box.classList.contains('on')) {
-      $('url').focus();
-      $('url').addEventListener('input', e => { if (e.target.value.trim()) accept('个人网页.html'); }, { once: true });
-    }
-  });
-
   $('risk-btn').addEventListener('click', e => {
     const p = $('risk-panel'); const open = p.classList.toggle('open');
     e.target.setAttribute('aria-expanded', String(open));
@@ -898,7 +1061,12 @@ function initIntake() {
     setTimeout(() => {
       started = false;
       Viewer.clear();
+      $('file').value = '';                 // 不清空的话，再选同一个文件不会触发 change
       pendingFile = null;
+      pendingUrl = null;
+      $('url').value = ''; $('url').disabled = false; $('urlGo').disabled = false;
+      $('urlTip').classList.remove('bad'); $('urlTip').textContent = URL_TIP;
+      $('modeSw').removeAttribute('aria-disabled');
       pendingKind = null;
       $('intake').classList.remove('has-file');
       $('fileline').classList.remove('on');
@@ -907,7 +1075,16 @@ function initIntake() {
       $('intake').classList.remove('accepted');
       $('steps').classList.remove('on');
       document.querySelectorAll('#steps .step').forEach(s => s.className = 'step');
-      $('claims').innerHTML = ''; $('claims').hidden = true; $('pending').hidden = false;
+      document.querySelectorAll('#steps .step .t').forEach((t, i) => { t.textContent = StatusDock.stages[i] || t.textContent; });
+      PICK.token = null; PICK.claims = []; PICK.skipped = []; PICK.selected = new Set(); PICK.fileType = ''; PICK.lead = '';
+      $('skipNote').hidden = true; $('pickSkipped').hidden = true;
+      delete document.body.dataset.picking;
+      $('pickBlocks').innerHTML = '';
+      $('pick').hidden = true; $('pickWait').hidden = true; $('repick').hidden = true;
+      $('pending').style.color = '';
+      $('claims').innerHTML = ''; $('claims').hidden = true; $('pending').hidden = true;
+      $('toolbar').hidden = true;
+      setFirstEmpty('把简历拖进左边的窗口，这里会先把它分成几块，让你勾选要核验的条目。');
       activeStatus = null; applyFilter();
       scrollTo({ top: 0, behavior: 'smooth' });
     }, 780);
@@ -1380,10 +1557,39 @@ const Viewer = {
     msg.append(p1, document.createElement('br'), a);
   },
 
+  /** 个人主页：左侧显示服务端读到的正文快照（只有文字块），不嵌原站页面。 */
+  openWeb(prev) {
+    this.clear();
+    this.url = prev.url;
+    const view = this.el('pdfView'), stage = this.el('pdfStage');
+    view.classList.add('on', 'web');
+    this.el('webHost').textContent = prev.site || '';
+    this.el('webHost').title = prev.url || '';
+    this.el('pdfOpen').title = '在新标签打开原网页';
+    const art = el('article', { class: 'web-page', id: 'webPage' });
+    if (prev.title) art.appendChild(el('h1', { text: prev.title }));
+    let list = null;
+    (prev.blocks || []).forEach((b, i) => {
+      if (b.t === 'li') {
+        if (!list) { list = el('ul'); art.appendChild(list); }
+        list.appendChild(el('li', { text: b.text, 'data-i': i }));
+        return;
+      }
+      list = null;
+      art.appendChild(el(b.t === 'h' ? 'h2' : 'p', { text: b.text, 'data-i': i }));
+    });
+    stage.appendChild(art);
+    this.el('pdfMsg').hidden = true;
+    const t = new Date();
+    this.el('pdfCap').textContent = `网页快照 · ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} 读取 · 只保留正文文字，不加载原站脚本和图片 · ↗ 打开原网页`;
+  },
+
   clear() {
     this._seq++;
     try { this._task?.cancel?.(); } catch { /* 同上 */ }
-    [...this.el('pdfStage').querySelectorAll('canvas,iframe')].forEach(n => n.remove());
+    [...this.el('pdfStage').querySelectorAll('canvas,iframe,article')].forEach(n => n.remove());
+    this.el('pdfView').classList.remove('web');
+    this.el('pdfOpen').title = '在新标签打开原文件';
     this.el('pdfView').classList.remove('on');
     this.el('pdfMsg').hidden = false;
     this.el('pdfMsg').textContent = '正在载入查看器…';
@@ -1520,7 +1726,7 @@ function applyReport(report) {
    每一行日志都是流水线里真实发生的（后端把 run_pipeline 的进度原样推过来），
    不是前端自己编的动画。 */
 const StatusDock = {
-  stages: ['解析并检测输入风险', '画像归纳并拆成可独立证伪的陈述', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
+  stages: ['解析并检测输入风险', '画像归纳并拆成可独立证伪的陈述', '勾选要核验的条目', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
   started: 0, timer: null,
   el: id => document.getElementById(id),
   reset() {
@@ -1553,6 +1759,25 @@ const StatusDock = {
     if (row) row.className = 'sp-step ' + state;
   },
   progress(done, total) { this.el('spPillTxt').textContent = `核验中 ${done}/${total}`; },
+  /** 拆分完、等用户勾选：计时停下，窗口收成胶囊，不挡分拣台。 */
+  waiting(n) {
+    clearInterval(this.timer);
+    this.el('spTitle').textContent = `已拆成 ${n} 条，等你勾选`;
+    this.el('spFoot').textContent = '勾选要核验的条目后点「核验」，会接着在这里显示检索过程。';
+    this.el('spPillTxt').textContent = `已拆成 ${n} 条`;
+  },
+  /** 勾选完开始核验：接着之前的日志往下写，计时从这里重新开始。 */
+  resume() {
+    const dock = this.el('statusDock');
+    dock.classList.remove('done', 'failed');
+    this.el('spTitle').textContent = '正在核验';
+    this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
+    this.started = Date.now();
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      this.el('spTime').textContent = ((Date.now() - this.started) / 1000).toFixed(0) + 's';
+    }, 500);
+  },
   log(line, hi = false) {
     const box = this.el('spLog');
     box.appendChild(el('span', { class: 'ln' + (hi ? ' hi' : ''), text: line }));
@@ -1578,12 +1803,9 @@ const StatusDock = {
   },
 };
 
-async function verifyStream(file, onEv) {
-  const res = await fetch('/api/verify/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
-    body: file,
-  });
+/* 读后端的 SSE：每个 `data:` 一条事件。上传简历与提交勾选共用。 */
+async function sseRequest(url, init, onEv) {
+  const res = await fetch(url, init);
   if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.error || `HTTP ${res.status}`);
@@ -1607,57 +1829,342 @@ async function verifyStream(file, onEv) {
   }
 }
 
-async function runFlow(file) {
-  const steps = [...document.querySelectorAll('#steps .step')];
-  $('steps').classList.add('on');
-  steps.forEach(s => s.className = 'step');
-  $('emptyFirst').hidden = true;      // 空态让位给「进行中」
-  $('pending').hidden = false;
+/* 左栏五步清单 + 状态窗口的阶段：两处一起推进 */
+const Steps = {
+  all: () => [...document.querySelectorAll('#steps .step')],
+  set(i, state) {
+    const s = this.all()[i]; if (s) s.className = 'step' + (state ? ' ' + state : '');
+    StatusDock.setStage(i, state);
+  },
+  reset() { $('steps').classList.add('on'); this.all().forEach(s => s.className = 'step'); },
+};
+
+/* ══ 分拣台：按类别分块，勾选要核验的条目 ════════════
+   拆分只调用模型、不检索；勾选的条目才会去搜索和读页。 */
+const BLOCKS = [
+  { name: '学历',         cats: ['学历'],             why: '就读学校、学位、保研 / 推免' },
+  { name: '论文',         cats: ['论文'],             why: '题目、期刊或会议、作者位次' },
+  { name: '学术会议',     cats: ['会议'],             why: '会议、报告题目、报告形式' },
+  { name: '专利与软著',   cats: ['专利'],             why: '名称、专利号、发明人位次' },
+  { name: '竞赛获奖',     cats: ['竞赛'],             why: '赛事、年份、奖项' },
+  { name: '荣誉与奖学金', cats: ['校内荣誉', '奖学金'], why: '名称、授予单位、年份' },
+  { name: '项目经历',     cats: ['项目', '开源项目'],   why: '项目名、角色、仓库' },
+  { name: '任职经历',     cats: ['任职'],             why: '单位、职务、时间' },
+  { name: '学生工作',     cats: ['学生工作'],          why: '组织、职务' },
+];
+/** 按设置不核验的条目（默认实习）：写清楚没核、为什么没核，列出原文摘要。 */
+function renderSkipped(box, items) {
+  box.innerHTML = '';
+  if (!items || !items.length) { box.hidden = true; return; }
+  const kinds = [...new Set(items.map(c => c.category === '实习' ? '实习经历' : c.category))].join('、');
+  box.append(el('b', { text: `${kinds} ${items.length} 条不核验` }),
+    '（按设置跳过，不去检索；实习一般没有公开记录）：',
+    items.map(c => summaryOf(c.rawText)).join('；'));
+  box.hidden = false;
+}
+const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileType: '', lead: '' };
+
+function blockOf(c) { return BLOCKS.find(b => b.cats.includes(c.category)) || { name: '其他', cats: [], why: '' }; }
+function pageOfLocator(loc) { const m = /第\s*(\d+)\s*页/.exec(loc || ''); return m ? +m[1] : null; }
+const CHECK_SVG = '<svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7"/></svg>';
+
+function renderPick() {
+  const box = $('pickBlocks'); box.innerHTML = '';
+  const groups = new Map();
+  PICK.claims.forEach(c => {
+    const b = blockOf(c);
+    if (!groups.has(b.name)) groups.set(b.name, { b, items: [] });
+    groups.get(b.name).items.push(c);
+  });
+  // 按 BLOCKS 的顺序排（学历在前），"其他" 垫底
+  const order = [...BLOCKS.map(b => b.name), '其他'];
+  [...groups.values()].sort((x, y) => order.indexOf(x.b.name) - order.indexOf(y.b.name)).forEach(({ b, items }) => {
+    const sec = el('section', { class: 'blk', 'data-block': b.name });
+    const tab = el('div', { class: 'blk-tab' }, el('span', { text: b.name }), el('b', { text: String(items.length) }));
+    const all = el('button', { class: 'blk-all', type: 'button' });
+    const ul = el('ul');
+    items.forEach(c => {
+      const id = 'pk-' + c.id;
+      const input = el('input', { type: 'checkbox', id, 'data-id': c.id });
+      input.checked = PICK.selected.has(c.id);
+      const boxEl = el('span', { class: 'box' }); boxEl.innerHTML = CHECK_SVG;
+      const keys = [...new Set((c.elements || []).map(e => e.split('=')[0]).filter(Boolean))];
+      const page = pageOfLocator(c.locator);
+      const isWeb = PICK.fileType === 'web';
+      const pgBtn = isWeb
+        ? el('button', { class: 'pg', type: 'button', title: '在左边网页里找到这一段原文', text: '定位' })
+        : (page && PICK.fileType === 'pdf')
+          ? el('button', { class: 'pg', type: 'button', title: '在左边原件里翻到这一页', text: `第 ${page} 页` }) : null;
+      if (pgBtn) pgBtn.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        isWeb ? jumpToText(c.rawText) : jumpToPage(page);
+      });
+      const row = el('label', { class: 'pk' + (input.checked ? ' on' : ''), for: id },
+        input, boxEl,
+        el('span', { class: 'tx' }, summaryOf(c.rawText),
+          keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null),
+        el('span', { class: 'meta' }, el('span', { text: c.date || '' }), pgBtn));
+      input.addEventListener('change', () => {
+        input.checked ? PICK.selected.add(c.id) : PICK.selected.delete(c.id);
+        row.classList.toggle('on', input.checked);
+        syncPick();
+      });
+      ul.appendChild(el('li', {}, row));
+    });
+    all.addEventListener('click', () => {
+      const ids = items.map(c => c.id);
+      const allOn = ids.every(i => PICK.selected.has(i));
+      ids.forEach(i => allOn ? PICK.selected.delete(i) : PICK.selected.add(i));
+      sec.querySelectorAll('input[type=checkbox]').forEach(inp => {
+        inp.checked = !allOn; inp.closest('.pk').classList.toggle('on', !allOn);
+      });
+      syncPick();
+    });
+    sec.append(tab, all, ul);
+    box.appendChild(sec);
+  });
+  syncPick();
+}
+
+function syncPick() {
+  const n = PICK.selected.size, total = PICK.claims.length;
+  $('pickN').textContent = String(n);
+  $('pickOf').textContent = `/ ${total} 条已选`;
+  const go = $('pickGo');
+  go.disabled = n === 0;
+  go.textContent = n === 0 ? '先勾选要核验的条目' : (n === total ? `核验全部 ${n} 条` : `核验这 ${n} 条`);
+  document.querySelectorAll('#pickBlocks .blk').forEach(sec => {
+    const inputs = [...sec.querySelectorAll('input[type=checkbox]')];
+    const on = inputs.filter(i => i.checked).length;
+    sec.classList.toggle('off', on === 0);
+    sec.querySelector('.blk-all').textContent = on === inputs.length ? '全不选' : '全选';
+  });
+}
+
+function jumpToPage(page) {
+  if (!Viewer.doc) return;
+  Viewer.page = Math.min(Math.max(1, page), Viewer.pages || 1);
+  Viewer.render();
+  $('intake').scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+}
+
+/** 元素顶部不在视口里就滚过去（手机上分拣台在原件下面，不滚就看不到）。 */
+function bringIntoView(node) {
+  const top = node.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight * 0.6) {
+    node.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+  }
+}
+
+/** 网页预览里找到这条陈述的原文所在段落：去掉空白和标点后按前缀匹配。 */
+function jumpToText(raw) {
+  const page = $('webPage'); if (!page) return;
+  const norm = t => (t || '').replace(/[\s\p{P}\p{S}]+/gu, '').toLowerCase();
+  const want = norm(raw);
+  if (!want) return;
+  const probes = [want.slice(0, 18), want.slice(0, 10), want.slice(-10)].filter(x => x.length >= 4);
+  const nodes = [...page.querySelectorAll('[data-i]')];
+  let hit = null;
+  for (const probe of probes) {
+    hit = nodes.find(n => norm(n.textContent).includes(probe)) || nodes.find(n => probe.includes(norm(n.textContent)) && norm(n.textContent).length >= 6);
+    if (hit) break;
+  }
+  page.querySelectorAll('.hit').forEach(n => n.classList.remove('hit'));
+  $('intake').scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+  if (!hit) return;
+  hit.classList.add('hit');
+  hit.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'center' });
+  setTimeout(() => hit.classList.remove('hit'), 2600);
+}
+
+function showPick() {
+  document.body.dataset.picking = '1';
+  $('emptyFirst').hidden = true;
+  $('pending').hidden = true;
+  $('pickWait').hidden = true;
   $('toolbar').hidden = true;
-  const finish = () => setTimeout(openViewer, 240);   // 台账已在 applyReport 里渲染
+  $('claims').hidden = true;
+  $('skipNote').hidden = true;
+  $('pick').hidden = false;
+  bringIntoView($('pick'));
+}
 
-  /* 真实核验：四步对应服务端的真实阶段。没有后端就不允许开始——本页没有任何演示数据。 */
+/** 换一份简历时，上一份的结论不能留在概览和台账里冒充这一份的。 */
+function clearReportView() {
+  REPORT = null;
+  activeStatus = null;
+  document.body.dataset.noreport = '1';
+  window.__chatReady?.(false);
+  ['bar', 'legend', 'metrics', 'disc', 'filters', 'claims', 'skipNote'].forEach(id => { const n = $(id); if (n) n.innerHTML = ''; });
+  $('skipNote').hidden = true;
+  $('total').textContent = '—';
+  $('rno').textContent = '—';
+  $('repick').hidden = true;
+}
+
+/* 第一段：上传 → 解析、画像、拆分（不检索）→ 分拣台 */
+async function runSplit(src) {
+  $('emptyFirst').hidden = true;
+  $('pending').hidden = true;
+  $('toolbar').hidden = true;
+  $('pick').hidden = true;
   if (!MODE.real) { setFirstEmpty('本页需要 serve.py 提供后端才能核验。用 python3 serve.py 启动后刷新。'); return; }
-  if (!file) return;
-
+  if (!src) return;
+  const isWeb = !!src.url;
+  clearReportView();
+  // 第一步的说法跟着输入方式走：网页要先读取并确认是个人主页
+  StatusDock.stages[0] = isWeb ? '读取网页，确认是个人主页' : '解析并检测输入风险';
+  Steps.all()[0].querySelector('.t').textContent = StatusDock.stages[0];
+  $('pickWait').firstChild.textContent = isWeb ? '正在读取网页并拆成一条条陈述' : '正在把简历拆成一条条陈述';
+  $('pickWait').hidden = false;
+  Steps.reset();
   StatusDock.reset();
-  StatusDock.open(true);              // 开始处理时窗口自动展开
-  steps[0].className = 'step doing';
+  $('spTitle').textContent = isWeb ? '正在读取主页' : '正在拆分简历';
+  StatusDock.open(true);
+  Steps.set(0, 'doing');
 
   let doneEv = null;
   try {
-    await verifyStream(file, ev => {
+    await sseRequest('/api/split/stream', isWeb ? {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: src.url }),
+    } : {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(src.name) },
+      body: src,
+    }, ev => {
       if (ev.done) { doneEv = ev; return; }
       const L = ev.log || '';
       if (!L) return;
-      // 阶段推进按**真实日志里的标记**判定，不是前端自己猜的
-      if (L.includes('归纳候选人画像') || L.includes('[1/6]')) { StatusDock.setStage(0, 'doing'); steps[0].className = 'step doing'; }
-      if (L.includes('画像完成')) { StatusDock.setStage(0, 'done'); StatusDock.setStage(1, 'doing'); steps[0].className = 'step done'; steps[1].className = 'step doing'; }
-      if (L.includes('[2/6]')) { StatusDock.setStage(1, 'doing'); steps[1].className = 'step doing'; }
-      if (L.includes('[3-5/6]')) { StatusDock.setStage(0, 'done'); StatusDock.setStage(1, 'done'); StatusDock.setStage(2, 'doing'); steps[1].className = 'step done'; steps[2].className = 'step doing'; }
-      if (L.includes('[6/6]')) { StatusDock.setStage(2, 'done'); StatusDock.setStage(3, 'doing'); steps[2].className = 'step done'; steps[3].className = 'step doing'; }
-      // 各条陈述同时开始检索：「[3-5/6] N 条陈述同时开始检索」给出总数，每完成一条推一行「✓ (k/N)」
+      if (L.includes('画像完成') || L.startsWith('已确认：')) { Steps.set(0, 'done'); Steps.set(1, 'doing'); }
+      if (L.includes('[2/6]')) { Steps.set(0, 'done'); Steps.set(1, 'doing'); }
+      StatusDock.log(L, L.includes('画像完成') || L.includes('已拆成') || L.startsWith('已确认：'));
+    });
+    if (!doneEv) throw new Error('拆分流程异常结束（没有收到完成事件）');
+    if (doneEv.failed || !doneEv.split) throw new Error(doneEv.error || '拆分失败（后端没有返回陈述）');
+    const sp = doneEv.split;
+    PICK.token = sp.token;
+    PICK.claims = sp.claims || [];
+    PICK.skipped = sp.skipped || [];
+    PICK.fileType = (sp.fileType || '').toLowerCase();
+    PICK.selected = new Set(PICK.claims.map(c => c.id));      // 默认全选，不需要的取消
+    pendingKind = (sp.fileType || pendingKind || '').toUpperCase();
+    // 输入风险在勾选前就展示：隐藏文字 / 注入在这一步已经检测完了
+    renderRisksFrom(sp.risks || []);
+    Steps.set(0, 'done'); Steps.set(1, 'done'); Steps.set(2, 'doing');
+    StatusDock.waiting(PICK.claims.length);
+    StatusDock.open(false);
+    if (!PICK.claims.length) {
+      $('pickWait').hidden = true;
+      setFirstEmpty(PICK.skipped.length
+        ? `这份简历拆出的 ${PICK.skipped.length} 条都是实习经历，按设置不核验。`
+        : '这份简历没有拆出可以核验的陈述。换一份简历试试。');
+      return;
+    }
+    PICK.lead = `${PICK.fileType === 'web' ? '个人主页' : '简历'}拆成了 ${PICK.claims.length} 条陈述，已按类别分好。`
+      + '没勾选的条目不会去检索；勾选的会同时开始核验。'
+      + (PICK.fileType === 'pdf' ? '点页码可以在左边原件里对照。' : '')
+      + (PICK.fileType === 'web' ? '点「定位」可以在左边网页里找到原文。主页本身不算证据——自述不能自证。' : '');
+    $('pickLead').textContent = PICK.lead;
+    renderPick();
+    renderSkipped($('pickSkipped'), PICK.skipped);
+    showPick();
+    if (PICK.fileType === 'web' && sp.preview) {
+      $('intake').classList.add('has-file');
+      $('fileline').classList.add('on');
+      $('fileKind').textContent = 'WEB';
+      $('fname').textContent = sp.filename || sp.preview.site || '';
+      Viewer.openWeb(sp.preview);
+    } else {
+      openViewer();
+    }
+  } catch (err) {
+    delete document.body.dataset.picking;
+    StatusDock.fail(err.message);
+    $('spTitle').textContent = isWeb ? '已停止' : '拆分失败';
+    $('spPillTxt').textContent = isWeb ? '已停止' : '拆分失败';
+    $('pickWait').hidden = true;
+    $('pending').hidden = false;
+    $('pending').textContent = `${isWeb ? '没有继续' : '拆分失败'}：${err.message}`;
+    if (isWeb) {
+      // 网址可以直接改了再读：左边的输入框重新放开，原因写在下面
+      started = false;
+      pendingUrl = null;
+      $('intake').classList.remove('accepted');
+      $('url').disabled = false; $('urlGo').disabled = false;
+      $('modeSw').removeAttribute('aria-disabled');
+      $('urlTip').classList.add('bad');
+      $('urlTip').textContent = err.message;
+    }
+    $('pending').style.color = '#712B13';
+  }
+}
+
+/* 第二段：只核验勾选的条目 */
+async function runVerify() {
+  const ids = PICK.claims.map(c => c.id).filter(id => PICK.selected.has(id));   // 按简历原顺序
+  if (!ids.length || !PICK.token) return;
+  delete document.body.dataset.picking;
+  $('pick').hidden = true;
+  $('pending').hidden = false;
+  $('pending').style.color = '';
+  $('pending').innerHTML = '';
+  $('pending').append(`正在核验 ${ids.length} 条`, el('span', { class: 'dots' }));
+  $('toolbar').hidden = true;
+  $('claims').hidden = true;
+  $('skipNote').hidden = true;
+  bringIntoView($('pending'));
+  Steps.set(2, 'done'); Steps.set(3, 'doing');
+  StatusDock.resume();
+  StatusDock.progress(0, ids.length);
+  StatusDock.open(true);
+
+  let doneEv = null;
+  try {
+    await sseRequest('/api/verify/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: PICK.token, claimIds: ids }),
+    }, ev => {
+      if (ev.done) { doneEv = ev; return; }
+      const L = ev.log || '';
+      if (!L) return;
+      if (L.includes('[3-5/6]')) Steps.set(3, 'doing');
+      if (L.includes('[6/6]')) { Steps.set(3, 'done'); Steps.set(4, 'doing'); }
       const m0 = L.match(/\[3-5\/6\] (\d+) 条陈述/);
       if (m0) StatusDock.progress(0, m0[1]);
       const m = L.match(/(?:✓ |\[3-5\/6\] )\((\d+)\/(\d+)\)/);
       if (m) StatusDock.progress(m[1], m[2]);
-      StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('画像完成') || L.includes('✓ ('));
+      StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('✓ ('));
     });
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');
-    pendingKind = (doneEv.fileType || pendingKind || '').toUpperCase();
-    steps.forEach(s => s.className = 'step done');
-    steps[3].querySelector('.t').textContent =
+    Steps.all().forEach((_, i) => Steps.set(i, 'done'));
+    Steps.all()[4].querySelector('.t').textContent =
       `逐条判定 · ${doneEv.report.claims.length} 条 · ${doneEv.seconds}s`;
     StatusDock.done(doneEv.seconds);
     applyReport(doneEv.report);
-    finish();
+    $('repick').hidden = false;
+    bringIntoView($('toolbar'));
   } catch (err) {
     StatusDock.fail(err.message);
     $('pending').hidden = false;
     $('pending').textContent = `核验失败：${err.message}`;
     $('pending').style.color = '#712B13';
+    if (/过期/.test(err.message)) return;
+    // 没过期就回到分拣台，勾选还在，可以直接重试；失败原因写在导语里
+    $('pickLead').textContent = `核验失败：${err.message}。勾选还在，可以直接再点一次。`;
+    showPick();
   }
+}
+
+/* 只有风险清单、还没有报告时，也要把顶部的风险条填上 */
+function renderRisksFrom(risks) {
+  const saved = REPORT;
+  REPORT = { ...(saved || {}), risks };
+  renderRisks();
+  REPORT = saved;
 }
 
 /* ══ 启动 ═══════════════════════════════════════ */
@@ -1676,6 +2183,15 @@ $('statusPill').addEventListener('click', () => {
   $('statusPill').hidden = true;
 });
 $('navTier').addEventListener('click', toggleTierPanel);
+$('pickGo').addEventListener('click', runVerify);
+$('repick').addEventListener('click', () => {
+  if (!PICK.token) return;
+  $('pickLead').textContent = PICK.lead || '';
+  renderPick();
+  showPick();
+  Steps.set(2, 'doing'); Steps.set(3, ''); Steps.set(4, '');
+  Steps.all()[4].querySelector('.t').textContent = StatusDock.stages[4];
+});
 document.body.dataset.noreport = '1';
 // 页面刷新后向服务端要回最近一次真实报告——不然一刷新就"丢"了
 (async () => {
@@ -1683,6 +2199,7 @@ document.body.dataset.noreport = '1';
     const r = await fetch('/api/report');
     if (!r.ok) return;
     const d = await r.json();
+    if (started || PICK.token) return;        // 已经在处理新简历，别把旧报告盖上来
     applyReport(d.report);
   } catch { /* 没有报告就保持空态 */ }
 })();

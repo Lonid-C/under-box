@@ -4,7 +4,7 @@
     "检索策略档案。加一种简历类型 / 一种行业 = 加一个 profile，不改代码。",
     "这是**领域知识**，不是模型输出：哪些机构会公开什么类型的文档，是长期观察的结论。",
     "占位符：{name} 候选人 {org} {dept} {role} {year} {term} {terms} {contest} {award}",
-    "        {paper} 论文标题 {repo} 仓库 {title} 标题 {company} {venue} {team} 队伍名 {major} {org_latin}/{org_han} 双语组织短名",
+    "        {paper} 论文标题 {repo} 仓库 {title} 标题 {company} {venue} {team} 队伍名 {major} {org_latin}/{org_han} 双语组织短名 {conference} 会议名 {doi} {arxiv} {patent_no} 专利号/登记号",
     "site 取值：school=学校主域名（查 data/schools.json）、organizer=组委会域名（claim.entities.organizer_domain）、",
     "          wechat=mp.weixin.qq.com（只吃搜索引擎已收录的）、gov=政府站、null=不限定",
     "round：1 定锚 / 2 取证 / 3 补漏"
@@ -63,7 +63,29 @@
       "论文标题",
       "标题",
       "专利名称",
+      "软件名称",
+      "报告题目",
+      "题目",
       "作品"
+    ],
+    "conference": [
+      "会议名称",
+      "会议"
+    ],
+    "doi": [
+      "DOI",
+      "doi"
+    ],
+    "arxiv": [
+      "arXiv",
+      "arxiv"
+    ],
+    "patent_no": [
+      "专利号",
+      "授权公告号",
+      "公开号",
+      "申请号",
+      "登记号"
     ],
     "paper": [
       "论文标题",
@@ -382,6 +404,7 @@
         "categories_any": [
           "论文",
           "专利",
+          "会议",
           "任职",
           "学历"
         ]
@@ -1099,17 +1122,27 @@
           "round": 3,
           "weight": 70,
           "purpose": "按刊物确认发表"
+        },
+        {
+          "tpl": "\"{doi}\"",
+          "site": null,
+          "round": 3,
+          "weight": 75,
+          "purpose": "简历写了 DOI 时按 DOI 找出版方页面（Crossref 精确查询已在元数据那一步做过）"
         }
       ],
       "notes": [
-        "Crossref 不记录共同一作，位次差异进 unproved 而非 ask。"
+        "Crossref 不记录共同一作，位次差异进 unproved 而非 ask。",
+        "在投 / 审稿中的稿件通常没有公开记录，none 是常态；预印本由 OpenAlex 按标题收录。",
+        "简历写了 DOI 的，元数据查询会先按 DOI 精确取回，再与标题比对——DOI 对不上标题的不算证据。"
       ]
     },
     "专利": {
       "elements": [
         "专利名称={title}",
-        "申请人",
-        "公开号"
+        "专利号={patent_no}",
+        "发明人位次",
+        "专利权人"
       ],
       "terms": [
         "专利",
@@ -1118,11 +1151,21 @@
       ],
       "anchor_forms": [
         {
+          "tpl": "{patent_no}",
+          "site": null,
+          "kind": "patent",
+          "round": 1,
+          "weight": 110,
+          "unless_terms": ["软件著作权", "软著", "著作权登记"],
+          "purpose": "专利号是一对一标识：直接在专利库里按号查，页面上有题名、发明人和专利权人"
+        },
+        {
           "tpl": "\"{name}\" {title}",
           "site": null,
           "kind": "patent",
           "round": 1,
           "weight": 100,
+          "unless_terms": ["软件著作权", "软著", "著作权登记"],
           "purpose": "国家知识产权局公开公告"
         }
       ],
@@ -1133,10 +1176,27 @@
           "kind": "patent",
           "round": 2,
           "weight": 100,
+          "unless_terms": ["软件著作权", "软著", "著作权登记"],
           "purpose": "专利公开公告"
         },
         {
+          "tpl": "\"{patent_no}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "按专利号 / 登记号全网找公告与转载"
+        },
+        {
+          "tpl": "\"{title}\" 软件著作权 登记",
+          "site": null,
+          "round": 2,
+          "weight": 92,
+          "when_terms": ["软件著作权", "软著", "著作权登记"],
+          "purpose": "软件著作权不在专利库里，按软件名称找登记公告"
+        },
+        {
           "tpl": "\"{title}\" 专利 公开",
+          "unless_terms": ["软件著作权", "软著", "著作权登记"],
           "site": null,
           "round": 2,
           "weight": 90,
@@ -1144,11 +1204,65 @@
         },
         {
           "tpl": "\"{title}\" 申请人 \"{name}\"",
+          "unless_terms": ["软件著作权", "软著", "著作权登记"],
           "site": null,
           "round": 2,
           "weight": 85,
           "purpose": "申请人字段交叉"
         }
+      ],
+      "notes": [
+        "申请中 / 已受理但未公开的专利查不到公开文本，none 是常态；发明专利一般在申请后 18 个月左右公开。",
+        "软件著作权归在本类，但不在专利库里：专利库限定的查询对它跳过，改按软件名称和登记号查。"
+      ]
+    },
+    "会议": {
+      "elements": [
+        "会议名称={conference}",
+        "报告题目={title}",
+        "参与形式"
+      ],
+      "terms": [
+        "会议",
+        "报告",
+        "墙报",
+        "Poster"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "site": null,
+          "round": 1,
+          "weight": 100,
+          "purpose": "报告 / 墙报题目与本人姓名交叉：会议日程、摘要集和报道里通常两者同时出现"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "\"{conference}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "会议名称与姓名交叉，找日程、讲者名单或报道"
+        },
+        {
+          "tpl": "\"{title}\" \"{conference}\"",
+          "site": null,
+          "round": 2,
+          "weight": 88,
+          "purpose": "题目与会议交叉，找会议程序册或摘要集"
+        },
+        {
+          "tpl": "\"{conference}\" {year} 会议日程",
+          "site": null,
+          "round": 3,
+          "weight": 65,
+          "purpose": "会议程序册（Program / Agenda）——多为 PDF，回读后在里面找本人"
+        }
+      ],
+      "notes": [
+        "只参会、没有报告的，通常没有任何公开记录，none 是常态，不指向任何问题。",
+        "会议论文已收进论文集的归「论文」，走 Crossref / 出版方；本类只管报告、墙报和参会本身。"
       ]
     },
     "项目": {

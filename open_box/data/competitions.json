@@ -1502,6 +1502,7 @@
       ],
       "region": "China",
       "official_urls": [
+        "https://dasai.lanqiao.cn/",
         "https://www.lanqiao.cn/"
       ],
       "official_domains": [
@@ -1512,6 +1513,27 @@
         "dasai.lanqiao.cn"
       ],
       "result_pages": [
+        {
+          "url": "https://dasai.lanqiao.cn/notices/860/",
+          "kind": "index",
+          "year": null,
+          "min_year": 2010,
+          "max_year": 2023
+        },
+        {
+          "url": "https://x-static.lanqiao.cn/upload/202110/courseimg/41147d63-c9bb-47d8-ae99-d5776a6c39f8.rar",
+          "kind": "roster",
+          "year": 2021,
+          "level": "national",
+          "edition": "第十二届"
+        },
+        {
+          "url": "https://upload.lanqiao.cn/file/20210608/1623136848170184.rar",
+          "kind": "roster",
+          "year": 2021,
+          "level": "provincial",
+          "edition": "第十二届"
+        },
         {
           "url": "https://www.lanqiao.cn/cup-sixteen/",
           "kind": "index",
@@ -1525,13 +1547,16 @@
       ],
       "publication": {
         "status": "public_results",
-        "scope_note": "官网年度回顾明确有获奖情况公示，但当前未确认所有软件赛组别都提供免登录完整名单；不能泛称官网不提供。",
+        "scope_note": "官网历届名单是动态公告，公开正文接口含第一至第十四届名单包；已确认第十二届（2021）省赛及决赛RAR附件，可按软件/电子/设计赛读取包内PDF。用“蓝桥杯”简称、年份与届次查学校名单及个人报道；报名或参赛项目表不证明获奖。证书查询另需身份信息，不把公示期结束或入口空壳当作未获奖。",
         "checked_at": "2026-10-07",
-        "source_url": "https://www.lanqiao.cn/cup-sixteen/"
+        "source_url": "https://dasai.lanqiao.cn/notices/860/"
       },
       "provenance": [
         "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
-        "https://www.lanqiao.cn/cup-sixteen/"
+        "https://www.lanqiao.cn/cup-sixteen/",
+        "https://dasai.lanqiao.cn/notices/860/",
+        "https://static.lanqiao.cn/temp_up/index.html",
+        "https://qihang.hrbeu.edu.cn/2021/0918/c3225a275340/page.htm"
       ],
       "directory_order": 27,
       "website_check": {
@@ -1548,7 +1573,25 @@
           "https://dasai.lanqiao.cn/pages/v7/dasai/activities/ct_20220311.html",
           "https://www.lanqiao.cn/courses/67554/"
         ]
-      }
+      },
+      "search_label": "蓝桥杯",
+      "quote_search_label": false,
+      "edition_year_offset": 2009,
+      "result_link_limit": 3,
+      "school_result_pages": [
+        {
+          "url": "https://qihang.hrbeu.edu.cn/2021/0918/c3225a275340/page.htm",
+          "kind": "roster",
+          "year": 2021,
+          "level": "provincial",
+          "school_domain": "hrbeu.edu.cn",
+          "archive_hints": [
+            "黑龙江"
+          ]
+        }
+      ],
+      "school_search_first": true,
+      "prefer_official_rosters": true
     },
     {
       "id": "milan-china",
@@ -5812,7 +5855,8 @@
         {
           "url": "http://eaedu.org.cn/",
           "kind": "index",
-          "year": null
+          "year": null,
+          "min_year": 2024
         },
         {
           "url": "http://eaedu.org.cn/news-106.html",
@@ -5834,7 +5878,8 @@
           "url": "http://eaedu.org.cn/searchawards.html",
           "kind": "index",
           "year": null,
-          "requires_identity": true
+          "requires_identity": true,
+          "min_year": 2024
         },
         {
           "url": "https://www.eaedu.org.cn/finalrank-1-1-1.html",
@@ -5854,7 +5899,7 @@
         "status": "public_results",
         "checked_at": "2026-10-07",
         "source_url": "http://eaedu.org.cn/news-106.html",
-        "scope_note": "已回读公开HTTP官网及2024广东/云南学生省赛公告，获奖名单以图片发布，当前文本解析不能直接核对图片中的姓名。2024/2025往届查询需年份、姓名、学校、报名手机号，不能仅凭姓名自动完成；可补充官方证书或学校官网佐证。该赛事与NECCS不同；模拟赛、教师赛、正式省赛和全国决赛分开核对。门户显示2026不代表历史条目属于2026。2026-10-07 HTTPS入口证书过期，目录使用实测可读的公开HTTP入口，不自动改协议或绕过证书校验。"
+        "scope_note": "公开HTTP官网及2024学生省赛公告可读，名单图片已支持本机OCR，识别结果需核对原图。当前公开首页和往届查询覆盖2024以后，不用于核验2021等早期奖项；早期年份优先同届学校官方名单/人物报道。2024/2025往届查询需姓名、学校、报名手机号，仅凭姓名不能自动完成。EAEDU与NECCS分开；模拟赛、教师赛、省赛和全国决赛分别核对。"
       },
       "provenance": [
         "https://www.eaedu.org.cn/news-130.html",
@@ -5880,7 +5925,9 @@
         "candidate_result_urls": [
           "https://www.eaedu.org.cn/rank-1-2-1.html"
         ]
-      }
+      },
+      "school_search_first": true,
+      "edition_year_offset": 2019
     }
   ]
 }

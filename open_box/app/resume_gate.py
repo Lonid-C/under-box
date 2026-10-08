@@ -14,14 +14,16 @@ _SECTION = re.compile(
     r"(?:^|\n)\s*(?:#{1,4}\s*|[一二三四五六七八九十\d]+[.、]\s*)?"
     r"(个人信息|基本信息|求职意向|教育经历|教育背景|工作经历|工作经验|实习经历|"
     r"项目经历|项目经验|科研经历|研究经历|竞赛经历|获奖经历|荣誉与奖励|"
-    r"学生工作|社会实践|论文发表|学术成果|专业技能|技能清单|"
+    r"学生工作|社会实践|论文发表|发表论文|学术成果|科研成果|学术论文|专利|专利与软著|"
+    r"知识产权|学术会议|会议报告|科研项目|专业技能|技能清单|"
     r"education|work experience|professional experience|internship|projects?|"
-    r"research experience|awards?|publications?|skills?)\s*[:：]?\s*(?=\n|$)",
+    r"research experience|awards?|publications?|patents?|conferences?|presentations?|"
+    r"skills?)\s*[:：]?\s*(?=\n|$)",
     re.IGNORECASE,
 )
 _CONTACT = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?:\+?86[- ]?)?1[3-9]\d[\d* -]{8,}|(?:姓名|Name)\s*[:：]\s*\S+", re.I)
 _NAME_LINE = re.compile(r"^(?:#\s*)?(?:[\u3400-\u9fff]{2,4}|[A-Za-z]+(?:\s+[A-Za-z]+){1,3})\s*$")
-_EXPERIENCE = re.compile(r"大学|学院|学校|公司|工作|实习|任职|项目|竞赛|获奖|论文|学位|学历|本科|硕士|博士|university|education|work|employment|intern|research|project", re.I)
+_EXPERIENCE = re.compile(r"大学|学院|学校|公司|工作|实习|任职|项目|竞赛|获奖|论文|专利|会议|学位|学历|本科|硕士|博士|university|education|work|employment|intern|research|project|patent|conference", re.I)
 
 _SYSTEM = """判断输入是否为一位求职者或研究者的个人简历／CV。只能返回 JSON：
 {"is_resume": true 或 false}。

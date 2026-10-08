@@ -322,6 +322,9 @@ def _context(claim, candidate_name: str, terms: list[str],
     title = pick("title", "title")
     project = pick("project", "project") or title
     year = (claim.date_start or claim.date_label or "")[:4]
+    if claim.category == "竞赛":
+        from .competitions import claim_year
+        year = str(claim_year(claim) or "")
     # 2023 年入学/毕业的推免名单，推荐方通常在 2022 年秋季公示。
     # 只作为公告检索年份，不能据此推定个人已获得资格。
     notice_year = str(int(year) - 1) if claim.category == "学历" and year.isdigit() else ""

@@ -14,7 +14,8 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_ENV_FILE = ROOT / ".env"
+# 用户工作进程只加载其专属文件，缺少的密钥不能退回另一用户的 .env。
+DEFAULT_ENV_FILE = Path(os.environ.get("UNDERBOX_ENV_FILE") or (ROOT / ".env"))
 
 # 认得 `KEY=value` 与 `export KEY=value`；`#` 开头的整行跳过。
 # 不处理行内注释与多行值——.env.example 里没有这种写法，真出现会原样带进值里，

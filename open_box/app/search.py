@@ -20,6 +20,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 from urllib.parse import urlparse
 
+from .usage import METER
+
 def _ascii_header(value: str, fallback: str) -> str:
     """HTTP 头必须是 latin-1 可编码的。
 
@@ -193,6 +195,14 @@ def _pdf_text(data: bytes) -> str | None:
         # pdfminer 对纯扫描件会返回分页符，不能把“\f\f”认作已读出名单。
         text = extract_text(BytesIO(data))
         return text if text and text.strip() else None
+    except Exception:
+        pass
+    # pypdf 是上传 PDF 已用的基础依赖；高级解析器缺失时仍可读文本名单。
+    # 不能把“没安装 pdfminer / PyMuPDF”当成“官网名单是扫描件”。
+    try:
+        from pypdf import PdfReader
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages)
+        return text if text.strip() else None
     except Exception:
         return None
 
@@ -493,6 +503,7 @@ class ZhipuSearcher:
                     raise SearchFiltered(
                         f"查询被内容审核拒绝（code 1301）：{query[:80]}", query=query, site=site)
                 r.raise_for_status()
+                METER.record_search(engine)
                 hits = self._parse(r.json())
                 return [h for h in hits if url_in_domain(h.url, site)] if site else hits
             except SearchUnavailable:

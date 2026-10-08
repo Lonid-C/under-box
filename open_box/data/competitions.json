@@ -284,6 +284,13 @@
       ],
       "result_pages": [
         {
+          "url": "https://www.mcm.edu.cn/html_cn/node/5d988b4e510d9dc78168e258dc76a48f.html",
+          "kind": "roster",
+          "year": 2021,
+          "level": "national",
+          "stage": "final"
+        },
+        {
           "url": "https://www.mcm.edu.cn/html_cn/node/f1241bf39c38153b57bdb27125fa2d72.html",
           "kind": "roster",
           "year": 2025,
@@ -310,6 +317,13 @@
           "level": "national",
           "inactive": true,
           "inactive_reason": "2026-10-07实测HTTP404，暂停直接回读，改查年度公告及学校名单"
+        },
+        {
+          "url": "https://www.mcm.edu.cn/upload_cn/node/626/n7nhofCn201ab6d8d92db35564daa7cca31853d6.pdf",
+          "kind": "attachment",
+          "year": 2021,
+          "level": "national",
+          "stage": "final"
         }
       ],
       "search_terms": [
@@ -319,16 +333,22 @@
       ],
       "publication": {
         "status": "public_names",
-        "scope_note": "官网历年竞赛结果栏目提供当年正式获奖公告及附件；2025正式PDF约19 MB且为扫描件，当前文本解析不能从中核对姓名，须人工读图或学校官方文本名单补证。旧2025初稿PDF为404，暂停直读。省级奖项优先省赛/学校名单，不能用全国奖或校内选拔名单替代。",
-        "checked_at": "2026-10-07",
-        "source_url": "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html"
+        "scope_note": "官网历年竞赛结果栏目按比赛年份提供正式公告及附件；网页更新时间不等于比赛年份。省级奖项优先省赛或学校名单，不能用全国奖或校内选拔名单替代。",
+        "checked_at": "2026-10-08",
+        "source_url": "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html",
+        "year_notes": {
+          "2021": "已核查2021年正式获奖公告及38页文本PDF。公告网页在2023年更新，附件标题和正文年度均为2021；按附件中的姓名、学校、奖级逐项核对，不从队员排列顺序推定队长身份。",
+          "2025": "2025正式PDF约19 MB且为扫描件，须人工读图或学校官方文本名单补证；旧2025初稿PDF为404，暂停直读。"
+        }
       },
       "provenance": [
         "https://www.gzcc.edu.cn/sjjxzx/upload/files/2024/4/f6c65f10b84f1013.pdf",
         "https://dxs.moe.gov.cn/zx/awards/",
         "https://www.mcm.edu.cn/upload_cn/node/761/QB2FQ76i1393aefba98af47db43d0e56ab7949c9.pdf",
         "https://www.mcm.edu.cn/html_cn/block/018500ec1a6bd8c7e9997133def2b590.html",
-        "https://www.mcm.edu.cn/html_cn/node/f1241bf39c38153b57bdb27125fa2d72.html"
+        "https://www.mcm.edu.cn/html_cn/node/f1241bf39c38153b57bdb27125fa2d72.html",
+        "https://www.mcm.edu.cn/html_cn/node/5d988b4e510d9dc78168e258dc76a48f.html",
+        "https://www.mcm.edu.cn/upload_cn/node/626/n7nhofCn201ab6d8d92db35564daa7cca31853d6.pdf"
       ],
       "directory_order": 5,
       "website_check": {

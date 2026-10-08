@@ -278,8 +278,8 @@ def verify_prepared(
         if resolution_note:
             vc.source_notes = [resolution_note]
         if competition:
-            vc.competition_lookup = lookup_summary(competition)
-            vc.source_notes = [publication_note(competition)]
+            vc.competition_lookup = lookup_summary(competition, claim)
+            vc.source_notes = [publication_note(competition, claim)]
             failures = getattr(fetcher, "failures", {})
             entry_failures = list(dict.fromkeys(failures[p["url"]] for p in seed_pages(competition, claim)
                                                 if failures.get(p["url"])))

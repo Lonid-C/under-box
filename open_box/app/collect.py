@@ -19,7 +19,8 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlunparse
 
 from . import judge
-from .competitions import (claim_year, competition_for_claim, competition_page_mismatch,
+from .competitions import (claim_year, claim_level, claim_province, competition_level,
+                           provinces_in_text, result_page_metadata, competition_for_claim, competition_page_mismatch,
                            roster_image_links, roster_links, seed_pages, useful_roster_hit)
 from .llm import LLM
 from .parse import extract_main_text, wrap_untrusted
@@ -75,6 +76,7 @@ EXTRACT_SYSTEM = """你在核对一条简历陈述是否有公开证据支持。
 - 统考和推免可能出现在同一个硕士拟录取公告的不同附件中。只根据本人所在附件的标题、表头和行内容确认招生类型，不能据公告含“推免”就把统考名单中的人当成推免生。
 - 同名不等于同一人。只要页面显示的学校、学院等与候选人不一致，必须写进 identity_conflicts。教育经历须按本科来源学校与研究生接收学校分别匹配，不把这两个阶段的学校不同当作身份冲突。
 - 竞赛须逐项核对年份/届次、赛道/组别、校赛/省赛/区域赛/国赛/国际赛、奖级以及人员身份。报名/入围/晋级名单不是获奖名单，初稿/拟授奖不能当作正式获奖，指导教师奖和组织奖不能证明学生个人获奖。
+- 名单中的队员一/队员二/队员三是排列顺序，不代表队长；只有明确的队长/captain标记才能证明队长身份。获奖比例须有相应数字及统计口径，不能从奖级或序号推算；赛事届次须明确对应赛事，不能拿组委会届次或网页更新时间替代。
 - 官网只列队号、队名、学校或作品时，只支持对应团队赛果；没有本人姓名或独立的成员关联材料，不能宣称本人属于该队。MCM与ICM的题目组别、英文奖级须保留原文，不自行换算一二等奖。
 - 赛事目录的官网和名单可用性是检索提示，不能据目录条目或首页赛事介绍证明本人获奖。
 - school_search_hint 仅由同期教育经历提供学校搜索范围，不代表简历声称该校是参赛单位。须读实际名单关联本人，不能把检索线索当获奖事实或据此制造学校冲突。"""
@@ -143,6 +145,9 @@ def _focus_text(text: str, claim: Claim, candidate_name: str) -> str:
     intervals = [(0, 1500)]
     available = MAX_PAGE_CHARS - 1800
     lowered = text.lower()
+    # 国赛长名单的奖级只在每个大区段开头写一次；本人行可能在几千字之后。
+    # 保留该行上方最近的奖级表头，避免只有姓名却丢了所属“一等奖/二等奖”。
+    section_headers = list(re.finditer(r"(?:本科|专科|高职高专)组\s*[特一二三]等奖[^\n]{0,60}", text))
     for term in dict.fromkeys(terms):
         if len(term) < 2:
             continue
@@ -151,6 +156,12 @@ def _focus_text(text: str, claim: Claim, candidate_name: str) -> str:
             pos = lowered.find(term.lower(), pos)
             if pos < 0 or available < 500:
                 break
+            if term in names or term in anchors:
+                heading = next((h for h in reversed(section_headers) if h.start() <= pos), None)
+                if heading and not any(a <= heading.start() < b for a, b in intervals):
+                    end = min(len(text), heading.end() + 200)
+                    intervals.append((heading.start(), end))
+                    available -= end - heading.start()
             start, end = max(0, pos - 700), min(len(text), pos + 1400)
             if not any(a <= pos < b for a, b in intervals):
                 end = min(end, start + available)
@@ -172,7 +183,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
                      *, organizer_hosts: set[str] | None = None,
                      candidate_provided: bool = False, candidate_name: str = "") -> Evidence | None:
     """让模型逐字摘录，然后由规则定级和打身份分。模型不参与任何判定。"""
-    if competition_for_claim(claim) and competition_page_mismatch(claim, hit.title or ""):
+    if claim.category == '竞赛' and competition_page_mismatch(claim, hit.title or ""):
         return None
     system = EXTRACT_SYSTEM.format(
         raw_text=claim.raw_text, elements=claim.elements, entities=claim.entities)
@@ -205,7 +216,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     valid_elements = set(claim.elements)
     supports = [s for s in supports if s in valid_elements]
 
-    if competition_for_claim(claim):
+    if claim.category == '竞赛':
         if competition_page_mismatch(claim, snippet):
             return None
         # 官网目录不能替代实际页面。已知赛事的摘录必须在本次读取内容中确实出现。
@@ -214,15 +225,68 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         if not quoted or quoted not in source_text:
             return None
         target_year = claim_year(claim)
+        metadata = result_page_metadata(competition_for_claim(claim), hit.url)
         year_text = re.sub(r"(?<!\d)(?:19|20)\d{2}年?(?:出生|生人)", "", snippet)
         year_text = re.sub(r"(?:出生(?:于)?|\bborn(?:\s+in)?)\s*(?:19|20)\d{2}", "", year_text, flags=re.I)
         snippet_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", year_text)}
-        title_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", hit.title or "")}
-        observed_years = snippet_years or title_years
-        if target_year and observed_years and target_year not in observed_years:
+        event_title = bool(re.search(r"获奖|授奖|赛果|名单|评奖|竞赛|大赛|比赛|\b(?:results?|winners?|awards?)\b",
+                                     hit.title or "", re.I))
+        title_years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", hit.title or "")} if event_title else set()
+        observed_years = snippet_years or title_years or ({metadata['year']} if metadata.get('year') else set())
+        scope_snippet = snippet
+        matching_event = True
+        if target_year and len(snippet_years) > 1:
+            markers = list(re.finditer(r"(?<!\d)(?:19|20)\d{2}(?!\d)", year_text))
+            parts = [year_text[m.start():markers[i+1].start() if i+1 < len(markers) else len(year_text)]
+                     for i,m in enumerate(markers) if int(m.group()) == target_year]
+            scope_snippet = ' '.join(parts)
+            matching_event = bool(re.search(r"竞赛|大赛|比赛|获奖|[特一二三]等奖|国赛|省赛|\b(?:prize|award|winner)\b",
+                                            scope_snippet, re.I))
+        if target_year and (target_year not in observed_years
+                            or metadata.get('year') and metadata['year'] != target_year
+                            or not matching_event):
             # 其他年度同名获奖不构成这条自述的矛盾，也不能支持当前年度。
             supports = []
             contradicts = []
+        target_level = claim_level(claim)
+        source_level = competition_level(scope_snippet) or competition_level(hit.title or "") or metadata.get('level', '')
+        target_province = claim_province(claim) if target_level == 'provincial' else ''
+        source_provinces = provinces_in_text(scope_snippet + ' ' + (hit.title or ''))
+        if metadata.get('province'):
+            source_provinces.add(metadata['province'])
+        scope_matches = ((not target_level or source_level == target_level)
+                         and (not target_province or source_provinces == {target_province}))
+        if not scope_matches:
+            # 年份可独立被证实，但无法对上赛级/省份的名单不能证明所述奖项。
+            award_fields = {'奖项', '获奖', '奖级', '名次', '奖项级别', '级别', '阶段',
+                            '赛段', '赛级', '赛事级别', '竞赛级别', '获奖级别', '比例', '获奖比例'}
+            supports = [s for s in supports if s.partition('=')[0].strip() not in award_fields]
+            contradicts = []
+        # 名单里的队员顺序不能被模型升级成队长，缺少比例和届次也不能填“已证”。
+        compact_snippet = re.sub(r"\s+", "", snippet)
+        supported = []
+        for element in supports:
+            field_name, _, value = element.partition("=")
+            if (field_name.strip() in {"角色", "参赛身份", "职务"} and "队长" in value
+                    and not re.search(r"队长|\bcaptain\b|\bteam\s+leader\b", snippet, re.I)):
+                continue
+            if (field_name.strip() in {"比例", "获奖比例", "获奖率"}
+                    and re.sub(r"\s+", "", value) not in compact_snippet):
+                continue
+            if field_name.strip() in {"届次", "竞赛届次"} and value.strip() not in snippet + (hit.title or ""):
+                continue
+            if field_name.strip() in {"赛事", "比赛", "竞赛"}:
+                editions = re.findall(r"第(?:[零一二三四五六七八九十百]+|\d+)届", value)
+                if any(edition not in snippet + (hit.title or "") for edition in editions):
+                    continue
+            supported.append(element)
+        supports = supported
+        # 没写队长/比例/届次属于未证明，不是反证；队员二的排列顺序也不是角色冲突。
+        missing_information = re.compile(
+            r"未(?:注明|标注|标明|说明|提供|显示|列明|披露|体现|给出|找到|出现|发现|包含|证实)"
+            r"|没有(?:写|提供|显示|标|明确|队长|统计)|无(?:队长|[^，。；]{0,12}标记|[^，。；]{0,12}口径)"
+            r"|无法(?:确认|确定|判断|核实)|不(?:能|足以)(?:证明|确认)")
+        contradicts = [value for value in contradicts if not missing_information.search(value)]
         if (re.search(r"初稿|草案|拟授奖|拟获奖|\bpreliminary\b", f"{hit.title or ''}\n{page_text[:1000]}", re.I)
                 and not re.search(r"拟获奖|拟授奖|初稿", claim.raw_text or "")):
             supports = [s for s in supports if s.partition("=")[0].strip() not in
@@ -793,7 +857,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     def add_hits(hits):
         nonlocal total_hits
         usable = [h for h in hits if h.url.startswith(("https://", "http://"))]
-        if competition:
+        if claim.category == '竞赛':
             usable = [h for h in usable if not competition_page_mismatch(claim, h.title or "")]
             year = claim_year(claim)
             def wrong_year(hit):

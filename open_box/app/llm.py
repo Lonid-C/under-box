@@ -11,6 +11,8 @@ import re
 import time
 from typing import Any, Protocol
 
+from .usage import METER
+
 
 class LLMUnavailable(RuntimeError):
     """没配置好，或供应商明确拒绝（鉴权失败、余额不足、参数非法）。不该重试。"""
@@ -234,7 +236,9 @@ class OpenAICompatLLM:
                 continue
             if r.status_code >= 400:
                 raise LLMUnavailable(f"{self.provider} 返回 {r.status_code}：{r.text[:200]}")
-            return r.json()
+            data = r.json()
+            METER.record_llm(self.provider, data.get("usage"))
+            return data
 
         raise LLMTransient(f"{self.provider} 连续 {self.max_retries} 次未成功：{last_exc}")
 

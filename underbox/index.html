@@ -26,6 +26,24 @@ body{
 }
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
+
+/* ══ 本次查询用量（DeepSeek / GLM）═════════════════════ */
+#usageDock{position:fixed;left:18px;bottom:18px;z-index:40;font:500 12px/1.5 var(--sans);color:var(--ink)}
+#usageDock[hidden]{display:none}
+#usageDock .u-card{background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow-sm);width:268px;padding:10px 12px}
+#usageDock .u-head{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-weight:700}
+#usageDock .u-dot{width:8px;height:8px;border-radius:50%;background:var(--pink);animation:uPulse 1s infinite}
+#usageDock.idle .u-dot{background:#1D9E75;animation:none}
+#usageDock .u-head .u-x{margin-left:auto;color:var(--ink-3);font-weight:500}
+#usageDock .u-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px dashed rgba(20,19,15,.25)}
+#usageDock .u-row:first-of-type{margin-top:8px}
+#usageDock .u-k{font-weight:700}
+#usageDock .u-v{text-align:right;font-variant-numeric:tabular-nums}
+#usageDock .u-sub{display:block;color:var(--ink-3);font-weight:400}
+#usageDock.collapsed .u-body{display:none}
+#usageDock .u-note{margin-top:6px;color:var(--ink-3);font-weight:400;font-size:11px}
+@keyframes uPulse{50%{opacity:.35}}
+
 /* ══ 两个状态 ═══════════════════════════════════════ */
 /* 用 auto 外边距做垂直居中，而不是 justify-content:center——
    后者在内容高于视口时会把顶部一起挤出屏幕且滚不到；auto 边距在溢出时自动归零，可正常滚动。 */
@@ -85,6 +103,7 @@ body[data-stage="app"] #gateCard{display:none}
 .gate-btn[disabled]:active{transform:none;box-shadow:var(--shadow-sm)}
 .gate-msg{margin:12px 0 0;min-height:18px;font-size:12.5px;color:var(--pink);font-weight:500}
 .gate-note{margin:12px 0 0;font-size:11.5px;line-height:1.65;color:var(--ink-3)}
+#accountBadge[hidden],#heroAccount[hidden]{display:none}
 #gateCard.shake{animation:shake .34s}
 
 /* ══ 落地页：品牌 ═══════════════════════════════════ */
@@ -496,6 +515,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 
 @media(max-width:980px){
   main.grid{grid-template-columns:minmax(0,1fr)}
+  .hdr-in{flex-wrap:wrap}
+  .top-right{width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-end}
   body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left,body[data-stage="gate"] .col-left{width:100%}
   .top-nav{display:none}
   .top-right .badge,.top-right .ghost{white-space:nowrap}
@@ -531,10 +552,11 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     </nav>
     <div class="tierpanel" id="tierPanel" hidden></div>
     <div class="top-right">
+      <span class="badge" id="accountBadge" hidden></span>
       <span class="badge" id="modeBadge"><i></i>载入中…</span>
       <span class="rno">报告 <b id="rno">—</b></span>
-      <button class="ghost" id="reset" type="button">换一份简历</button>
-      <button class="ghost" id="logoutBtn" type="button" hidden>退出</button>
+      <button class="ghost" id="reset" type="button" title="结束本次查询，保留当前用户登录">退出此次查询</button>
+      <button class="ghost" id="logoutBtn" type="button" hidden title="登出当前用户，返回口令登录页">用户登出</button>
     </div>
   </div>
 </header>
@@ -551,22 +573,26 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   <aside class="col-left">
     <section class="card" id="gateCard">
       <div class="card-h">
-        <h2>进入核验台</h2>
+        <h2>用户登录</h2>
         <span class="n">仅限受邀使用</span>
       </div>
       <div class="card-b">
         <label class="gate-field" for="gatePw">
-          <span>访问口令</span>
-          <input type="password" id="gatePw" name="password" placeholder="请输入口令"
+          <span>你的专属口令</span>
+          <input type="password" id="gatePw" name="password" placeholder="请输入你的登录口令"
                  autocomplete="current-password" enterkeyhint="go" spellcheck="false">
         </label>
-        <button class="gate-btn" id="gateGo" type="button"><span id="gateBtnTxt">进入核验台</span></button>
+        <button class="gate-btn" id="gateGo" type="button"><span id="gateBtnTxt">登录并进入核验台</span></button>
         <p class="gate-msg" id="gateMsg" role="alert" aria-live="polite"></p>
-        <p class="gate-note">口令由部署者设置。验证通过后本机保留 7 天登录状态。</p>
+        <p class="gate-note">输入你的专属口令登录，核验记录仅对当前账户可见。登录状态最长保留 7 天。</p>
       </div>
     </section>
 
     <section class="card" id="intake">
+      <div id="heroAccount" hidden style="padding:10px 20px;border-bottom:2px solid var(--ink);font-size:12px;background:var(--cream)">
+        <span id="heroAccountName"></span>
+        <button class="ghost" id="heroLogout" type="button" style="float:right;padding:2px 10px;font-size:11px" title="登出当前用户，返回口令登录页">用户登出</button>
+      </div>
       <div class="pulse"></div>
       <div class="card-h">
         <h2 id="intakeTitle">上传简历</h2>
@@ -674,7 +700,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </main>
 
 <p class="hero-foot">
-  不上传云端 · 只读<b>公开来源</b> · 每条结论都带出处 · <b>不给候选人打分</b>，不做排名与录用建议
+  仅用于当前账户核验 · 只读<b>公开来源</b> · 每条结论都带出处 · <b>不给候选人打分</b>，不做排名与录用建议
 </p>
 
 <div class="status-dock anim up" data-enter="520" id="statusDock" hidden>
@@ -729,8 +755,16 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     </div>
   </section>
 
+<div id="usageDock" class="idle" hidden>
+  <div class="u-card">
+    <div class="u-head" id="usageHead"><span class="u-dot"></span><span>本次查询用量</span><span class="u-x" id="usageToggle">收起</span></div>
+    <div class="u-body" id="usageBody"></div>
+  </div>
+</div>
 <script>
 let REPORT = null;
+let QUERY_EPOCH = 0;
+const QUERY_STREAMS = new Set();
 
 const STATUS = {
   ok:   {label:'已证实',        dot:'#1D9E75', bg:'#E1F5EE', fg:'#085041'},
@@ -834,7 +868,14 @@ function detailOf(c) {
       if (/^https?:\/\//i.test(url)) scope.appendChild(el('div', {},
         el('a', {href:url, target:'_blank', rel:'noopener noreferrer', text:'赛事官网：' + url})));
     });
-    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'官网名单范围'}), scope));
+    if (preset.publication_source_url && /^https?:\/\//i.test(preset.publication_source_url)) {
+      scope.appendChild(el('div', {}, el('a', {
+        href:preset.publication_source_url, target:'_blank', rel:'noopener noreferrer',
+        text:preset.target_year ? `${preset.target_year} 年名单或历年目录入口` : '官方名单入口',
+      })));
+    }
+    const scopeTitle = preset.target_year ? `官网名单范围 · ${preset.target_year} 年` : '官网名单范围';
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:scopeTitle}), scope));
   }
   if (c.evidence.length) {
     const box = el('div');
@@ -996,9 +1037,12 @@ function flip(card, ms, before, after) {
 /** 核心：投料窗口从页面正中 FLIP 到左栏里它的终点。
     纯位移、不缩放——所以窗口里的字不会被拉变形。 */
 function morphToApp() {
+  const epoch = QUERY_EPOCH;
   flip($('intake'), 880,
     () => { document.body.dataset.stage = 'app'; },
-    () => { runEnter(); setTimeout(() => runSplit(pendingUrl ? { url: pendingUrl } : pendingFile), 900); });
+    () => { runEnter(); setTimeout(() => {
+      if (epoch === QUERY_EPOCH) runSplit(pendingUrl ? { url: pendingUrl } : pendingFile);
+    }, 900); });
 }
 function morphToHero() {
   flip($('intake'), 760,
@@ -1153,8 +1197,25 @@ function initIntake() {
   });
 
   $('reset').addEventListener('click', () => {
+    const epoch = ++QUERY_EPOCH;
+    started = true;                          // 返回首页的过渡期间不接受新上传
+    QUERY_STREAMS.forEach(controller => controller.abort());
+    QUERY_STREAMS.clear();
+    Chat.abort();
+    clearInterval(StatusDock.timer);
+    clearReportView();
+    Usage.reset();
+    window.__chatReset?.();
+    $('statusDock').hidden = true; $('statusPill').hidden = true;
+    $('tierPanel').hidden = true;
+    $('risk-panel').classList.remove('open'); $('risk-body').innerHTML = '';
+    $('risk-line').textContent = '—';
+    $('risk-btn').textContent = '查看详情'; $('risk-btn').setAttribute('aria-expanded', 'false');
+    try { sessionStorage.setItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`, '1'); } catch {}
+    if (location.hash === '#app') history.replaceState(null, '', location.pathname + location.search);
     morphToHero();
     setTimeout(() => {
+      if (epoch !== QUERY_EPOCH) return;
       started = false;
       Viewer.clear();
       $('file').value = '';                 // 不清空的话，再选同一个文件不会触发 change
@@ -1307,12 +1368,58 @@ async function loadClaimPlan(claimId, out, btn) {
   btn.disabled = false;
 }
 
+
+/* 本次查询用量：拆分、核验、问答是三个独立后端任务，各自回报「自任务开始」的累计，
+   这里把已完成任务的累计（done）与进行中任务的累计（cur）相加。新上传一份简历才清零。 */
+const Usage = {
+  done: null, cur: null,
+  blank: () => ({ deepseek: { calls: 0, in: 0, cached: 0, out: 0, tokens: 0, yuan: 0 },
+                  glm: { calls: 0, in: 0, out: 0, tokens: 0, searches: 0, searchYuan: 0, yuan: 0 } }),
+  add(a, b) {
+    const o = this.blank();
+    for (const side of ['deepseek', 'glm']) for (const k of Object.keys(o[side])) {
+      const x = a?.[side]?.[k], y = b?.[side]?.[k];
+      // yuan 为 null = 单价未配置；任一方未知则合计也未知
+      o[side][k] = (k === 'yuan' && (x === null || y === null)) ? null : (x || 0) + (y || 0);
+    }
+    return o;
+  },
+  reset() { this.done = this.blank(); this.cur = null; this.render(); },
+  live(u) { this.cur = u; this.render(); },
+  commit() { if (this.cur) { this.done = this.add(this.done, this.cur); this.cur = null; this.render(); } },
+  total() { return this.add(this.done || this.blank(), this.cur); },
+  render() {
+    const t = this.total(), d = t.deepseek, g = t.glm;
+    const dock = document.getElementById('usageDock');
+    const any = d.calls || g.calls || g.searches;
+    dock.hidden = !any;
+    dock.classList.toggle('idle', !this.cur);
+    const n = v => Number(v || 0).toLocaleString('zh-CN');
+    const yuan = v => v === null ? '' : ' · ¥' + Number(v).toFixed(v < 1 ? 4 : 2);
+    const row = (k, main, sub) => `<div class="u-row"><span class="u-k">${k}</span><span class="u-v">${main}<span class="u-sub">${sub}</span></span></div>`;
+    const dsMain = `${n(d.tokens)} tokens` + yuan(d.yuan);
+    const dsSub = `输入 ${n(d.in)}${d.cached ? `（缓存 ${n(d.cached)}）` : ''} · 输出 ${n(d.out)} · ${n(d.calls)} 次调用`;
+    const glMain = `${n(g.searches)} 次搜索` + yuan(g.yuan ?? g.searchYuan);
+    const glSub = g.tokens ? `搜索 ${n(g.searches)} 次 · 模型 ${n(g.tokens)} tokens` : '按次计费（智谱 web_search）';
+    document.getElementById('usageBody').innerHTML =
+      row('DeepSeek', dsMain, dsSub) + row('GLM', glMain, glSub) +
+      (d.yuan === null && d.tokens ? '<div class="u-note">DeepSeek 折算金额需配置单价环境变量，当前仅显示 tokens。</div>' : '');
+  },
+};
+document.getElementById('usageHead').addEventListener('click', () => {
+  const dock = document.getElementById('usageDock');
+  dock.classList.toggle('collapsed');
+  document.getElementById('usageToggle').textContent = dock.classList.contains('collapsed') ? '展开' : '收起';
+});
+Usage.done = Usage.blank();
+
 /* 对话走 SSE 流式：服务端把模型增量原样转发，这里逐段渲染。
    没有核验报告之前禁用——问答的材料就是那份报告，没有报告就没有可回答的东西。 */
 const Chat = {
   ctrl: null,
   /** 返回完整回答文本；onDelta(已累计文本) 逐段回调。 */
   async askStream(question, onDelta, onDone) {
+    const epoch = QUERY_EPOCH;
     this.ctrl = new AbortController();
     const res = await fetch('/api/ask/stream', {
       method: 'POST',
@@ -1338,11 +1445,14 @@ const Chat = {
         const line = part.split('\n').find(l => l.startsWith('data: '));
         if (!line) continue;
         const ev = JSON.parse(line.slice(6));
+        if (epoch !== QUERY_EPOCH) throw new DOMException('查询已退出', 'AbortError');
         if (ev.error) throw new Error(ev.error);
         if (ev.delta) { full += ev.delta; onDelta(full); }
         if (ev.done) { seconds = ev.seconds; finished = true; }
+        if (ev.usage) { Usage.live(ev.usage); }
       }
     }
+    Usage.commit();
     onDone?.(seconds);
     return full;
   },
@@ -1382,6 +1492,7 @@ function initChat() {
   }
 
   async function send_(question) {
+    const epoch = QUERY_EPOCH;
     const q = (question ?? input.value).trim();
     if (!q) return;
     if (busy) return;
@@ -1403,9 +1514,11 @@ function initChat() {
       const full = await Chat.askStream(q,
         t => { acc = t; bub.textContent = t; scrollChat(); },
         secs => { if (secs) bub.dataset.secs = secs; });
+      if (epoch !== QUERY_EPOCH) return;
       bub.classList.remove('streaming');
       bub.textContent = acc || '（模型没有返回内容）';
     } catch (err) {
+      if (epoch !== QUERY_EPOCH) return;
       bub.classList.remove('streaming');
       if (err.name === 'AbortError') {
         bub.textContent = (acc || '') + '\n\n（已中断——以上是中断前已生成的内容）';
@@ -1515,6 +1628,15 @@ function initChat() {
   const setChatStatus = txt => { $('chatStTxt').textContent = txt; };
   setChatStatus('需先核验一份简历');
   window.__chatStatus = setChatStatus;
+  window.__chatReset = () => {
+    Chat.abort();
+    body.querySelectorAll('.msg').forEach(message => message.remove());
+    leadList.replaceChildren();
+    input.value = ''; input.style.height = '44px';
+    busy = false; send.disabled = true; stop.hidden = true;
+    setOpen(false); setChatReady(false); setChatStatus('需先核验一份简历');
+    $('chatSt').classList.remove('on');
+  };
 }
 
 /* ══ PDF 查看器 ══════════════════════════════════
@@ -1901,27 +2023,39 @@ const StatusDock = {
 
 /* 读后端的 SSE：每个 `data:` 一条事件。上传简历与提交勾选共用。 */
 async function sseRequest(url, init, onEv) {
-  const res = await fetch(url, init);
-  if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
-    const d = await res.json().catch(() => ({}));
-    throw new Error(d.error || `HTTP ${res.status}`);
-  }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '';
-  for (;;) {
-    const { value, done: rdDone } = await reader.read();
-    if (rdDone) break;
-    buf += dec.decode(value, { stream: true });
-    const parts = buf.split('\n\n');
-    buf = parts.pop();
-    for (const part of parts) {
-      const line = part.split('\n').find(l => l.startsWith('data: '));
-      if (!line) continue;
-      const ev = JSON.parse(line.slice(6));
-      if (ev.ping) continue;
-      onEv(ev);
+  const epoch = QUERY_EPOCH;
+  const controller = new AbortController();
+  QUERY_STREAMS.add(controller);
+  if (url === '/api/split/stream') Usage.reset();      // 新上传 = 新的一次查询
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `HTTP ${res.status}`);
     }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done: rdDone } = await reader.read();
+      if (rdDone) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (const part of parts) {
+        const line = part.split('\n').find(l => l.startsWith('data: '));
+        if (!line) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (epoch !== QUERY_EPOCH) throw new DOMException('查询已退出', 'AbortError');
+        if (ev.ping) continue;
+        if (ev.usage) Usage.live(ev.usage);
+        if (ev.usage && !ev.done) continue;           // 纯用量事件，不进业务回调
+        onEv(ev);
+      }
+    }
+  } finally {
+    QUERY_STREAMS.delete(controller);
+    if (epoch === QUERY_EPOCH) Usage.commit();
   }
 }
 
@@ -2100,12 +2234,14 @@ function clearReportView() {
 
 /* 第一段：上传 → 解析、画像、拆分（不检索）→ 分拣台 */
 async function runSplit(src) {
+  const epoch = QUERY_EPOCH;
   $('emptyFirst').hidden = true;
   $('pending').hidden = true;
   $('toolbar').hidden = true;
   $('pick').hidden = true;
   if (!MODE.real) { setFirstEmpty('本页需要 serve.py 提供后端才能核验。用 python3 serve.py 启动后刷新。'); return; }
   if (!src) return;
+  try { sessionStorage.removeItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`); } catch {}
   const isWeb = !!src.url;
   clearReportView();
   // 第一步的说法跟着输入方式走：网页要先读取并确认是个人主页
@@ -2137,6 +2273,7 @@ async function runSplit(src) {
       if (L.includes('[2/6]')) { Steps.set(0, 'done'); Steps.set(1, 'doing'); }
       StatusDock.log(L, L.includes('画像完成') || L.includes('已拆成') || L.startsWith('已确认：'));
     });
+    if (epoch !== QUERY_EPOCH) return;
     if (!doneEv) throw new Error('拆分流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.split) throw new Error(doneEv.error || '拆分失败（后端没有返回陈述）');
     const sp = doneEv.split;
@@ -2176,6 +2313,7 @@ async function runSplit(src) {
       openViewer();
     }
   } catch (err) {
+    if (epoch !== QUERY_EPOCH) return;
     delete document.body.dataset.picking;
     StatusDock.fail(err.message);
     $('spTitle').textContent = isWeb ? '已停止' : '拆分失败';
@@ -2199,6 +2337,7 @@ async function runSplit(src) {
 
 /* 第二段：只核验勾选的条目 */
 async function runVerify() {
+  const epoch = QUERY_EPOCH;
   const ids = PICK.claims.map(c => c.id).filter(id => PICK.selected.has(id));   // 按简历原顺序
   if (!ids.length || !PICK.token) return;
   delete document.body.dataset.picking;
@@ -2234,6 +2373,7 @@ async function runVerify() {
       if (m) StatusDock.progress(m[1], m[2]);
       StatusDock.log(L, L.includes('[3-5/6]') || L.includes('[6/6]') || L.includes('✓ ('));
     });
+    if (epoch !== QUERY_EPOCH) return;
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');
     Steps.all().forEach((_, i) => Steps.set(i, 'done'));
@@ -2244,6 +2384,7 @@ async function runVerify() {
     $('repick').hidden = false;
     bringIntoView($('toolbar'));
   } catch (err) {
+    if (epoch !== QUERY_EPOCH) return;
     StatusDock.fail(err.message);
     $('pending').hidden = false;
     $('pending').textContent = `核验失败：${err.message}`;
@@ -2266,6 +2407,35 @@ function renderRisksFrom(risks) {
 /* ══ 登录门禁 ═══════════════════════════════════ */
 /* 这里只是"门"，不是"锁"：真正的判定在服务端——/api/login 校验口令后下发 httpOnly
    cookie，前端既拿不到口令也无法伪造签名。改口令会让旧 cookie 立刻失效。 */
+let ACCOUNT = null;
+const originalFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+  if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
+    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+    if (ACCOUNT) headers.set('X-Underbox-User', ACCOUNT.id);
+    init = { ...init, headers };
+  }
+  const response = await originalFetch(input, init);
+  if (url.origin === location.origin && url.pathname !== '/api/login' && [401, 409].includes(response.status)) {
+    const data = await response.clone().json().catch(() => ({}));
+    if (data.loginRequired && ACCOUNT) location.reload();
+  }
+  return response;
+};
+
+async function activateAccount(user, gate = true) {
+  ACCOUNT = user || null;
+  authBadge(gate);
+  $('accountBadge').hidden = !ACCOUNT;
+  $('heroAccount').hidden = !ACCOUNT;
+  const label = ACCOUNT ? `当前用户：${ACCOUNT.name}` : '';
+  $('accountBadge').textContent = label;
+  $('heroAccountName').textContent = label;
+  await probeMode();
+  await restoreReport();
+}
+
 const Gate = {
   /** 通过 → 门禁卡淡出上浮、投料卡同期淡入。品牌字全程不动，所以看着像"卡片换了身份"。 */
   pass() {
@@ -2300,6 +2470,7 @@ const Gate = {
     $('gatePw').focus(); $('gatePw').select();
   },
   async submit() {
+    if ($('gateGo').disabled) return;
     const pw = $('gatePw').value.trim();
     if (!pw) return this.fail('请输入口令');
     const btn = $('gateGo'), txt = $('gateBtnTxt');
@@ -2310,17 +2481,21 @@ const Gate = {
         body: JSON.stringify({ password: pw }),
       });
       const d = await r.json().catch(() => ({}));
-      if (r.ok && d.ok) { $('gateMsg').textContent = ''; authBadge(true); return this.pass(); }
+      if (r.ok && d.ok) {
+        $('gateMsg').textContent = ''; $('gatePw').value = '';
+        await activateAccount(d.user, d.gate !== false);
+        return this.pass();
+      }
       this.fail(d.error || '口令不正确');
     } catch {
       this.fail('连接失败，请检查网络后重试');
     } finally {
-      btn.disabled = false; txt.textContent = '进入核验台';
+      btn.disabled = false; txt.textContent = '登录并进入核验台';
     }
   },
 };
 
-/** 顶栏「退出」只在门禁开启时才露面——没设口令的部署看到它反而困惑 */
+/** 用户登出只在门禁开启时显示；退出查询不调用登出接口。 */
 function authBadge(on) { const b = $('logoutBtn'); if (b) b.hidden = !on; }
 
 /* ══ 启动 ═══════════════════════════════════════ */
@@ -2350,7 +2525,8 @@ $('repick').addEventListener('click', () => {
 });
 document.body.dataset.noreport = '1';
 // 页面刷新后向服务端要回最近一次真实报告——不然一刷新就"丢"了
-(async () => {
+async function restoreReport() {
+  try { if (sessionStorage.getItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`)) return; } catch {}
   try {
     const r = await fetch('/api/report');
     if (!r.ok) return;
@@ -2358,38 +2534,51 @@ document.body.dataset.noreport = '1';
     if (started || PICK.token) return;        // 已经在处理新简历，别把旧报告盖上来
     applyReport(d.report);
   } catch { /* 没有报告就保持空态 */ }
-})();
-probeMode();
+}
 
 $('gateGo').addEventListener('click', () => Gate.submit());
 $('gatePw').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); Gate.submit(); }   // 手机上 return 键直接提交
 });
-$('logoutBtn').addEventListener('click', async () => {
-  try { await fetch('/api/logout', { method: 'POST' }); } catch { /* 清不掉也照重载 */ }
-  location.reload();
-});
-
-/* 进来先问服务端两件事：这个部署要不要口令、我这台机器登录过没有。
-   问不到（老后端 / 网络异常）就当门禁不存在——这里只管"显示哪一屏"，
-   真正的拦截在服务端的 cookie 校验上，前端放行并不会让 API 变得可访问。 */
-(async () => {
-  if (location.hash === '#app') {            // 深链：直接进主界面，不播动画
-    document.body.dataset.stage = 'app';
-    $('gateCard').style.display = 'none';
-    runEnter(); renderClaims();
-    return;
+async function logoutAccount() {
+  const buttons = [$('logoutBtn'), $('heroLogout')];
+  buttons.forEach(button => button.disabled = true);
+  try {
+    const response = await fetch('/api/logout', { method: 'POST' });
+    if (!response.ok) throw new Error('登出失败');
+    QUERY_EPOCH++;
+    QUERY_STREAMS.forEach(controller => controller.abort());
+    Chat.abort();
+    ACCOUNT = null;
+    location.reload();
+  } catch {
+    buttons.forEach(button => button.disabled = false);
+    alert('用户登出未成功，请检查网络后重试。');
   }
-  let gate = false, authed = false;
+}
+$('logoutBtn').addEventListener('click', logoutAccount);
+$('heroLogout').addEventListener('click', logoutAccount);
+
+/* 先确认服务端会话，再读取当前用户的报告和服务状态。 */
+(async () => {
   try {
     const r = await fetch('/api/session');
-    if (r.ok) { const d = await r.json(); gate = !!d.gate; authed = !!d.authed; }
-  } catch { /* 没有这个端点：当门禁不存在 */ }
-  if (!gate || authed) {
-    if (gate && authed) authBadge(true);
-    return Gate.skip();
+    if (!r.ok) throw new Error('登录服务暂时不可用');
+    const d = await r.json();
+    if (!d.gate || d.authed) {
+      await activateAccount(d.user, !!d.gate);
+      if (location.hash === '#app') {
+        document.body.dataset.stage = 'app';
+        $('gateCard').style.display = 'none';
+        runEnter(); renderClaims();
+        return;
+      }
+      return Gate.skip();
+    }
+  } catch {
+    $('gateMsg').textContent = '登录服务暂时不可用，请刷新后重试';
   }
-  $('gatePw').focus();                       // 停在门禁屏，可以立刻打字
+  $('gatePw').focus();
 })();
 </script>
 </body>

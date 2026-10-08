@@ -492,6 +492,7 @@ def stream_answer(material: str, question: str):
         "max_tokens": 4096,
         "temperature": 0,
         "stream": True,
+        "stream_options": {"include_usage": True},      # 末尾多一块带 usage 的 chunk，用于记账
         "thinking": {"type": "disabled"},
     }
     try:
@@ -513,6 +514,9 @@ def stream_answer(material: str, question: str):
                     chunk = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
+                if chunk.get("usage"):
+                    from app.usage import METER            # noqa: PLC0415
+                    METER.record_llm("deepseek", chunk["usage"])
                 delta = ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("content")
                 if delta:
                     yield {"delta": delta}
@@ -701,8 +705,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _sse(self, target, args: tuple) -> None:
         """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。"""
+        from app.usage import METER                       # noqa: PLC0415
         events: queue.Queue = queue.Queue()
         holder: dict = {}
+        # 用量：每次供应商调用记账后，把「本任务自开始以来」的累计推给页面
+        base = METER.mark()
+        unsubscribe = METER.subscribe(lambda: events.put({"usage": METER.since(base)}))
         threading.Thread(target=target, args=(*args, events, holder), daemon=True).start()
 
         self.send_response(200)
@@ -726,6 +734,8 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if ev is None:
                     break
+                if ev.get("done"):
+                    ev["usage"] = METER.since(base)
                 push(ev)
                 if ev.get("done"):
                     if "report" in ev:               # 存到**类**上（实例随请求销毁）
@@ -735,6 +745,8 @@ class Handler(BaseHTTPRequestHandler):
                     break
         except (BrokenPipeError, ConnectionResetError):
             pass                                     # 用户关了页面 / 中断了连接
+        finally:
+            unsubscribe()
 
     def do_GET(self):                          # noqa: N802
         path = self.path.split("?", 1)[0]
@@ -818,6 +830,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         started = time.monotonic()
         acc: list[str] = []
+        from app.usage import METER                       # noqa: PLC0415
+        base = METER.mark()
         try:
             for ev in stream_answer(material, question):
                 if "error" in ev:
@@ -827,7 +841,7 @@ class Handler(BaseHTTPRequestHandler):
                 acc.append(ev["delta"])
                 self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
                 self.wfile.flush()
-            self.wfile.write(f"data: {json.dumps({'done': True, 'seconds': round(time.monotonic() - started, 1)}, ensure_ascii=False)}\n\n".encode("utf-8"))
+            self.wfile.write(f"data: {json.dumps({'done': True, 'seconds': round(time.monotonic() - started, 1), 'usage': METER.since(base)}, ensure_ascii=False)}\n\n".encode("utf-8"))
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             # 客户端中断（用户点了停止 / 关了页面）——正常收尾，不算错误
@@ -881,6 +895,11 @@ def main() -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8787)
     args = ap.parse_args()
+
+    accounts_file = os.environ.get("UNDERBOX_ACCOUNTS_FILE")
+    if accounts_file:
+        from accounts import serve_accounts
+        return serve_accounts(Handler, accounts_file, args.host, args.port)
 
     print(f"underbox  http://{args.host}:{args.port}/", flush=True)
     print(f"  模型     {'deepseek-flash' if _llm_ready() else '⚠ 未配置 DEEPSEEK_API_KEY'}", flush=True)

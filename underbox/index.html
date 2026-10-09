@@ -44,9 +44,9 @@
   transition:opacity .55s var(--ease);
   --gx:50vw; --gy:50vh; --gr:0px;
   -webkit-mask-image:radial-gradient(circle var(--gr) at var(--gx) var(--gy),
-    transparent 0, transparent calc(var(--gr) * .72), #000 var(--gr));
+    transparent 0, transparent calc(var(--gr) * .85), #000 var(--gr));
   mask-image:radial-gradient(circle var(--gr) at var(--gx) var(--gy),
-    transparent 0, transparent calc(var(--gr) * .72), #000 var(--gr));
+    transparent 0, transparent calc(var(--gr) * .85), #000 var(--gr));
 }
 .dusk.done{opacity:0; visibility:hidden}
 
@@ -65,7 +65,7 @@
 
 /* gate 阶段的品牌字：白字 + 深色柔影——深底上醒目，掠过奶油色的光斑时也读得清 */
 body[data-stage="gate"] .hero-mark,
-body[data-stage="gate"] .hero-slogan{color:#FFFFFF;text-shadow:0 2px 14px rgba(20,19,15,.6)}
+body[data-stage="gate"] .hero-slogan{color:#FFFFFF;font-weight:700;text-shadow:0 2px 14px rgba(20,19,15,.6)}
 body[data-stage="gate"] .hero-mark em{color:var(--pink)}
 body[data-stage="gate"] .hero-foot{color:#B6B1A3;text-shadow:0 1px 8px rgba(20,19,15,.5)}
 body[data-stage="gate"] .hero-foot b{color:#DCDAD4}
@@ -3261,12 +3261,12 @@ Dusk.init();
 addEventListener('mousemove', e => {
   if (document.body.dataset.stage !== 'gate') return;    // 登录之后就放手，让云自己散
   Dusk.move(e.clientX, e.clientY);
-  if (Dusk.tr < 260) Dusk.grow(260);                     // 一动鼠标，云先透出一道光
+  if (Dusk.tr < 320) Dusk.grow(320);                     // 一动鼠标，云先透出一道光
 });
 addEventListener('touchstart', e => {
   if (document.body.dataset.stage !== 'gate') return;
   const t = e.touches[0];
-  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 260)); }
+  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 320)); }
 }, { passive: true });
 
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）

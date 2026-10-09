@@ -2767,48 +2767,55 @@ function renderQuota() {
 }
 
 /* ══ 云层：拨云见日 ═══════════════════════════════
-   一个全屏遮罩 + 一个半径变量，三种状态：
-     · 初始 r=0        —— 全暗（深色主题）
-     · 鼠标移出登录卡   —— 在鼠标处开一个小洞，透一线光。这是**预告**不是结果：
-                          松手不动它就会自动合上（鼠标移回卡内即 shut）
-     · 登录成功        —— 洞扩到铺满视口（日出），扩完把云层移除
+   一个全屏遮罩 + 一个"洞"（圆心、半径两个变量），三种状态：
+     · 初始 r=0   —— 全暗（深色主题）
+     · 鼠标移动    —— 洞**平滑地滑**向鼠标：背景随鼠标位置透出浅色（MiMo 官网式响应）。
+                      位置和半径都是"目标值 + 每帧向目标走一段"，不是瞬移，所以自然流畅
+     · 登录成功    —— 圆心滑到**登录卡中心**，半径从那里一路涨到铺满视口（日出）
 
-   半径用 rAF 手动插值，而不是靠 CSS 变量 transition——
-   @property 注册的变量才能过渡，而部分 Safari 还没支持。 */
+   插值用一个 rAF 循环：目标值随时可改（鼠标再动、登录触发），显示值每帧向目标
+   靠近一个比例——中途发生变化也能被自然接住，比固定时长的动画丝滑。
+   不依赖 CSS 变量的 transition（@property 注册过的变量才能过渡，部分 Safari 还没有）。 */
 const Dusk = {
-  el: null, r: 0, raf: 0,
-  init() { this.el = $('dusk'); },
-  move(x, y) {                                   // 洞跟着鼠标走
-    if (!this.el) return;
-    this.el.style.setProperty('--mx', x + 'px');
-    this.el.style.setProperty('--my', y + 'px');
+  el: null, raf: 0, onDone: null,
+  x: 0, y: 0, r: 0,                       // 显示值（这一帧画在页面上的）
+  tx: 0, ty: 0, tr: 0,                    // 目标值（鼠标在哪、洞该多大）
+  init() {
+    this.el = $('dusk');
+    this.x = this.tx = innerWidth / 2;
+    this.y = this.ty = innerHeight / 2;
+    this.apply();
   },
-  to(radius, ms, done) {
-    if (!this.el) return;
-    cancelAnimationFrame(this.raf);
-    const from = this.r, to = radius, t0 = performance.now();
-    const step = now => {
-      const p = Math.min(1, (now - t0) / ms);
-      const e = 1 - Math.pow(1 - p, 3);          // easeOutCubic：起步快、收尾缓，像云散开
-      this.r = from + (to - from) * e;
-      this.el.style.setProperty('--r', this.r.toFixed(1) + 'px');
-      if (p < 1) this.raf = requestAnimationFrame(step);
-      else if (done) done();
-    };
-    this.raf = requestAnimationFrame(step);
+  step() {
+    this.x += (this.tx - this.x) * 0.16;               // 位置追得快
+    this.y += (this.ty - this.y) * 0.16;
+    const dr = this.tr - this.r;
+    this.r += dr * (dr > 0 ? 0.085 : 0.22);            // 半径开得从容、合得利落
+    if (Math.abs(this.tx - this.x) < 0.5) this.x = this.tx;   // 逼近永远差一口气，
+    if (Math.abs(this.ty - this.y) < 0.5) this.y = this.ty;   // 差半像素就直接贴上
+    if (Math.abs(dr) < 1) this.r = this.tr;
+    this.apply();
+    const settled = this.x === this.tx && this.y === this.ty && this.r === this.tr;
+    if (settled && this.onDone) { const f = this.onDone; this.onDone = null; f(); }
+    this.raf = settled ? 0 : requestAnimationFrame(() => this.step());
   },
-  // 两个都只在登录阶段生效：登录卡淡出消失时浏览器会补一个 mouseleave，
-  // 不拦住的话会在云已经散尽之后又把它"A 开一个小洞"（半径被打回 190）。
-  peek(x, y) {
-    if (document.body.dataset.stage !== 'gate') return;
-    this.move(x, y);
-    this.to(190, 420);
+  wake() { if (this.el && !this.raf) this.raf = requestAnimationFrame(() => this.step()); },
+  apply() {
+    this.el.style.setProperty('--mx', this.x.toFixed(1) + 'px');
+    this.el.style.setProperty('--my', this.y.toFixed(1) + 'px');
+    this.el.style.setProperty('--r', this.r.toFixed(1) + 'px');
   },
-  shut() {
-    if (document.body.dataset.stage !== 'gate') return;
-    this.to(0, 320);
+  move(x, y) { this.tx = x; this.ty = y; this.wake(); },   // 鼠标到哪，云就在哪透光
+  grow(px) { this.tr = px; this.wake(); },                 // 只调半径
+  /** 日出：圆心落到登录卡中心，从那里一路扩到铺满视口。done 在全部到位后回调。 */
+  clear(done) {
+    const c = $('gateCard').getBoundingClientRect();
+    this.tx = c.left + c.width / 2;
+    this.ty = c.top + c.height / 2;
+    this.tr = Math.hypot(innerWidth, innerHeight) * 1.3;
+    this.onDone = done || null;
+    this.wake();
   },
-  clear(done) { this.to(Math.hypot(innerWidth, innerHeight) * 1.3, 900, done); },   // 日出
 };
 
 const Gate = {
@@ -3225,17 +3232,19 @@ $('statusPill').addEventListener('click', () => {
   $('statusPanel').hidden = false;
   $('statusPill').hidden = true;
 });
-/* 云层：移出登录卡先透一线光（只是预告，移回去就合上），洞始终跟着鼠标走。
-   手机没有 hover，改成"点登录卡之外的任意处"给同样的反馈。 */
+/* 云层交互：鼠标一动云就透光，洞平滑地滑向鼠标（全程响应，不再要求"先移出登录卡"）。
+   登录卡本身不参与——它是操作焦点，必须稳定；洞在它底下透过来的光会在卡片四周露出，
+   背景依然是活的。手机没有 hover，点哪开哪。都只在登录阶段生效。 */
 Dusk.init();
-const gateBox = $('gateCard');
-gateBox.addEventListener('mouseleave', e => Dusk.peek(e.clientX, e.clientY));
-gateBox.addEventListener('mouseenter', () => Dusk.shut());
-addEventListener('mousemove', e => { if (Dusk.r > 1) Dusk.move(e.clientX, e.clientY); });
+addEventListener('mousemove', e => {
+  if (document.body.dataset.stage !== 'gate') return;    // 登录之后就放手，让云自己散
+  Dusk.move(e.clientX, e.clientY);
+  if (Dusk.tr < 170) Dusk.grow(170);                     // 一动鼠标，云先透出一道光
+});
 addEventListener('touchstart', e => {
-  if (document.body.dataset.stage !== 'gate' || gateBox.contains(e.target)) return;
+  if (document.body.dataset.stage !== 'gate') return;
   const t = e.touches[0];
-  if (t) Dusk.peek(t.clientX, t.clientY);
+  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 190)); }
 }, { passive: true });
 
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）

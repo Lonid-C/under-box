@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS quota_requests (
 CREATE INDEX IF NOT EXISTS idx_req_status ON quota_requests(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_req_user   ON quota_requests(user_id, created_at);
 
+-- 运行期可改的配置（API 供应商 / 模型 / 密钥）。
+-- 优先级：**这里的值覆盖 env 文件**；某项为空则回落到 env 文件。
+-- 密钥在本表里是明文，但库文件权限 0600，与原本放在 env 文件里风险相当。
+CREATE TABLE IF NOT EXISTS settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- 访问流水：看板的"访问量"来自这里。只记路径与状态，不记正文
 CREATE TABLE IF NOT EXISTS access_log (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -376,6 +385,69 @@ def decide_request(conn, req_id: int, *, approve: bool, admin_id: str, note: str
 def pending_count(conn) -> int:
     row = conn.execute("SELECT COUNT(*) c FROM quota_requests WHERE status = 'pending'").fetchone()
     return row["c"] if row else 0
+
+
+# ── 运行期可改的配置（API 供应商 / 模型 / 密钥）──────────────────────────
+# 键名 → 注入工作进程的环境变量名。集中写死这一张表，不做字符串拼接：
+# 拼错一个变量名不会报错，只会静默失效，那种 bug 最难查。
+SETTING_ENVS = {
+    "llm_provider":       "LLM_PROVIDER",
+    "llm_model":          "LLM_MODEL",
+    "llm_endpoint":       "LLM_ENDPOINT",
+    "llm_thinking":       "LLM_THINKING",
+    "deepseek_api_key":   "DEEPSEEK_API_KEY",
+    "zhipu_api_key":      "ZHIPU_API_KEY",
+    "llm_api_key":        "LLM_API_KEY",
+    "search_provider":    "SEARCH_PROVIDER",
+    "search_api_key":     "SEARCH_API_KEY",
+    "search_engine":      "SEARCH_ENGINE",
+    "search_engine_open": "SEARCH_ENGINE_OPEN",
+    "search_endpoint":    "SEARCH_ENDPOINT",
+    "brave_api_key":      "BRAVE_SEARCH_API_KEY",
+}
+SECRET_KEYS = ("deepseek_api_key", "zhipu_api_key", "llm_api_key", "search_api_key", "brave_api_key")
+
+
+def get_settings(conn) -> dict[str, str]:
+    return {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings")}
+
+
+def set_settings(conn, items: dict[str, str]) -> None:
+    """只写传进来的键。空字符串 = 删掉这一项（回落到 env 文件的值）。"""
+    stamp = now()
+    for key, value in items.items():
+        if key not in SETTING_ENVS:
+            continue                                  # 不认识的一律忽略
+        if value:
+            conn.execute(
+                "INSERT INTO settings(key, value, updated_at) VALUES(?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, "
+                "updated_at=excluded.updated_at", (key, str(value).strip(), stamp))
+        else:
+            conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+
+def mask(value: str) -> str:
+    """密钥一律不回传明文：只给长度和尾 4 位，够管理员确认"填的是哪一把"。"""
+    if not value:
+        return ""
+    return f"{'•' * 8}{value[-4:]}（{len(value)} 位）"
+
+
+def settings_public(conn) -> dict:
+    """交给管理台的配置快照：密钥脱敏，其余原样。"""
+    raw = get_settings(conn)
+    return {k: (mask(raw.get(k, "")) if k in SECRET_KEYS else raw.get(k, "")) for k in SETTING_ENVS}
+
+
+def settings_env(conn) -> dict[str, str]:
+    """给工作进程的环境变量覆盖：只有配过的项才出现（没配就沿用 env 文件）。"""
+    out: dict[str, str] = {}
+    for key, value in get_settings(conn).items():
+        env = SETTING_ENVS.get(key)
+        if env and value:
+            out[env] = value
+    return out
 
 
 # ── 访问统计 ──────────────────────────────────────────────────────────────

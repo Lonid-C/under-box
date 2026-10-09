@@ -177,6 +177,19 @@ body[data-stage="app"] #gateCard{display:none}
 .ad-inline{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .ad-note{font-size:11.5px;color:var(--ink-2);line-height:1.65}
 .ad-empty{font-size:12.5px;color:var(--ink-3);padding:6px 0}
+
+/* API 配置表单 */
+.ad-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.ad-field{display:block}
+.ad-field>span{display:block;font-size:11.5px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.ad-field .ad-in{font-size:12.5px;padding:7px 9px}
+.ad-field select.ad-in{cursor:pointer}
+.ad-hint{display:block;font-size:11px;font-style:normal;color:var(--ink-3);margin-top:4px;line-height:1.5}
+.ad-sub{margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--ink-2);
+  padding-bottom:5px;border-bottom:1.5px solid #D8D4C9}
+.ad-test{margin-top:12px;min-height:17px}
+.ad-test.ok{color:#0F6E56}
+.ad-test.bad{color:#B33A1A}
 @media(max-width:600px){
   .ad-body{padding:14px}
   .ad-head{padding:11px 14px;gap:9px}
@@ -2801,6 +2814,94 @@ const Sheet = {
     return el('div', { class: 'ad-mini' }, ...values.map(v =>
       el('i', { style: `height:${Math.max(2, Math.round(v / max * 46))}px`, title: String(v) })));
   },
+  // ── 表单小件 ────────────────────────────────────────────────────────
+  field(label, node, hint) {
+    return el('label', { class: 'ad-field' }, el('span', { text: label }), node,
+      hint ? el('em', { class: 'ad-hint', text: hint }) : null);
+  },
+  input(key, { type = 'text', ph = '', list = '' } = {}) {
+    return el('input', { class: 'ad-in', 'data-k': key, type, placeholder: ph,
+                         list: list || null, autocomplete: 'off', spellcheck: 'false' });
+  },
+  select(key, value, opts) {
+    return el('select', { class: 'ad-in', 'data-k': key },
+      ...opts.map(o => el('option', { value: o, text: o,
+                                      selected: o === value ? 'selected' : null })));
+  },
+  /** 把一块区域里所有 [data-k] 控件的值收成对象 */
+  collect(scope) {
+    const out = {};
+    scope.querySelectorAll('[data-k]').forEach(n => { out[n.dataset.k] = n.value; });
+    return out;
+  },
+
+  // ── 管理员：API 配置 ────────────────────────────────────────────────
+  async configCard() {
+    const d = await this.api('GET', '/api/admin/settings');
+    const s = d.settings || {}, op = d.options || {};
+    // 密钥框留空 = 不改，所以用 placeholder 展示"现在配的是什么（脱敏）"
+    const ph = k => (s[k] ? `已配置 ${s[k]}，留空表示不改` : '未配置');
+    const wrap = el('div', {},
+      el('div', { class: 'ad-sub', text: '模型（大模型）' }),
+      el('div', { class: 'ad-grid' },
+        this.field('供应商', this.select('llm_provider', s.llm_provider || 'deepseek', op.llm_provider || [])),
+        this.field('模型名', this.input('llm_model', { ph: s.llm_model || '如 deepseek-flash', list: 'ubModels' })),
+        this.field('思考模式', this.select('llm_thinking', s.llm_thinking || 'disabled', op.llm_thinking || [])),
+        this.field('自定义端点', this.input('llm_endpoint', { ph: s.llm_endpoint || '留空用预设' }),
+                   '只有 openai-compatible 供应商需要填'),
+        this.field('DeepSeek 密钥', this.input('deepseek_api_key', { type: 'password', ph: ph('deepseek_api_key') })),
+        this.field('智谱密钥', this.input('zhipu_api_key', { type: 'password', ph: ph('zhipu_api_key') }),
+                   'GLM 与 web_search 共用这一把'),
+        this.field('通用 LLM 密钥', this.input('llm_api_key', { type: 'password', ph: ph('llm_api_key') }),
+                   '选 openai-compatible 时用')),
+      el('div', { class: 'ad-sub', text: '搜索' }),
+      el('div', { class: 'ad-grid' },
+        this.field('供应商', this.select('search_provider', s.search_provider || 'zhipu', op.search_provider || [])),
+        this.field('带域查询引擎', this.select('search_engine', s.search_engine || 'search_std', op.search_engine || [])),
+        this.field('裸查询引擎', this.select('search_engine_open', s.search_engine_open || 'search_pro_sogou', op.search_engine_open || [])),
+        this.field('搜索密钥', this.input('search_api_key', { type: 'password', ph: ph('search_api_key') })),
+        this.field('Brave 密钥', this.input('brave_api_key', { type: 'password', ph: ph('brave_api_key') }),
+                   '仅 search_provider = brave 时需要'),
+        this.field('自定义端点', this.input('search_endpoint', { ph: s.search_endpoint || '留空用预设' }))),
+      el('div', { class: 'ad-inline', style: 'margin-top:14px' },
+        this.act('测试模型', b => this.testSettings(wrap, 'llm', b)),
+        this.act('测试搜索', b => this.testSettings(wrap, 'search', b)),
+        this.act('保存并生效', b => this.saveSettings(wrap, b), true)),
+      el('p', { class: 'ad-note ad-test' }),
+      el('datalist', { id: 'ubModels' }, ...(op.llm_model || []).map(m => el('option', { value: m }))));
+    return this.card('API 配置', '保存后会重启工作进程（几秒内核验不可用）', wrap);
+  },
+  async testSettings(wrap, target, btn) {
+    const note = wrap.querySelector('.ad-test');
+    btn.disabled = true; note.className = 'ad-note ad-test'; note.textContent = '测试中…';
+    try {
+      const r = await this.api('POST', '/api/admin/settings/test',
+                               { ...this.collect(wrap), target });
+      note.textContent = Object.entries(r.result).map(([k, v]) =>
+        `${k === 'llm' ? '模型' : '搜索'}：${v.ok ? '✓ ' : '✗ '}${v.detail}`).join('　｜　');
+      note.className = 'ad-note ad-test ' + (r.ok ? 'ok' : 'bad');
+    } catch (e) {
+      note.textContent = `测试失败：${e.message}`;
+      note.className = 'ad-note ad-test bad';
+    } finally { btn.disabled = false; }
+  },
+  async saveSettings(wrap, btn) {
+    const note = wrap.querySelector('.ad-test');
+    btn.disabled = true; note.className = 'ad-note ad-test';
+    note.textContent = '保存中，正在重启工作进程…';
+    try {
+      const r = await this.api('POST', '/api/admin/settings', this.collect(wrap));
+      note.textContent = r.reloaded ? '✓ 已保存并生效（工作进程已重启）'
+                                    : `✓ 已保存${r.note ? '，但 ' + r.note : ''}`;
+      note.className = 'ad-note ad-test ' + (r.reloaded ? 'ok' : 'bad');
+      // 延后刷新：refresh() 会重建整块 DOM，立刻调用的话上面那行提示闪一下就没了
+      setTimeout(() => this.refresh(), 1800);
+    } catch (e) {
+      note.textContent = `保存失败：${e.message}`;
+      note.className = 'ad-note ad-test bad';
+    } finally { btn.disabled = false; }
+  },
+
   statusPill(status) {
     const map = { approved: ['ok', '已批准'], rejected: ['no', '已拒绝'] };
     const [cls, label] = map[status] || ['wait', '待审批'];
@@ -2916,6 +3017,8 @@ const Sheet = {
         el('td', { class: 'num', text: u.last_at || '—' }),
         el('td', {}, this.act('调配额', () => this.setQuota(u)))))
     ), el('p', { class: 'ad-note', text: '配额为 -1 表示不限额（管理员默认不限额）。' })));
+
+    out.push(await this.configCard());           // API 配置放最后：不常改，但改完要能立刻测
     return out;
   },
 

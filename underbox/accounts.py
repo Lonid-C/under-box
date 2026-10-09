@@ -127,6 +127,9 @@ class Workers:
                if k in {"PATH", "HOME", "LANG", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR"}
                or k.startswith("LC_")}
         env.update(parse_env_text(env_file.read_text()))
+        # 管理台里改过的配置优先于 env 文件（映射表在 store.SETTING_ENVS）
+        with store.connect(self.accounts.path) as conn:
+            env.update(store.settings_env(conn))
         env.update(
             UNDERBOX_ENV_FILE=str(env_file),
             UNDERBOX_PASSWORD="",                    # 单实例口令门禁已由本网关取代
@@ -179,6 +182,28 @@ class Workers:
                 print("重新启动工作进程", flush=True)
                 self.launch()
 
+    def reload(self) -> None:
+        """重启工作进程让新配置生效。期间核验不可用（几秒），调用方要如实告知。"""
+        if self.process and self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+        self.launch()
+        deadline = time.monotonic() + 60
+        while True:
+            if self.process.poll() is not None:
+                raise RuntimeError("工作进程重启失败（配置可能有问题，看服务日志）")
+            try:
+                with socket.create_connection(("127.0.0.1", self.port), timeout=.3):
+                    return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("工作进程重启超时")
+                self.stopping.wait(.1)
+
     def stop(self) -> None:
         self.stopping.set()
         if self.process and self.process.poll() is None:
@@ -190,7 +215,97 @@ class Workers:
                 self.process.wait()
 
 
-def account_handler(base, accounts: Accounts, worker_port: int):
+# ── API 连通性自检 ────────────────────────────────────────────────────────
+# 在网关进程里直接发最小请求。不经过工作进程，也不写入任何状态——
+# 这样"还没保存"的配置也能先测一把再决定要不要用。
+LLM_PRESETS = {
+    "deepseek": ("https://api.deepseek.com/chat/completions", "deepseek-flash",
+                 ("deepseek_api_key", "llm_api_key")),
+    "zhipu": ("https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-4.7-flash",
+              ("zhipu_api_key", "llm_api_key", "search_api_key")),
+    "openai-compatible": ("", "", ("llm_api_key",)),
+}
+ZHIPU_SEARCH_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/web_search"
+MASK_CHAR = "•"
+
+# 管理台下拉里的候选项。都是"建议值"而不是白名单——模型名和引擎名随时会变，
+# 前端用 datalist 呈现，也允许直接手填。
+SETTING_OPTIONS = {
+    "llm_provider": ["deepseek", "zhipu", "openai-compatible"],
+    "llm_model": ["deepseek-flash", "deepseek-v4-pro", "glm-4.7-flash"],
+    "llm_thinking": ["disabled", "enabled"],
+    "search_provider": ["zhipu", "brave", "generic"],
+    "search_engine": ["search_std", "search_pro"],
+    "search_engine_open": ["search_pro_sogou", "search_pro_quark", "search_pro"],
+}
+
+
+def _pick(cfg: dict, names: tuple) -> str:
+    for name in names:
+        if cfg.get(name):
+            return cfg[name]
+    return ""
+
+
+def probe_llm(cfg: dict) -> dict:
+    import httpx
+    provider = (cfg.get("llm_provider") or "deepseek").lower()
+    preset = LLM_PRESETS.get(provider)
+    if preset is None:
+        return {"ok": False, "detail": f"未知的模型供应商：{provider}"}
+    endpoint = (cfg.get("llm_endpoint") or preset[0]).strip()
+    model = (cfg.get("llm_model") or preset[1]).strip()
+    key = _pick(cfg, preset[2])
+    if not endpoint or not model:
+        return {"ok": False, "detail": "端点和模型名都要填（自定义供应商没有预设可依）"}
+    if not key:
+        return {"ok": False, "detail": f"缺少密钥：{' 或 '.join(preset[2])} 至少要有一个"}
+    try:
+        with httpx.Client(timeout=20) as client:
+            r = client.post(endpoint, headers={"Authorization": f"Bearer {key}"},
+                            json={"model": model, "temperature": 0, "max_tokens": 8,
+                                  "messages": [{"role": "user", "content": "ping"}]})
+        if r.status_code == 200:
+            return {"ok": True, "detail": f"{provider} · {model} 已连通"}
+        hint = {401: "密钥无效", 402: "余额不足", 404: "端点或模型名不对",
+                429: "被限流"}.get(r.status_code, "")
+        return {"ok": False, "detail": f"HTTP {r.status_code} {hint}｜{r.text[:160]}"}
+    except Exception as exc:                             # noqa: BLE001
+        return {"ok": False, "detail": f"连不上：{type(exc).__name__}: {exc}"}
+
+
+def probe_search(cfg: dict) -> dict:
+    import httpx
+    provider = (cfg.get("search_provider") or "zhipu").lower()
+    try:
+        with httpx.Client(timeout=20) as client:
+            if provider == "brave":
+                key = cfg.get("brave_api_key") or ""
+                if not key:
+                    return {"ok": False, "detail": "使用 Brave 就必须填 brave_api_key"}
+                r = client.get("https://api.search.brave.com/res/v1/web/search",
+                               params={"q": "test", "count": 2},
+                               headers={"X-Subscription-Token": key, "Accept": "application/json"})
+                if r.status_code == 200:
+                    return {"ok": True, "detail": "Brave 已连通"}
+                return {"ok": False, "detail": f"HTTP {r.status_code}｜{r.text[:160]}"}
+            # 默认智谱
+            engine = cfg.get("search_engine") or "search_std"
+            endpoint = (cfg.get("search_endpoint") or ZHIPU_SEARCH_ENDPOINT).strip()
+            key = cfg.get("search_api_key") or cfg.get("zhipu_api_key") or ""
+            if not key:
+                return {"ok": False, "detail": "缺少密钥：search_api_key（智谱搜索与 GLM 共用一把）"}
+            r = client.post(endpoint, headers={"Authorization": f"Bearer {key}"},
+                            json={"search_engine": engine, "search_query": "测试"})
+            if r.status_code != 200:
+                return {"ok": False, "detail": f"HTTP {r.status_code}｜{r.text[:160]}"}
+            hits = (r.json() or {}).get("search_result") or []
+            return {"ok": True, "detail": f"智谱 {engine} 已连通，返回 {len(hits)} 条"}
+    except Exception as exc:                             # noqa: BLE001
+        return {"ok": False, "detail": f"连不上：{type(exc).__name__}: {exc}"}
+
+
+def account_handler(base, accounts: Accounts, worker_port: int, workers: "Workers" = None):
     class Gateway(base):
         # -- 身份 ----------------------------------------------------------
         def user(self) -> dict | None:
@@ -316,10 +431,106 @@ def account_handler(base, accounts: Accounts, worker_port: int):
                 conn.commit()
             return self._json({"ok": True, "id": req, "message": "申请已提交，等待管理员审批"})
 
+        # -- API 配置（管理台可改）--------------------------------------------
+        def _env_fallback(self) -> dict:
+            """工作进程实际还会读的那份 env 文件——管理台没配过的项由它兜底。
+
+            连通性测试必须带上它，否则会出现"明明能用、却报缺少密钥"这种假故障。
+            """
+            try:
+                from app.env import parse_env_text          # noqa: PLC0415
+                with store.connect(accounts.path) as conn:
+                    row = conn.execute(
+                        "SELECT env_file FROM users WHERE enabled = 1 AND env_file IS NOT NULL "
+                        "ORDER BY id LIMIT 1").fetchone()
+                if row is None:
+                    return {}
+                return parse_env_text(Path(row["env_file"]).read_text())
+            except Exception:                                # noqa: BLE001
+                return {}
+
+        def _merged_settings(self, incoming: dict) -> dict:
+            """把"本次提交的改动"叠到"实际生效的配置"上。
+
+            三层顺序：库里的值 → env 文件兜底 → 本次提交的改动。
+            密钥在页面上显示为掩码（••••1234）：原样回传说明"没动过"，
+            这时必须保留真值，否则会把掩码本身当成密钥存进去。
+            """
+            with store.connect(accounts.path) as conn:
+                merged = dict(store.get_settings(conn))
+            raw_env = self._env_fallback()
+            for key, env_name in store.SETTING_ENVS.items():
+                if not merged.get(key) and raw_env.get(env_name):
+                    merged[key] = raw_env[env_name]
+            for key, value in incoming.items():
+                if key not in store.SETTING_ENVS:
+                    continue
+                value = "" if value is None else str(value).strip()
+                # 这里是"测试"用的合并，语义是"我填了什么就用什么"：
+                # 空值表示"这个框我没填"，要保留现有值（含 env 文件兜底），
+                # 绝不能拿空串去覆盖——否则"不填 key 只点测试"会假报缺少密钥。
+                # （保存路径的语义不同：那里空值 = 显式清掉该项。）
+                if not value or (key in store.SECRET_KEYS and value.startswith(MASK_CHAR)):
+                    continue
+                merged[key] = value
+            return merged
+
+        def _save_settings(self) -> None:
+            # 掩码（••••1234）是"没改过"的意思，绝不能把它当值存进去——
+            # 页面原样回传掩码是常态（表单里的密钥框就显示着它）。
+            fields = {}
+            for key, value in self._payload().items():
+                if key not in store.SETTING_ENVS:
+                    continue
+                text = "" if value is None else str(value).strip()
+                if key in store.SECRET_KEYS and text.startswith(MASK_CHAR):
+                    continue
+                fields[key] = text
+            if not fields:
+                # 提交过来的全是掩码（密钥框原样回传）说明"什么也没改"，不是错误
+                with store.connect(accounts.path) as conn:
+                    snapshot = store.settings_public(conn)
+                return self._json({"ok": True, "reloaded": False,
+                                   "note": "没有需要保存的改动", "settings": snapshot})
+            with store.connect(accounts.path) as conn:
+                store.set_settings(conn, fields)
+                conn.commit()
+                snapshot = store.settings_public(conn)
+            # 配置要重启工作进程才生效——如实把"重启了没有"告诉前端
+            reloaded, note = False, ""
+            if workers is not None:
+                try:
+                    workers.reload()
+                    reloaded = True
+                except Exception as exc:                 # noqa: BLE001
+                    note = f"配置已保存，但工作进程重启失败：{exc}"
+            return self._json({"ok": True, "reloaded": reloaded, "note": note,
+                               "settings": snapshot})
+
+        def _test_settings(self) -> None:
+            payload = self._payload()
+            cfg = self._merged_settings(payload)
+            target = str(payload.get("target") or "all")
+            result = {}
+            if target in ("all", "llm"):
+                result["llm"] = probe_llm(cfg)
+            if target in ("all", "search"):
+                result["search"] = probe_search(cfg)
+            return self._json({"ok": all(v.get("ok") for v in result.values()), "result": result})
+
         # -- 管理员 ---------------------------------------------------------
         def _admin(self, user: dict) -> None:
             """所有 /api/admin/* 的唯一入口。先验角色，再分发。"""
             path = self.path.split("?", 1)[0]
+            # 配置类接口自己管连接：保存后要重启工作进程，不能把连接一直捏在手里
+            if path == "/api/admin/settings" and self.command == "GET":
+                with store.connect(accounts.path) as conn:
+                    return self._json({"settings": store.settings_public(conn),
+                                       "options": SETTING_OPTIONS})
+            if path == "/api/admin/settings" and self.command == "POST":
+                return self._save_settings()
+            if path == "/api/admin/settings/test" and self.command == "POST":
+                return self._test_settings()
             with store.connect(accounts.path) as conn:
                 if path == "/api/admin/overview" and self.command == "GET":
                     fresh = store.get_user(conn, user["id"])
@@ -529,7 +740,8 @@ def serve_accounts(base, db: str, host: str, port: int) -> int:
     signal.signal(signal.SIGTERM, terminate)
     try:
         workers.start()
-        server = ThreadingHTTPServer((host, port), account_handler(base, accounts, workers.port))
+        server = ThreadingHTTPServer((host, port),
+                                     account_handler(base, accounts, workers.port, workers))
         with store.connect(accounts.path) as conn:
             n = conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
         print(f"underbox 账户网关 http://{host}:{port}/，账号 {n} 个，"

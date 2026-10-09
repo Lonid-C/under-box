@@ -69,9 +69,9 @@
 body[data-stage="gate"] .mk-fg,
 body[data-stage="gate"] .hero-foot,
 body[data-stage="gate"] .hero-foot b{color:#FFFFFF;mix-blend-mode:difference}
-/* 洋红部分不参与混合（在奶油底上会变绿），改用深色描边 */
+/* 洋红部分不参与混合（在奶油底上会变绿）；描边与字同色——去掉黑边，字形更实 */
 body[data-stage="gate"] .hero-mark em,
-body[data-stage="gate"] .hero-slogan em{color:var(--pink);-webkit-text-stroke:1.1px #14130F}
+body[data-stage="gate"] .hero-slogan em{color:var(--pink);-webkit-text-stroke:1.4px var(--pink)}
 body[data-stage="gate"] .hero-slogan{color:#FFFFFF;font-weight:800;letter-spacing:.01em;-webkit-text-stroke:.6px currentColor}
 
 /* gate 阶段：两层布景接管，body 流里的品牌区/页脚让位；其余阶段布景退场 */

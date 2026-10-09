@@ -25,17 +25,28 @@
    --ink 与 --cream 恰好互换，洋红不动——品牌色在两种底上都站得住。
    这就是"深色下的字色与浅色不同"的全部机制，没有别的开关。 */
 body[data-theme="dusk"]{
-  --cream:#14130F; --paper:#1D1B16; --ink:#F2EFE7; --ink-2:#B6B1A3; --ink-3:#7E7A6F;
-  --pink-soft:rgba(255,46,154,.20); --grid:rgba(242,239,231,.055);
-  --shadow:5px 5px 0 rgba(242,239,231,.22); --shadow-sm:3px 3px 0 rgba(242,239,231,.22);
-  --shadow-hero:9px 9px 0 rgba(242,239,231,.22);
+  --cream:#14130F; --paper:#1D1B16;
+  /* 字一律走白色：主字纯白，次字/三级用不同亮度的白——都白，但层次还在。
+     之前用的 #F2EFE7 偏米黄，在深底上发闷。 */
+  --ink:#FFFFFF; --ink-2:#DCDAD4; --ink-3:#A8A59D;
+  --pink-soft:rgba(255,46,154,.20);
+  --grid:rgba(255,255,255,.07);          /* 与奶油底同一种网格，只是换成白线 */
+  --shadow:5px 5px 0 rgba(255,255,255,.26); --shadow-sm:3px 3px 0 rgba(255,255,255,.26);
+  --shadow-hero:9px 9px 0 rgba(255,255,255,.26);
 }
 
 /* ── 云层：盖住整页，靠遮罩在鼠标处"拨开"一个洞 ──────────
    初始半径 0（全暗）；鼠标移出登录卡开一个小洞（透一线光，是预告）；
    登录成功后洞扩到铺满视口（日出）。洞的位置始终跟着鼠标。 */
 .dusk{
-  position:fixed; inset:0; z-index:80; pointer-events:none; background:#14130F;
+  position:fixed; inset:0; z-index:80; pointer-events:none;
+  /* 云层也要有网格：它是一块纯色盖在最上面，body 的网格被它整个遮住了，
+     所以深色态下原本看不到网格。用同一个 --grid（dusk 下是白线），
+     网格随遮罩一起被"拨开"，洞里的网格自然换成下面那层。 */
+  background-color:#14130F;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:26px 26px;
   --r:0px; --mx:50%; --my:50%;
   /* 0 → 0.72r 是洞，0.72r → r 是云的边缘（羽化带），r 之外仍是云 */
   -webkit-mask-image:radial-gradient(circle at var(--mx) var(--my),

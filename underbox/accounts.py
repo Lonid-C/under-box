@@ -228,6 +228,37 @@ LLM_PRESETS = {
 ZHIPU_SEARCH_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/web_search"
 MASK_CHAR = "•"
 
+# 管理台「API 清单」的数据源：管理员一眼能看到"有哪些、配没配、当前用的哪个"。
+# (kind, id) 才是唯一键——同一个供应商可能既供模型又供搜索（智谱就是），
+# 所以不能用 id 单独做键。
+# key_fields 的顺序与 open_box 里 PROVIDERS[key_envs] 保持一致：先看专属那把，
+# 再回落到通用那把（写反了会出现"明明填了却说没配"）。
+API_CATALOG = (
+    {"kind": "llm", "id": "deepseek", "name": "DeepSeek",
+     "key_fields": ("deepseek_api_key", "llm_api_key"),
+     "model": "deepseek-flash", "endpoint": "https://api.deepseek.com/chat/completions",
+     "hint": "默认供应商，按 token 计费"},
+    {"kind": "llm", "id": "zhipu", "name": "智谱 GLM",
+     "key_fields": ("zhipu_api_key", "llm_api_key", "search_api_key"),
+     "model": "glm-4.7-flash",
+     "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+     "hint": "免费档；与下面的搜索共用同一把 key"},
+    {"kind": "llm", "id": "openai-compatible", "name": "自定义（OpenAI 兼容）",
+     "key_fields": ("llm_api_key",), "model": "", "endpoint": "",
+     "hint": "端点和模型名都要自己填"},
+    {"kind": "search", "id": "zhipu", "name": "智谱 web_search",
+     "key_fields": ("search_api_key", "zhipu_api_key"),
+     "engine": "search_std", "endpoint": ZHIPU_SEARCH_ENDPOINT,
+     "hint": "带域限定的查询默认走它；裸查询走下面配置的引擎"},
+    {"kind": "search", "id": "brave", "name": "Brave Search",
+     "key_fields": ("brave_api_key",), "endpoint":
+     "https://api.search.brave.com/res/v1/web/search",
+     "hint": "可选备用索引，主索引空结果时用"},
+    {"kind": "search", "id": "generic", "name": "自定义 HTTP 搜索",
+     "key_fields": ("search_api_key",), "endpoint": "",
+     "hint": "需要自己填端点"},
+)
+
 # 管理台下拉里的候选项。都是"建议值"而不是白名单——模型名和引擎名随时会变，
 # 前端用 datalist 呈现，也允许直接手填。
 SETTING_OPTIONS = {
@@ -431,6 +462,75 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                 conn.commit()
             return self._json({"ok": True, "id": req, "message": "申请已提交，等待管理员审批"})
 
+        # -- API 清单：看到所有 + 选用 ----------------------------------------
+        def _api_items(self) -> dict:
+            """整理成"有哪些 API、各自配没配、当前用的是哪个"。"""
+            with store.connect(accounts.path) as conn:
+                stored = store.get_settings(conn)
+            raw_env = self._env_fallback()
+
+            def value_of(field: str) -> str:
+                return stored.get(field) or raw_env.get(store.SETTING_ENVS.get(field, ""), "")
+
+            selected = {
+                "llm": stored.get("llm_provider") or raw_env.get("LLM_PROVIDER") or "deepseek",
+                "search": stored.get("search_provider") or raw_env.get("SEARCH_PROVIDER") or "zhipu",
+            }
+            out = {kind: {"selected": selected[kind], "items": []} for kind in ("llm", "search")}
+            for spec in API_CATALOG:
+                kind = spec["kind"]
+                keys = [value_of(f) for f in spec["key_fields"]]
+                first = next((k for k in keys if k), "")     # 专属 key 优先，其次通用 key
+                item = {
+                    "id": spec["id"], "name": spec["name"], "hint": spec.get("hint", ""),
+                    "key_fields": list(spec["key_fields"]),
+                    "key_set": bool(first),
+                    "key_masked": store.mask(first),
+                    "selected": spec["id"] == selected[kind],
+                    "endpoint": (stored.get("llm_endpoint") if kind == "llm"
+                                 else stored.get("search_endpoint")) or spec.get("endpoint", ""),
+                }
+                if kind == "llm":
+                    item["model"] = stored.get("llm_model") or spec.get("model", "")
+                else:
+                    item["engine"] = stored.get("search_engine") or spec.get("engine", "")
+                out[kind]["items"].append(item)
+            return out
+
+        def _select_api(self) -> None:
+            data = self._payload()
+            kind, api_id = str(data.get("kind") or ""), str(data.get("id") or "")
+            if not any(s["kind"] == kind and s["id"] == api_id for s in API_CATALOG):
+                return self._json({"error": "没有这个 API"}, 404)
+            field = "llm_provider" if kind == "llm" else "search_provider"
+            with store.connect(accounts.path) as conn:
+                store.set_settings(conn, {field: api_id})
+                conn.commit()
+            return self._reload_and_report()
+
+        def _test_api(self) -> None:
+            data = self._payload()
+            kind, api_id = str(data.get("kind") or ""), str(data.get("id") or "")
+            if not any(s["kind"] == kind and s["id"] == api_id for s in API_CATALOG):
+                return self._json({"error": "没有这个 API"}, 404)
+            cfg = self._merged_settings({})
+            if kind == "llm":
+                cfg["llm_provider"] = api_id       # 临时切到这一家来测，不改已保存的配置
+                return self._json({"ok": True, "result": probe_llm(cfg)})
+            cfg["search_provider"] = api_id
+            return self._json({"ok": True, "result": probe_search(cfg)})
+
+        def _reload_and_report(self, extra: dict | None = None) -> None:
+            """改完配置统一走这里：重启工作进程，并如实回报成功与否。"""
+            reloaded, note = False, ""
+            if workers is not None:
+                try:
+                    workers.reload()
+                    reloaded = True
+                except Exception as exc:                 # noqa: BLE001
+                    note = f"已保存，但工作进程重启失败：{exc}"
+            return self._json({"ok": True, "reloaded": reloaded, "note": note, **(extra or {})})
+
         # -- API 配置（管理台可改）--------------------------------------------
         def _env_fallback(self) -> dict:
             """工作进程实际还会读的那份 env 文件——管理台没配过的项由它兜底。
@@ -496,16 +596,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                 store.set_settings(conn, fields)
                 conn.commit()
                 snapshot = store.settings_public(conn)
-            # 配置要重启工作进程才生效——如实把"重启了没有"告诉前端
-            reloaded, note = False, ""
-            if workers is not None:
-                try:
-                    workers.reload()
-                    reloaded = True
-                except Exception as exc:                 # noqa: BLE001
-                    note = f"配置已保存，但工作进程重启失败：{exc}"
-            return self._json({"ok": True, "reloaded": reloaded, "note": note,
-                               "settings": snapshot})
+            return self._reload_and_report({"settings": snapshot})
 
         def _test_settings(self) -> None:
             payload = self._payload()
@@ -531,6 +622,12 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                 return self._save_settings()
             if path == "/api/admin/settings/test" and self.command == "POST":
                 return self._test_settings()
+            if path == "/api/admin/apis" and self.command == "GET":
+                return self._json(self._api_items())
+            if path == "/api/admin/apis/select" and self.command == "POST":
+                return self._select_api()
+            if path == "/api/admin/apis/test" and self.command == "POST":
+                return self._test_api()
             with store.connect(accounts.path) as conn:
                 if path == "/api/admin/overview" and self.command == "GET":
                     fresh = store.get_user(conn, user["id"])

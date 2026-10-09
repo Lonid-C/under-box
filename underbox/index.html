@@ -190,6 +190,13 @@ body[data-stage="app"] #gateCard{display:none}
 .ad-test{margin-top:12px;min-height:17px}
 .ad-test.ok{color:#0F6E56}
 .ad-test.bad{color:#B33A1A}
+
+/* API 清单：当前使用的那行整行高亮 */
+.ad-tbl tr.on{background:var(--pink-soft)}
+.ad-tbl tr.on td{border-bottom-color:#F0C6DC}
+.ad-tbl .ad-hint{display:block;font-size:11px;font-style:normal;color:var(--ink-3);
+  line-height:1.5;margin:0;white-space:normal}
+.ad-tbl td .ad-act+.ad-act{margin-left:6px}
 @media(max-width:600px){
   .ad-body{padding:14px}
   .ad-head{padding:11px 14px;gap:9px}
@@ -2837,39 +2844,91 @@ const Sheet = {
 
   // ── 管理员：API 配置 ────────────────────────────────────────────────
   async configCard() {
-    const d = await this.api('GET', '/api/admin/settings');
+    const [apis, d] = await Promise.all([
+      this.api('GET', '/api/admin/apis'),
+      this.api('GET', '/api/admin/settings'),
+    ]);
     const s = d.settings || {}, op = d.options || {};
     // 密钥框留空 = 不改，所以用 placeholder 展示"现在配的是什么（脱敏）"
     const ph = k => (s[k] ? `已配置 ${s[k]}，留空表示不改` : '未配置');
-    const wrap = el('div', {},
-      el('div', { class: 'ad-sub', text: '模型（大模型）' }),
+    const wrap = el('div', {});
+    wrap.append(
+      // ① 清单：有哪些、配没配、当前用哪个，并可逐个测试 / 切换
+      el('div', { class: 'ad-sub', text: '可用的 API' }),
+      this.apiTable(apis, wrap),
+      el('p', { class: 'ad-note', text: '「设为当前」立即生效（会重启工作进程）；「测试」只试这一家，不改配置。' }),
+      // ② 密钥与参数：清单只读状态，真正的值在这里填
+      el('div', { class: 'ad-sub', text: '密钥与参数' }),
       el('div', { class: 'ad-grid' },
-        this.field('供应商', this.select('llm_provider', s.llm_provider || 'deepseek', op.llm_provider || [])),
         this.field('模型名', this.input('llm_model', { ph: s.llm_model || '如 deepseek-flash', list: 'ubModels' })),
         this.field('思考模式', this.select('llm_thinking', s.llm_thinking || 'disabled', op.llm_thinking || [])),
-        this.field('自定义端点', this.input('llm_endpoint', { ph: s.llm_endpoint || '留空用预设' }),
-                   '只有 openai-compatible 供应商需要填'),
+        this.field('模型自定义端点', this.input('llm_endpoint', { ph: s.llm_endpoint || '留空用预设' }),
+                   '只有「自定义（OpenAI 兼容）」需要填'),
         this.field('DeepSeek 密钥', this.input('deepseek_api_key', { type: 'password', ph: ph('deepseek_api_key') })),
         this.field('智谱密钥', this.input('zhipu_api_key', { type: 'password', ph: ph('zhipu_api_key') }),
                    'GLM 与 web_search 共用这一把'),
         this.field('通用 LLM 密钥', this.input('llm_api_key', { type: 'password', ph: ph('llm_api_key') }),
-                   '选 openai-compatible 时用')),
-      el('div', { class: 'ad-sub', text: '搜索' }),
-      el('div', { class: 'ad-grid' },
-        this.field('供应商', this.select('search_provider', s.search_provider || 'zhipu', op.search_provider || [])),
+                   '选「自定义」时用'),
         this.field('带域查询引擎', this.select('search_engine', s.search_engine || 'search_std', op.search_engine || [])),
         this.field('裸查询引擎', this.select('search_engine_open', s.search_engine_open || 'search_pro_sogou', op.search_engine_open || [])),
         this.field('搜索密钥', this.input('search_api_key', { type: 'password', ph: ph('search_api_key') })),
         this.field('Brave 密钥', this.input('brave_api_key', { type: 'password', ph: ph('brave_api_key') }),
-                   '仅 search_provider = brave 时需要'),
-        this.field('自定义端点', this.input('search_endpoint', { ph: s.search_endpoint || '留空用预设' }))),
+                   '仅 Brave 搜索需要'),
+        this.field('搜索自定义端点', this.input('search_endpoint', { ph: s.search_endpoint || '留空用预设' }))),
       el('div', { class: 'ad-inline', style: 'margin-top:14px' },
-        this.act('测试模型', b => this.testSettings(wrap, 'llm', b)),
-        this.act('测试搜索', b => this.testSettings(wrap, 'search', b)),
+        this.act('测试当前配置', b => this.testSettings(wrap, 'all', b)),
         this.act('保存并生效', b => this.saveSettings(wrap, b), true)),
       el('p', { class: 'ad-note ad-test' }),
       el('datalist', { id: 'ubModels' }, ...(op.llm_model || []).map(m => el('option', { value: m }))));
-    return this.card('API 配置', '保存后会重启工作进程（几秒内核验不可用）', wrap);
+    return this.card('API 管理', '密钥只显示掩码；改动需重启工作进程生效', wrap);
+  },
+
+  /** API 清单表：模型与搜索各一组，当前使用的那行高亮 */
+  apiTable(apis, wrap) {
+    const rows = [];
+    for (const kind of ['llm', 'search']) {
+      for (const it of (apis[kind] || {}).items || []) {
+        rows.push(el('tr', { class: it.selected ? 'on' : null },
+          el('td', {}, el('span', { class: 'ad-pill', text: kind === 'llm' ? '模型' : '搜索' })),
+          el('td', {}, el('b', { text: it.name }),
+                    it.hint ? el('em', { class: 'ad-hint', text: it.hint }) : null),
+          el('td', {}, it.key_set
+            ? el('span', { class: 'ad-pill ok', text: '密钥已配' })
+            : el('span', { class: 'ad-pill off', text: '密钥未配' })),
+          el('td', { class: 'wide' },
+            it.model ? el('span', { class: 'ad-hint', text: `模型 ${it.model}` }) : null,
+            it.engine ? el('span', { class: 'ad-hint', text: `引擎 ${it.engine}` }) : null),
+          el('td', {}, it.selected
+            ? el('span', { class: 'ad-pill admin', text: '当前使用' })
+            : this.act('设为当前', b => this.selectApi(kind, it.id, b), true)),
+          el('td', {}, this.act('测试', b => this.testApi(kind, it.id, b, wrap)))));
+      }
+    }
+    return this.table(['类型', 'API', '密钥', '参数', '当前', '操作'], rows);
+  },
+  async testApi(kind, id, btn, wrap) {
+    const note = wrap.querySelector('.ad-test');
+    btn.disabled = true; note.className = 'ad-note ad-test';
+    note.textContent = `正在测试 ${id}…`;
+    try {
+      const r = await this.api('POST', '/api/admin/apis/test', { kind, id });
+      const res = r.result || {};
+      note.textContent = `${id}：${res.ok ? '✓ ' : '✗ '}${res.detail || ''}`;
+      note.className = 'ad-note ad-test ' + (res.ok ? 'ok' : 'bad');
+    } catch (e) {
+      note.textContent = `测试失败：${e.message}`;
+      note.className = 'ad-note ad-test bad';
+    } finally { btn.disabled = false; }
+  },
+  async selectApi(kind, id, btn) {
+    btn.disabled = true; btn.textContent = '切换中…';
+    try {
+      await this.api('POST', '/api/admin/apis/select', { kind, id });
+      setTimeout(() => this.refresh(), 900);        // refresh 会整块重建 DOM，延后一点
+    } catch (e) {
+      alert(`切换失败：${e.message}`);
+      btn.disabled = false; btn.textContent = '设为当前';
+    }
   },
   async testSettings(wrap, target, btn) {
     const note = wrap.querySelector('.ad-test');

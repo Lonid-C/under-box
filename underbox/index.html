@@ -20,13 +20,45 @@
   --sans:'Inter','PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;
   --disp:'Archivo Black','Inter','PingFang SC',system-ui,sans-serif;
 }
+/* ══ 深色（云未散）═══════════════════════════════════
+   不给深色主题写第二套样式：只把这组变量换掉，所有组件自动跟着变。
+   --ink 与 --cream 恰好互换，洋红不动——品牌色在两种底上都站得住。
+   这就是"深色下的字色与浅色不同"的全部机制，没有别的开关。 */
+body[data-theme="dusk"]{
+  --cream:#14130F; --paper:#1D1B16; --ink:#F2EFE7; --ink-2:#B6B1A3; --ink-3:#7E7A6F;
+  --pink-soft:rgba(255,46,154,.20); --grid:rgba(242,239,231,.055);
+  --shadow:5px 5px 0 rgba(242,239,231,.22); --shadow-sm:3px 3px 0 rgba(242,239,231,.22);
+  --shadow-hero:9px 9px 0 rgba(242,239,231,.22);
+}
+
+/* ── 云层：盖住整页，靠遮罩在鼠标处"拨开"一个洞 ──────────
+   初始半径 0（全暗）；鼠标移出登录卡开一个小洞（透一线光，是预告）；
+   登录成功后洞扩到铺满视口（日出）。洞的位置始终跟着鼠标。 */
+.dusk{
+  position:fixed; inset:0; z-index:80; pointer-events:none; background:#14130F;
+  --r:0px; --mx:50%; --my:50%;
+  /* 0 → 0.72r 是洞，0.72r → r 是云的边缘（羽化带），r 之外仍是云 */
+  -webkit-mask-image:radial-gradient(circle at var(--mx) var(--my),
+    transparent 0, transparent calc(var(--r) * .72), #000 var(--r));
+  mask-image:radial-gradient(circle at var(--mx) var(--my),
+    transparent 0, transparent calc(var(--r) * .72), #000 var(--r));
+}
+.dusk.done{display:none}          /* 云散尽后移除，不留一层全屏遮罩 */
+
 *{box-sizing:border-box}
 html,body{margin:0}
 body{
   background:var(--cream); color:var(--ink); font:400 14px/1.65 var(--sans);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px; -webkit-font-smoothing:antialiased;
+  /* 换主题时颜色要走过渡，否则是硬切 */
+  transition:background-color .52s var(--ease), color .52s var(--ease);
 }
+
+/* 品牌字与登录卡要浮在云层之上：云遮的是底色，文字始终可读。
+   卡 90 > 品牌 85 > 云 80 —— 登录卡永远最上层，不被任何东西盖住。 */
+.hero-wrap,.hero-foot{position:relative;z-index:85}
+#gateCard{position:relative;z-index:90}
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 
 
@@ -651,7 +683,10 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 </style>
 </head>
-<body data-stage="gate">
+<body data-stage="gate" data-theme="dusk">
+<!-- 云层：登录前盖住整页（深色主题）。鼠标移出登录卡先透一线光，
+     登录成功才散尽露出浅色主题。纯视觉层，不接收指针事件。 -->
+<div class="dusk" id="dusk" aria-hidden="true"></div>
 
 <div class="hero-wrap">
   <img class="hero-logo" src="data:image/png;base64,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" alt="" width="96" height="96">
@@ -2686,6 +2721,10 @@ window.fetch = async function(input, init = {}) {
 
 async function activateAccount(user, gate = true) {
   ACCOUNT = user || null;
+  if (ACCOUNT) {                             // 已经有会话（刷新 / 深链 / 已登录）：直接给晴天
+    document.body.dataset.theme = 'day';
+    $('dusk').classList.add('done');
+  }
   authBadge(gate);
   $('accountBadge').hidden = !ACCOUNT;
   $('heroAccount').hidden = !ACCOUNT;
@@ -2716,10 +2755,59 @@ function renderQuota() {
   }
 }
 
+/* ══ 云层：拨云见日 ═══════════════════════════════
+   一个全屏遮罩 + 一个半径变量，三种状态：
+     · 初始 r=0        —— 全暗（深色主题）
+     · 鼠标移出登录卡   —— 在鼠标处开一个小洞，透一线光。这是**预告**不是结果：
+                          松手不动它就会自动合上（鼠标移回卡内即 shut）
+     · 登录成功        —— 洞扩到铺满视口（日出），扩完把云层移除
+
+   半径用 rAF 手动插值，而不是靠 CSS 变量 transition——
+   @property 注册的变量才能过渡，而部分 Safari 还没支持。 */
+const Dusk = {
+  el: null, r: 0, raf: 0,
+  init() { this.el = $('dusk'); },
+  move(x, y) {                                   // 洞跟着鼠标走
+    if (!this.el) return;
+    this.el.style.setProperty('--mx', x + 'px');
+    this.el.style.setProperty('--my', y + 'px');
+  },
+  to(radius, ms, done) {
+    if (!this.el) return;
+    cancelAnimationFrame(this.raf);
+    const from = this.r, to = radius, t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / ms);
+      const e = 1 - Math.pow(1 - p, 3);          // easeOutCubic：起步快、收尾缓，像云散开
+      this.r = from + (to - from) * e;
+      this.el.style.setProperty('--r', this.r.toFixed(1) + 'px');
+      if (p < 1) this.raf = requestAnimationFrame(step);
+      else if (done) done();
+    };
+    this.raf = requestAnimationFrame(step);
+  },
+  // 两个都只在登录阶段生效：登录卡淡出消失时浏览器会补一个 mouseleave，
+  // 不拦住的话会在云已经散尽之后又把它"A 开一个小洞"（半径被打回 190）。
+  peek(x, y) {
+    if (document.body.dataset.stage !== 'gate') return;
+    this.move(x, y);
+    this.to(190, 420);
+  },
+  shut() {
+    if (document.body.dataset.stage !== 'gate') return;
+    this.to(0, 320);
+  },
+  clear(done) { this.to(Math.hypot(innerWidth, innerHeight) * 1.3, 900, done); },   // 日出
+};
+
 const Gate = {
-  /** 通过 → 门禁卡淡出上浮、投料卡同期淡入。品牌字全程不动，所以看着像"卡片换了身份"。 */
+  /** 通过 → 主题翻面 + 拨云 + 门禁卡淡出上浮；投料卡在**云散的过程中**入场，不等云散完。
+      时序：t=0 字色开始变（.52s）且云开始散（.9s）；t=300 切 stage，投料卡起入场（.56s）；
+            t=900 云散尽、云层移除。整条 0.9s。 */
   pass() {
     const card = $('gateCard'), intake = $('intake');
+    document.body.dataset.theme = 'day';     // 与拨云同时起步，不是等云散完才翻面
+    Dusk.clear(() => $('dusk').classList.add('done'));
     if (reduceMotion()) { this.settle(); return; }
     intake.classList.add('fading');          // 先备成透明，切换那一刻不会闪
     card.classList.add('leaving');
@@ -2729,15 +2817,17 @@ const Gate = {
         intake.classList.remove('fading');
         card.classList.remove('leaving');
       }));
-    }, 280);
+    }, 300);
   },
   settle() {
     document.body.dataset.stage = 'hero';
     runEnter();
   },
-  /** 已登录 / 服务端没设口令：直接进落地页，不播登录动画 */
+  /** 已登录 / 服务端没设口令：直接进落地页，不播拨云（本来就没走登录这一步） */
   skip() {
     document.body.dataset.stage = 'hero';
+    document.body.dataset.theme = 'day';      // 已经登录过，直接给晴天
+    $('dusk').classList.add('done');
     $('gateCard').style.display = 'none';
     runEnter();
   },
@@ -3124,6 +3214,19 @@ $('statusPill').addEventListener('click', () => {
   $('statusPanel').hidden = false;
   $('statusPill').hidden = true;
 });
+/* 云层：移出登录卡先透一线光（只是预告，移回去就合上），洞始终跟着鼠标走。
+   手机没有 hover，改成"点登录卡之外的任意处"给同样的反馈。 */
+Dusk.init();
+const gateBox = $('gateCard');
+gateBox.addEventListener('mouseleave', e => Dusk.peek(e.clientX, e.clientY));
+gateBox.addEventListener('mouseenter', () => Dusk.shut());
+addEventListener('mousemove', e => { if (Dusk.r > 1) Dusk.move(e.clientX, e.clientY); });
+addEventListener('touchstart', e => {
+  if (document.body.dataset.stage !== 'gate' || gateBox.contains(e.target)) return;
+  const t = e.touches[0];
+  if (t) Dusk.peek(t.clientX, t.clientY);
+}, { passive: true });
+
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）
 $('navTier').addEventListener('click', toggleTierPanel);
 $('pickGo').addEventListener('click', runVerify);

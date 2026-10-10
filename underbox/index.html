@@ -3265,12 +3265,12 @@ Dusk.init();
 addEventListener('mousemove', e => {
   if (document.body.dataset.stage !== 'gate') return;    // 登录之后就放手，让云自己散
   Dusk.move(e.clientX, e.clientY);
-  if (Dusk.tr < 320) Dusk.grow(320);                     // 一动鼠标，云先透出一道光
+  if (Dusk.tr < 240) Dusk.grow(240);                     // 一动鼠标，云先透出一道光
 });
 addEventListener('touchstart', e => {
   if (document.body.dataset.stage !== 'gate') return;
   const t = e.touches[0];
-  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 320)); }
+  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 240)); }
 }, { passive: true });
 
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）

@@ -84,8 +84,12 @@ body{
   background:var(--cream); color:var(--ink); font:400 14px/1.65 var(--sans);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px; -webkit-font-smoothing:antialiased;
+  /* 换主题时颜色要走过渡，否则是硬切 */
   transition:background-color .52s var(--ease), color .52s var(--ease);
 }
+
+/* 品牌字与登录卡要浮在云层之上：云遮的是底色，文字始终可读。
+   卡 90 > 品牌 85 > 云 80 —— 登录卡永远最上层，不被任何东西盖住。 */
 .hero-wrap,.hero-foot{position:relative}
 #gateCard{position:relative;z-index:90}
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
@@ -2936,6 +2940,9 @@ window.fetch = async function(input, init = {}) {
 
 async function activateAccount(user, gate = true) {
   ACCOUNT = user || null;
+  if (ACCOUNT) {                             // 已经有会话（刷新 / 深链 / 已登录）：布景直接退场
+    $('dusk').classList.add('done');
+  }
   authBadge(gate);
   $('accountBadge').hidden = !ACCOUNT;
   $('heroAccount').hidden = !ACCOUNT;
@@ -2966,6 +2973,16 @@ function renderQuota() {
   }
 }
 
+/* ══ 云层：拨云见日 ═══════════════════════════════
+   一个全屏遮罩 + 一个"洞"（圆心、半径两个变量），三种状态：
+     · 初始 r=0   —— 全暗（深色主题）
+     · 鼠标移动    —— 洞**平滑地滑**向鼠标：背景随鼠标位置透出浅色（MiMo 官网式响应）。
+                      位置和半径都是"目标值 + 每帧向目标走一段"，不是瞬移，所以自然流畅
+     · 登录成功    —— 圆心滑到**登录卡中心**，半径从那里一路涨到铺满视口（日出）
+
+   插值用一个 rAF 循环：目标值随时可改（鼠标再动、登录触发），显示值每帧向目标
+   靠近一个比例——中途发生变化也能被自然接住，比固定时长的动画丝滑。
+   不依赖 CSS 变量的 transition（@property 注册过的变量才能过渡，部分 Safari 还没有）。 */
 const Dusk = {
   el: null, raf: 0, onDone: null,
   x: 0, y: 0, r: 0,                       // 显示值（这一帧画在页面上的）
@@ -3009,11 +3026,13 @@ const Dusk = {
 };
 
 const Gate = {
-  /** 通过 → 门禁卡淡出上浮、投料卡同期淡入。品牌字全程不动，所以看着像"卡片换了身份"。 */
+  /** 通过 → 主题翻面 + 拨云 + 门禁卡淡出上浮；投料卡在**云散的过程中**入场，不等云散完。
+      时序：t=0 字色开始变（.52s）且云开始散（.9s）；t=300 切 stage，投料卡起入场（.56s）；
+            t=900 云散尽、云层移除。整条 0.9s。 */
   pass() {
     const card = $('gateCard'), intake = $('intake');
-    $('dusk').classList.add('done');
-    Dusk.clear();
+    $('dusk').classList.add('done');         // 云整体淡出（.55s），同时洞还在扩大——露出日间布景
+    Dusk.clear();                            // 洞以登录卡为中心扩到铺满，与淡出叠加
     if (reduceMotion()) { this.settle(); return; }
     intake.classList.add('fading');          // 先备成透明，切换那一刻不会闪
     card.classList.add('leaving');
@@ -3029,7 +3048,7 @@ const Gate = {
     document.body.dataset.stage = 'hero';
     runEnter();
   },
-  /** 已登录 / 服务端没设口令：直接进落地页，不播登录动画 */
+  /** 已登录 / 服务端没设口令：直接进落地页，不播拨云（本来就没走登录这一步） */
   skip() {
     document.body.dataset.stage = 'hero';
     $('dusk').classList.add('done');
@@ -3420,16 +3439,19 @@ $('statusPill').addEventListener('click', () => {
   $('statusPanel').hidden = false;
   $('statusPill').hidden = true;
 });
+/* 云层交互：鼠标一动云就透光，洞平滑地滑向鼠标（全程响应，不再要求"先移出登录卡"）。
+   登录卡本身不参与——它是操作焦点，必须稳定；洞在它底下透过来的光会在卡片四周露出，
+   背景依然是活的。手机没有 hover，点哪开哪。都只在登录阶段生效。 */
 Dusk.init();
 addEventListener('mousemove', e => {
   if (document.body.dataset.stage !== 'gate') return;    // 登录之后就放手，让云自己散
   Dusk.move(e.clientX, e.clientY);
-  if (Dusk.tr < 320) Dusk.grow(320);                     // 一动鼠标，云先透出一道光
+  if (Dusk.tr < 240) Dusk.grow(240);                     // 一动鼠标，云先透出一道光
 });
 addEventListener('touchstart', e => {
   if (document.body.dataset.stage !== 'gate') return;
   const t = e.touches[0];
-  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 320)); }
+  if (t) { Dusk.move(t.clientX, t.clientY); Dusk.grow(Math.max(Dusk.tr, 240)); }
 }, { passive: true });
 
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）

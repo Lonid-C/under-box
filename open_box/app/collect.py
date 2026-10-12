@@ -204,6 +204,8 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     claim.entities = {**claim.entities, "candidate_name": candidate_name or claim.entities.get("candidate_name", "")}
     if excluded(hit.url, claim_sources(claim), hit.publisher):
         return None
+    if claim.category == "竞赛" and competition_page_mismatch(claim, hit.title or ""):
+        return None
     if claim.category == '竞赛' and competition_page_mismatch(claim, hit.title or ""):
         return None
     if claim.category == "学历" and not education_school_matches(

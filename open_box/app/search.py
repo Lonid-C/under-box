@@ -9,16 +9,20 @@ from __future__ import annotations
 import os
 import posixpath
 import re
+import ssl
 import threading
 import time
 import zipfile
 from xml.etree import ElementTree as ET
 import urllib.robotparser as robotparser
 from io import BytesIO
+from pathlib import Path
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
+from .usage import UsageExecutor as ThreadPoolExecutor
 from typing import Protocol
 from urllib.parse import urlparse
+
+from .usage import METER
 
 def _ascii_header(value: str, fallback: str) -> str:
     """HTTP 头必须是 latin-1 可编码的。
@@ -194,6 +198,14 @@ def _pdf_text(data: bytes) -> str | None:
         text = extract_text(BytesIO(data))
         return text if text and text.strip() else None
     except Exception:
+        pass
+    # pypdf 是上传 PDF 已用的基础依赖；高级解析器缺失时仍可读文本名单。
+    # 不能把“没安装 pdfminer / PyMuPDF”当成“官网名单是扫描件”。
+    try:
+        from pypdf import PdfReader
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(data)).pages)
+        return text if text.strip() else None
+    except Exception:
         return None
 
 
@@ -302,6 +314,9 @@ class CachedSearcher:
     """只在单份报告内复用完全相同的查询；跨报告不共享个人信息或旧结果。"""
 
     def __init__(self, inner: Searcher):
+        # 调用方可能已包缓存；新报告仍建独立缓存，并保留供应商的空结果补查能力。
+        while isinstance(inner, CachedSearcher):
+            inner = inner.inner
         self.inner = inner
         self.cache: dict[tuple[str, str | None], list[SearchHit]] = {}
         self._guard = threading.Lock()
@@ -399,6 +414,8 @@ class ZhipuSearcher:
         #   search_pro 的域限定是准的（pku.edu.cn → 只回 pku、微信 → 只回微信）。
         # 所以：带 site 用 self.engine（过滤生效），不带 site 用 self.engine_open。
         self.engine_open = os.environ.get("SEARCH_ENGINE_OPEN", "search_pro_sogou")
+        self.engine_open_alternate = os.environ.get("SEARCH_ENGINE_OPEN_ALTERNATE") or (
+            "search_pro_sogou" if self.engine_open == "search_pro_quark" else "search_pro_quark")
         self.timeout = timeout
         self.calls = 0
         self._last: dict[str, float] = {}
@@ -433,7 +450,9 @@ class ZhipuSearcher:
             return []
         if not site:
             # 裸查询必须换引擎：search_std/search_pro 的裸结果没有 link（见 __init__）
-            return self._call(query, None, self.engine_open)
+            # 书目 PDF 是有意换索引的最后一条查询，避免不同关键词一直返回同批商店页。
+            catalog = 'filetype:pdf' in query.lower() and bool(re.search(r'书目|馆藏|出版社',query))
+            return self._call(query, None, self.engine_open_alternate if catalog else self.engine_open)
 
         # 官方仅为 std/pro/sogou 声明域过滤支持；夸克配置不能使官网限定失效。
         engine = self.engine if self.engine != "search_pro_quark" else "search_pro"
@@ -446,11 +465,19 @@ class ZhipuSearcher:
         return hits
 
     def confirm_empty(self, query: str, site: str | None = None) -> list[SearchHit]:
-        """关键整批名单的空结果用 pro 确认，不修改共享实例的默认引擎。"""
-        if (not self.api_key or not site or self.engine != "search_std"
-                or self.engine_site_fallback and self.engine_site_fallback != self.engine):
+        """关键官网记录空结果换索引补查，结果仍须落在原目标域。
+
+        原生域过滤和开放索引的覆盖不同；补查最多一次，调用者按查询缓存。
+        不修改共享实例引擎，也不放宽目标学校或现任机构的排除范围。
+        """
+        if not self.api_key or not site:
             return []
-        return self._call(query, site, "search_pro")
+        if self.engine == "search_std" and not self.engine_site_fallback:
+            found = self._call(query, site, "search_pro")
+            if found:
+                return found
+        found = self._call(f'{query} site:{site}', None, self.engine_open_alternate)
+        return [h for h in found if url_in_domain(h.url, site)]
 
     def _call(self, query: str, site: str | None, engine: str) -> list[SearchHit]:
         import httpx
@@ -493,6 +520,7 @@ class ZhipuSearcher:
                     raise SearchFiltered(
                         f"查询被内容审核拒绝（code 1301）：{query[:80]}", query=query, site=site)
                 r.raise_for_status()
+                METER.record_search(engine)
                 hits = self._parse(r.json())
                 return [h for h in hits if url_in_domain(h.url, site)] if site else hits
             except SearchUnavailable:
@@ -655,6 +683,26 @@ _robots_guard = threading.Lock()
 ROBOTS_TIMEOUT_SECONDS = 5.0
 
 
+def _verify_for_url(url: str):
+    """补足 BNBU 的中间证书链，仍使用系统根证书和主机名校验。
+
+    公共中间证书随代码保存，避免工作进程重启或账户配置更新漏传环境变量后
+    再次报 SSL 错误；显式配置存在时仍优先使用它。
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if host == "staff.bnbu.edu.cn":
+        bundled = Path(__file__).resolve().parent.parent / "data" / "certs" / "globalsign-atlas-r3-ov-tls-ca-2026-q2.pem"
+        configured = os.environ.get("BNBU_TLS_CA_FILE", "")
+        ca_file = configured if configured and os.path.isfile(configured) else str(bundled)
+        if not os.path.isfile(ca_file):
+            return True
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=ca_file)
+        return context
+    return True
+
+
 def _load_robots(root: str) -> robotparser.RobotFileParser | None:
     """用本项目的 UA 和短超时取 robots.txt。
 
@@ -671,7 +719,8 @@ def _load_robots(root: str) -> robotparser.RobotFileParser | None:
     import httpx
     try:
         r = httpx.get(root + "/robots.txt", headers={"User-Agent": UA},
-                      timeout=ROBOTS_TIMEOUT_SECONDS, follow_redirects=True)
+                      timeout=ROBOTS_TIMEOUT_SECONDS, follow_redirects=True,
+                      verify=_verify_for_url(root))
     except Exception:
         return None
     if r.status_code != 200:
@@ -1057,9 +1106,10 @@ class PageFetcher:
         hints = [hint for p in item.get("school_result_pages", []) if p.get("school_domain") == school
                  for hint in p.get("archive_hints", [])]
         # 学校所在地只影响包内文件读取优先级，不据此声称候选人的参赛省份。
-        return self.get(url, archive_hint=str(claim.raw_text) + str(claim.entities) + " ".join(hints))
+        return self.get(url, archive_hint=str(claim.raw_text) + str(claim.entities) + " ".join(hints),
+                        publication_catalog=claim.category=='著作')
 
-    def get(self, url: str, *, archive_hint: str = "") -> str | None:
+    def get(self, url: str, *, archive_hint: str = "", publication_catalog: bool = False) -> str | None:
         import httpx
         host = urlparse(url).hostname or ""
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
@@ -1078,7 +1128,7 @@ class PageFetcher:
             for attempt in range(self.PAGE_RETRIES + 1):
                 try:
                     r = httpx.get(url, headers={"User-Agent": UA}, timeout=timeout,
-                                  follow_redirects=True)
+                                  follow_redirects=True, verify=_verify_for_url(url))
                     status = getattr(r, "status_code", 200)
                     if isinstance(status, int) and 400 <= status < 500:
                         # 404/403 之类重试也不会变，直接记原因，别再等。
@@ -1092,7 +1142,11 @@ class PageFetcher:
                         if len(r.content) > MAX_PUBLIC_PDF_BYTES:
                             self.failures[url] = "PDF 超过公开名单读取上限（32 MB）"
                             return None
-                        text = _pdf_text(r.content)
+                        if publication_catalog:
+                            from .book_catalog import pdf_catalog_text
+                            text = pdf_catalog_text(r.content) or _pdf_text(r.content)
+                        else:
+                            text = _pdf_text(r.content)
                         if not text:
                             self.failures[url] = "PDF 未提取到文本，可能是扫描件或受保护文件"
                         return text
@@ -1174,6 +1228,102 @@ class PageFetcher:
                 time.sleep(0.5 * (attempt + 1))
         return None
 
+    def post_public_json(self, url: str, data: dict) -> dict | None:
+        """POST only to BNBU's public, read-only profile API, respecting robots and pacing."""
+        import httpx
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if (parsed.scheme != "https" or parsed.hostname != "staff.bnbu.edu.cn"
+                or parsed.path not in {"/api/teacher/v1/category/lists",
+                                      "/api/teacher/v1/content/list"}):
+            return None
+        if not robots_allows(url):
+            self.failures[url] = "robots.txt 不允许访问"
+            return None
+        host = parsed.hostname
+        with self._host_lock(host):
+            self._throttle(host)
+            try:
+                response = httpx.post(url, data=data, headers={"User-Agent": UA},
+                                      timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
+                                      follow_redirects=True, verify=_verify_for_url(url))
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict) and payload.get("code") in (0, 200):
+                    return payload
+                self.failures[url] = "BNBU 公开接口未返回成功结果"
+            except Exception as exc:
+                if isinstance(exc, httpx.ConnectError) and ("SSL" in str(exc).upper()
+                                                            or "CERTIFICATE" in str(exc).upper()):
+                    self.failures[url] = "证书校验失败（SSL）"
+                else:
+                    self.failures[url] = f"公开接口请求失败（{type(exc).__name__}）"
+        return None
+
+    def read_bnbu_profile_sections(self, page_url: str, html: str) -> list[tuple[str, list[str]]] | None:
+        """Read public profile sections omitted from BNBU's JavaScript-only HTML shell."""
+        from bs4 import BeautifulSoup
+
+        email_match = re.search(r"\bEmail\s*=\s*['\"]([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})['\"]",
+                                html or "", re.I)
+        if not email_match:
+            return None
+        lang = urlparse(page_url).path.strip("/").split("/")[-1].lower()
+        if lang not in {"cn", "en"}:
+            return None
+        base = "https://staff.bnbu.edu.cn"
+        email = email_match.group(1)
+        common = {"email": email, "lang": lang}
+        categories = self.post_public_json(base + "/api/teacher/v1/category/lists",
+                                           {**common, "pid": 0, "area": "content"})
+        if not categories:
+            return None
+
+        def plain(value) -> str:
+            if not value:
+                return ""
+            return re.sub(r"\s+", " ", BeautifulSoup(str(value), "lxml").get_text(" ", strip=True)).strip()
+
+        output: list[tuple[str, list[str]]] = []
+        queue = list(categories.get("data") or [])
+        while queue:
+            category = queue.pop(0)
+            if not isinstance(category, dict):
+                continue
+            queue.extend(x for x in category.get("children", []) if isinstance(x, dict))
+            category_id = category.get("category_id")
+            name = plain(category.get("name"))
+            if not category_id or not name or category.get("type") not in {"content", "list"}:
+                continue
+            endpoint = base + "/api/teacher/v1/content/list"
+            payload = self.post_public_json(endpoint, {**common, "category_id": category_id,
+                                                       "pageSize": 50, "page": 0})
+            if not payload or not isinstance(payload.get("data"), dict):
+                return None
+            data = payload["data"]
+            items = data.get("list") or []
+            last_page = min(10, max(1, int(data.get("last_page") or 1)))
+            for page in range(1, last_page):
+                more = self.post_public_json(endpoint, {**common, "category_id": category_id,
+                                                        "pageSize": 50, "page": page})
+                if not more or not isinstance(more.get("data"), dict):
+                    return None
+                items.extend(more["data"].get("list") or [])
+            entries = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                value = plain(item.get("title")) or plain(item.get("content"))
+                extra = plain(item.get("content"))
+                if value and extra and extra != value:
+                    value += " " + extra
+                if value:
+                    entries.append(value)
+            if entries:
+                output.append((name, entries))
+        return output
+
 
 SEARCH_PROVIDERS = {"zhipu": ZhipuSearcher, "generic": HTTPSearcher,
                     "brave": BraveSearcher}
@@ -1190,6 +1340,12 @@ def build_searcher(provider: str | None = None) -> Searcher:
     SEARCH_ENDPOINT=...                # 可选：端点有变时覆盖
     SEARCH_PROVIDER=zhipu|brave|generic # 可选
     """
+    from .api_config import search_credentials
+    credentials = search_credentials()
+    if credentials is not None:
+        # Account binding is exclusive: never borrow another account's Brave key
+        # or send the bound Zhipu key to a globally configured custom endpoint.
+        return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
     name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
     if name == "brave":

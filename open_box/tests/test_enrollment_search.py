@@ -132,7 +132,7 @@ def _roster(url, snippet, supports, tier="A", signals=("学校一致", "学院�
 
 class EnrollmentCorroborationTests(unittest.TestCase):
     def setUp(self):
-        self.undergrad = _claim("c1", "2019.09-2023.06 哈尔滨工程大学 计算机科学与技术", "哈尔滨工程大学",
+        self.undergrad = _claim("c1", "2019.09-2023.06 哈尔滨工程大学 本科 计算机科学与技术", "哈尔滨工程大学",
                                 ["学校=哈尔滨工程大学", "专业=计算机科学与技术"])
         self.grad = _claim("c2", "2023.09 哈尔滨工业大学（保送）", "哈尔滨工业大学",
                            ["学校=哈尔滨工业大学", "入学方式=保送"])
@@ -154,10 +154,11 @@ class EnrollmentCorroborationTests(unittest.TestCase):
         linked = verified[0].evidence[-1]
         self.assertTrue(linked.title.startswith("［关联佐证·来自 c2 学历］"))
         self.assertEqual(linked.supports, ["学校=哈尔滨工程大学"])
-        # 原条目的证据不被改写
-        self.assertEqual(verified[1].evidence[0].supports, ["入学方式=保送"])
+        # 推荐方资格不能被升级成接收方保送录取；原输入证据保持不变。
+        self.assertEqual(verified[1].evidence[0].supports, [])
+        self.assertEqual(roster.supports, ["入学方式=保送"])
 
-    def test_third_party_list_naming_school_and_person_counts(self):
+    def test_award_list_cannot_be_borrowed_to_prove_enrollment(self):
         contest = _claim("c11", "2021 数学建模国家二等奖", "全国大学生数学建模竞赛组委会",
                          ["奖项=国家二等奖"], category="竞赛")
         ev = Evidence(url="https://www.mcm.edu.cn/upload_cn/node/626/list.pdf",
@@ -167,7 +168,7 @@ class EnrollmentCorroborationTests(unittest.TestCase):
         judge.score_evidence(ev)
         verified = [judge.assess(self.undergrad, []), judge.assess(contest, [ev])]
         judge.corroborate_enrollment(verified, "张三")
-        self.assertIn("学校=哈尔滨工程大学", verified[0].proved)
+        self.assertNotIn("学校=哈尔滨工程大学", verified[0].proved)
 
     def test_list_without_the_candidate_name_is_not_borrowed(self):
         roster = _roster("https://ugs.hrbeu.edu.cn/list.pdf", "905 王某 计算机学院", ["入学方式=保送"])

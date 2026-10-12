@@ -20,6 +20,8 @@ sdk profile 是 stdio 上的 JSON-RPC，两者都不是浏览器能直接讲的�
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import queue
@@ -39,6 +41,25 @@ OPEN_BOX = Path(os.environ.get("OPEN_BOX_ROOT") or (HERE.parent / "open_box"))
 if str(OPEN_BOX) not in sys.path:
     sys.path.insert(0, str(OPEN_BOX))
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+# ── 登录门禁 ──────────────────────────────────────────────────────────────
+# 口令来自环境变量（部署方写进 open_box/.env 的 UNDERBOX_PASSWORD，app/env.py 会加载）。
+# **没设口令 = 门禁关闭**，服务就是开放的——本地开发不必每次登录。
+COOKIE_NAME = "ub_gate"
+
+
+def _gate_password() -> str:
+    return (os.environ.get("UNDERBOX_PASSWORD") or "").strip()
+
+
+def _session_token(password: str) -> str:
+    """由口令派生的会话值（cookie 里存这个，不存口令本身）。
+
+    服务端不保存任何会话状态：重启不掉线，也没有过期表要清理。
+    换来的是"改口令即让所有旧 cookie 失效"——对一个本地小服务，这笔划算。
+    """
+    return hmac.new(password.encode("utf-8"), b"underbox-session-v1", hashlib.sha256).hexdigest()
 
 
 # ── 报告 → 喂给模型的材料 ────────────────────────────────────────────────
@@ -81,6 +102,12 @@ def render_material(rep) -> str:
             out.append(f"  已证明：{'；'.join(v.proved)}")
         if v.unproved:
             out.append(f"  尚未证明：{'；'.join(v.unproved)}")
+        if v.manual_review:
+            review = v.manual_review
+            out.append("  实习仅提供人工背调入口，尚未核实本人经历：" + (review.get("companyUrl") or review.get("queryUrl") or "待补充公司全称"))
+            for phone in review.get("contacts", []):
+                out.append("  公司公开电话：" + phone["phone"] + "；出处：" + phone["sourceUrl"])
+            out.append("  " + review.get("note", ""))
         for note in getattr(v, "source_notes", []):
             out.append(f"  官网名单范围：{note}")
         for e in v.evidence:
@@ -176,10 +203,11 @@ def to_presentation(rep) -> dict:
         "generatedAt": rep.generated_at,
         "mode": rep.mode,
         "sourceFile": rep.source_file,
+        "verificationWorkflow": getattr(rep, "verification_workflow", None),
         "searchConfigured": _search_configured(),
         "risks": [{"kind": r.kind, "locator": r.locator, "detail": r.detail, "excerpt": r.excerpt}
                   for r in rep.input_risks],
-        # 拆出来但按设置不核验的（默认实习经历）：如实列出，导出时写明没核
+        # 显式按设置不核验的条目；实习默认进入人工背调入口。
         "skipped": [claim_brief(c) for c in getattr(rep, "skipped_claims", None) or []],
         "claims": [{
             "id": v.claim.id,
@@ -198,6 +226,10 @@ def to_presentation(rep) -> dict:
             "searchExhausted": v.search_exhausted,
             "sourceNotes": getattr(v, "source_notes", []),
             "competitionLookup": getattr(v, "competition_lookup", None),
+            "claimVerification": getattr(v, "claim_verification", None),
+            "githubAudit": getattr(v, "github_audit", None),
+            "manualReview": getattr(v, "manual_review", None),
+            "verificationAgent": getattr(v, "verification_agent", None),
             "evidence": [{
                 "tier": e.source_tier,
                 "title": e.title,
@@ -288,8 +320,10 @@ def _remember_prepared(entry: dict) -> str:
 
 
 def claim_brief(c) -> dict:
+    from app.github_audit import material_eligible
     return {"id": c.id, "category": c.category, "date": c.date_label, "rawText": c.raw_text,
-            "locator": c.raw_locator, "elements": c.elements}
+            "locator": c.raw_locator, "elements": c.elements,
+            "githubMaterialEligible": material_eligible(c)}
 
 
 def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
@@ -383,7 +417,7 @@ def run_split_url_job(url: str, events: queue.Queue, holder: dict) -> None:
         events.put({"log": f"已读取正文 {len(snap.blocks)} 段"
                            + (f"；发现 {hidden} 处隐藏文字，已剔除" if hidden else "")})
         llm = build_llm()
-        events.put({"log": "判断这是不是个人主页（防止拿来查无关的人）…"})
+        events.put({"log": "检查主页来源与正文（教育域名和职业资料白名单直接通过类型检查）…"})
         verdict = ensure_personal_homepage(doc, llm, title=snap.title)
         events.put({"log": f"已确认：{verdict['page_type']}"
                            + (f"（{verdict['person']}）" if verdict.get("person") else "")
@@ -420,7 +454,7 @@ def run_split_url_job(url: str, events: queue.Queue, holder: dict) -> None:
         events.put(None)
 
 
-def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, holder: dict) -> None:
+def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, holder: dict, *, materials=None) -> None:
     """线程目标：只核验勾选的陈述（各条同时开始检索）。"""
     from app.pipeline import verify_prepared         # noqa: PLC0415
 
@@ -434,6 +468,10 @@ def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, ho
         if entry is None:
             raise LookupError("这份简历的拆分结果已过期，请重新上传")
         prepared = entry["prepared"]
+        if materials:
+            from dataclasses import replace
+            from app.github_audit import supplement_claims
+            prepared = replace(prepared, claims=supplement_claims(prepared.claims, materials))
         rep = verify_prepared(prepared, claim_ids=claim_ids, progress=say)
         holder["oby"] = rep
         holder["profile"] = prepared.profile
@@ -471,6 +509,7 @@ def stream_answer(material: str, question: str):
         "max_tokens": 4096,
         "temperature": 0,
         "stream": True,
+        "stream_options": {"include_usage": True},      # 末尾多一块带 usage 的 chunk，用于记账
         "thinking": {"type": "disabled"},
     }
     try:
@@ -492,6 +531,9 @@ def stream_answer(material: str, question: str):
                     chunk = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
+                if chunk.get("usage"):
+                    from app.usage import METER            # noqa: PLC0415
+                    METER.record_llm("deepseek", chunk["usage"])
                 delta = ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("content")
                 if delta:
                     yield {"delta": delta}
@@ -521,6 +563,34 @@ def report_to_markdown(rep: dict) -> str:
         competition = c.get("competitionLookup") or {}
         if competition.get("official_urls"):
             L.append(f"- 赛事官网：{'；'.join(competition['official_urls'])}")
+        if c.get("claimVerification"):
+            for check in c["claimVerification"].get("checks", []):
+                L.append(f"- 主张核对：{check['element']} · {check['state']} · {'；'.join(check['urls'])}")
+        if c.get("githubAudit"):
+            audit = c['githubAudit']
+            L.append("### GitHub 贡献核验（本条关联范围）")
+            L.append('- 范围：' + '；'.join(audit.get('scope', [])))
+            L.append('- 归属依据：' + audit.get('identityBasis', ''))
+            for record in audit.get('records', []):
+                L.append('- 公开记录：' + record['url'])
+                for f in record.get('files', []):
+                    L.append(f"  - {f['path']} · {f['type']} · +{f['additions']}/-{f['deletions']}（上下文，不评价能力）")
+                    if f.get('patch'):
+                        L.append('    - diff 原文摘录（部分，完整内容见对应记录 URL）：')
+                        L.extend('        '+line for line in f['patch'][:1200].splitlines())
+            for note in audit.get('warnings', []) + audit.get('limitations', []): L.append('- ' + note)
+            if audit.get('truncated'): L.append('- 本次范围被分页或预算截断，未检查记录保持未知。')
+        if c.get("manualReview"):
+            review = c["manualReview"]
+            L.append("### 实习人工背调（尚未核实本人经历）")
+            L.append("- 公司：" + review.get("company", ""))
+            L.append("- 企查查入口：" + (review.get("companyUrl") or review.get("queryUrl") or "待补充公司全称"))
+            for phone in review.get("contacts", []):
+                L.append("- 公司公开电话：" + phone["phone"] + "｜来源：" + phone["sourceUrl"] + "｜读取：" + phone["accessedAt"])
+                L.append("  - 原文：" + phone["excerpt"])
+            L.append("- " + review.get("note", ""))
+            for note in review.get("limitations", []): L.append("- " + note)
+            for check in review.get("checks", []): L.append("- 人工核对：" + check)
         for e in c.get("evidence", []):
             L.append(f"- 证据（{e.get('tier') or '未定级'}）：{e.get('title', '')}"
                      f"｜{e.get('publisher', '')}｜{e.get('url', '')}")
@@ -531,9 +601,21 @@ def report_to_markdown(rep: dict) -> str:
         if c.get("question"):
             L.append(f"- 可问的问题：{c['question']}")
         L.append("")
+    workflow = rep.get("verificationWorkflow") or {}
+    if workflow.get("tasks"):
+        L.append("## 核验分工与协作")
+        for task in workflow["tasks"]:
+            L.append("- " + str(task["claimId"]) + "：" + task["agent"]["name"])
+            sources = list(dict.fromkeys(e["sourceName"] for e in task.get("sourceAccess", {}).get("events", [])))
+            if sources: L.append("  - 实际调用来源：" + "；".join(sources))
+        for handoff in workflow.get("handoffs", []):
+            L.append("- 定位线索：" + handoff["fromClaim"] + " → " + handoff["toClaim"] + "，" + handoff["element"])
+            L.append("  - 原出处：" + "；".join(handoff["urls"]))
+        L.append(workflow.get("note", ""))
+        L.append("")
     if rep.get("skipped"):
         L.append("## 未核验的条目")
-        L.append("以下条目按设置不进入核验（实习经历通常没有公开记录），报告对它们不下任何结论。")
+        L.append("以下条目按设置不进入核验，报告对它们不下任何结论。")
         for c in rep["skipped"]:
             L.append(f"- {c.get('category', '')}：{c.get('rawText', '')}")
         L.append("")
@@ -554,30 +636,147 @@ STATUS_CN = {"ok": "已证实", "part": "部分证实", "ask": "待澄清",
 
 # ── HTTP ─────────────────────────────────────────────────────────────────
 
+# ── 每用户状态 ────────────────────────────────────────────────────────────
+# 网关模式下所有用户共享**同一个**工作进程（13 个独立进程会 OOM），
+# 所以"最近一次报告 / 画像 / 台账"必须按人分存——否则 A 刷新会看到 B 的报告。
+# 身份来自网关转发的 X-Underbox-User；单机模式没有这个头，统一落到 'local'。
+_STATE_LOCK = threading.Lock()
+_STATES: dict[str, dict] = {}
+
+
+def user_state(user_id: str) -> dict:
+    with _STATE_LOCK:
+        return _STATES.setdefault(user_id, {"presentation": None, "oby": None,
+                                            "profile": None, "generation": 0})
+
+
+def account_search_credentials(user_id: str):
+    from app.api_config import SearchCredentials
+    db = os.environ.get("UNDERBOX_DB")
+    if not db or user_id == "local" or not os.environ.get("UNDERBOX_GATEWAY_WORKER"):
+        return None
+    import store
+    with store.connect(db) as conn:
+        key = store.user_search_key(conn, user_id)
+    return SearchCredentials(key) if key is not None else None
+
+
+def record_gateway_usage(kind: str, ev: dict, user_id: str) -> None:
+    """网关模式下，把这一次任务的用量写进库；核验成功再消耗一次配额。
+
+    user_id 由调用方从请求头取（共享进程里没有 UNDERBOX_USER_ID 这个环境变量了）。
+    只有被网关拉起的工作进程才会设 UNDERBOX_GATEWAY_WORKER —— 单机模式没有它，直接返回。
+    （注意别拿 UNDERBOX_GATEWAY_DB 当开关：那是"我是网关"的标记，用在这里会递归。）
+
+    记账失败绝不能让核验结果丢掉，所以整段吞异常，只打一行日志。
+    """
+    if not os.environ.get("UNDERBOX_GATEWAY_WORKER"):
+        return
+    db = os.environ.get("UNDERBOX_DB")
+    if not user_id or user_id == "local" or not db:
+        return
+    try:
+        import store                                     # noqa: PLC0415  只有网关模式需要
+        report = ev.get("report")
+        claims = len(report.get("claims") or []) if isinstance(report, dict) else 0
+        ok = not ev.get("failed") and (kind != "verify" or isinstance(report, dict))
+        with store.connect(db) as conn:
+            store.record_usage(conn, user_id, kind=kind or "task", claims=claims,
+                               seconds=float(ev.get("seconds") or 0),
+                               usage=ev.get("usage"), ok=ok)
+            if kind == "verify" and ok:
+                store.consume_quota(conn, user_id)
+            conn.commit()
+            if kind == "verify" and ok:
+                try:
+                    store.save_report(conn, user_id, report)
+                    conn.commit()
+                except Exception as exc:                  # noqa: BLE001
+                    conn.rollback()
+                    print(f"[history] 保存报告失败：{exc}", file=sys.stderr, flush=True)
+    except Exception as exc:                              # noqa: BLE001
+        print(f"[usage] 记账失败（不影响核验结果）：{exc}", file=sys.stderr, flush=True)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "underbox"
 
-    # 最近一次**真实核验**的结果。/api/verify 写入，其余端点读取。
+    # 最近一次**真实核验**的结果放在 user_state() 里按用户分存（见模块顶部说明）：
+    # 网关模式下多人共享这一个进程，类属性会被互相覆盖。
     # 页面本身不预置任何数据——没有核验就没有报告。
-    oby_report: object | None = None        # open_box 的 Report 对象（对话材料、检索计划用）
-    last_presentation: dict | None = None   # 网页端形状（导出用）
-    resume_profile: object | None = None    # 画像（检索计划必须用同一份，重新派生会漂移）
+
+    def uid(self) -> str:
+        """这次请求属于谁。网关转发时带 X-Underbox-User；单机模式没有，算 'local'。"""
+        return (self.headers.get("X-Underbox-User") or "local").strip() or "local"
+
+    def _st(self) -> dict:
+        return user_state(self.uid())
 
     def log_message(self, fmt, *args):        # 安静一点，只留自己的日志
         pass
 
-    def _send(self, body: bytes, ctype: str, status: int = 200) -> None:
+    def _send(self, body: bytes, ctype: str, status: int = 200,
+              headers: dict | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, data: dict, status: int = 200) -> None:
+    def _json(self, data: dict, status: int = 200, headers: dict | None = None) -> None:
         self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"),
-                   "application/json; charset=utf-8", status)
+                   "application/json; charset=utf-8", status, headers)
+
+    # ── 门禁 ──────────────────────────────────────────────────────────────
+    def _cookie(self, name: str) -> str:
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == name:
+                return unquote(v)
+        return ""
+
+    def _authed(self) -> bool:
+        pw = _gate_password()
+        if not pw:
+            return True                        # 没设口令：门禁关闭
+        return hmac.compare_digest(self._cookie(COOKIE_NAME), _session_token(pw))
+
+    def _deny_api(self, path: str) -> bool:
+        """需要登录却被拦下就回 401，返回 True 表示已经处理完这个请求。
+
+        只拦 /api/*；页面本身（index.html 等静态资源）必须放行，
+        否则登录页自己都拿不到。拦住 API 就等于拦住了全部数据。
+        """
+        if not path.startswith("/api/"):
+            return False
+        if path in ("/api/login", "/api/logout", "/api/session", "/api/health"):
+            return False                       # 登录用 / 探活用，必须放行
+        if self._authed():
+            return False
+        self._json({"error": "未登录或登录已过期", "loginRequired": True}, 401)
+        return True
+
+    def _login(self) -> None:
+        pw = _gate_password()
+        given = str(self._read_json().get("password") or "")
+        if not pw:                             # 没设口令：门禁关闭，前端据此直接进主页
+            return self._json({"ok": True, "gate": False})
+        if not given or not hmac.compare_digest(given, pw):
+            time.sleep(0.35)                   # 轻微迟滞，压低暴力尝试的速率
+            return self._json({"ok": False, "error": "口令不正确"}, 401)
+        self._json({"ok": True}, 200, {
+            "Set-Cookie": f"{COOKIE_NAME}={_session_token(pw)}; Path=/; "
+                          f"Max-Age={7 * 86400}; HttpOnly; SameSite=Lax",
+        })
+
+    def _logout(self) -> None:
+        self._json({"ok": True}, 200, {
+            "Set-Cookie": f"{COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
+        })
 
     def _asset(self, name: str) -> None:
         p = (HERE / name).resolve()
@@ -605,12 +804,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "缺少 token：先上传简历拆分条目"}, 400)
             if not ids:
                 return self._json({"error": "没有勾选要核验的条目"}, 400)
-            return self._sse(run_verify_selected_job, (token, ids))
+            with _PREPARED_LOCK:
+                entry = PREPARED.get(token)
+            if entry is None or entry.get('owner', 'local') != self.uid():
+                return self._json({'error':'拆分结果已过期或不属于当前账户，请重新上传'}, 404)
+            materials = payload.get('githubMaterials') or {}
+            try:
+                from app.github_audit import supplement_claims
+                supplement_claims(entry['prepared'].claims, materials)
+            except ValueError as exc:
+                return self._json({'error':str(exc)}, 400)
+            from functools import partial
+            return self._sse(partial(run_verify_selected_job, materials=materials), (token, ids), kind="verify")
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
         fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
-        return self._sse(run_verify_job, (data, fname))
+        return self._sse(run_verify_job, (data, fname), kind="verify")
 
     def _split_stream(self) -> None:
         """流式拆分（SSE）：上传简历 → 解析、画像、拆成陈述，结束时给出陈述清单与 token。不检索。
@@ -621,32 +831,48 @@ class Handler(BaseHTTPRequestHandler):
             url = str(self._read_json().get("url") or "").strip()
             if not url:
                 return self._json({"error": "请粘贴个人主页的网址"}, 400)
-            return self._sse(run_split_url_job, (url,))
+            return self._sse(run_split_url_job, (url,), kind="split")
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
         fname = Path(unquote(self.headers.get("X-Filename") or "resume.pdf").strip()).name
-        return self._sse(run_split_job, (data, fname))
+        return self._sse(run_split_job, (data, fname), kind="split")
 
-    def _sse(self, target, args: tuple) -> None:
-        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。"""
+    def _sse(self, target, args: tuple, kind: str = "") -> None:
+        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。
+
+        kind 供网关模式记账用：verify 完成后消耗一次配额，split / 其余只记用量不扣。
+        """
+        from app.usage import METER                       # noqa: PLC0415
+        from app.api_config import bind_search_credentials
+        try:
+            credentials = account_search_credentials(self.uid())
+        except Exception:
+            return self._json({"error": "账户搜索 API 配置暂不可用，请联系管理员"}, 503)
         events: queue.Queue = queue.Queue()
         holder: dict = {}
-        threading.Thread(target=target, args=(*args, events, holder), daemon=True).start()
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        # SSE 没有 Content-Length，也不做 chunked 编码——客户端只能靠连接关闭判断结束
-        self.send_header("Connection", "close")
-        self.close_connection = True
-        self.end_headers()
+        generation = self._st()["generation"]
+        scope = METER.open_scope(owners=2)  # HTTP 流与后台任务各持有一次引用。
+        base = METER.mark(scope)
+        unsubscribe = METER.subscribe(lambda: events.put({"usage": METER.since(base)}), scope)
+        def run_task():
+            # Bind inside the background thread; nested UsageExecutor pools copy
+            # this context, isolating credentials even when accounts run together.
+            with bind_search_credentials(credentials):
+                METER.run_in_scope(scope, target, *args, events, holder)
+        threading.Thread(target=run_task, daemon=True).start()
 
         def push(ev: dict) -> None:
             self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
             self.wfile.flush()
 
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.close_connection = True
+            self.end_headers()
             while True:
                 try:
                     ev = events.get(timeout=300)     # 阶段内可能长时间无新行，放宽到 5 分钟
@@ -655,20 +881,39 @@ class Handler(BaseHTTPRequestHandler):
                     continue
                 if ev is None:
                     break
+                if ev.get("done"):
+                    if kind == "split" and ev.get("split", {}).get("token"):
+                        with _PREPARED_LOCK:
+                            entry = PREPARED.get(ev["split"]["token"])
+                            if entry is not None: entry['owner'] = self.uid()
+                    ev["usage"] = METER.since(base)
+                    record_gateway_usage(kind, ev, self.uid())   # 写流水；核验成功再扣一次配额
                 push(ev)
                 if ev.get("done"):
-                    if "report" in ev:               # 存到**类**上（实例随请求销毁）
-                        Handler.last_presentation = ev["report"]
-                        Handler.oby_report = holder.get("oby")
-                        Handler.resume_profile = holder.get("profile")
+                    if "report" in ev:
+                        # 退出与旧任务完成可能并发，代数判断与写入必须在同一把锁内。
+                        with _STATE_LOCK:
+                            st = _STATES.get(self.uid())
+                            if st and generation == st["generation"]:
+                                st["presentation"] = ev["report"]
+                                st["oby"] = holder.get("oby")
+                                st["profile"] = holder.get("profile")
                     break
         except (BrokenPipeError, ConnectionResetError):
             pass                                     # 用户关了页面 / 中断了连接
+        finally:
+            unsubscribe()
+            METER.release_scope(scope)
 
     def do_GET(self):                          # noqa: N802
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             return self._asset("index.html")
+        if path == "/api/session":
+            # 页面靠它决定"显示登录屏还是主界面"
+            return self._json({"gate": bool(_gate_password()), "authed": self._authed()})
+        if self._deny_api(path):
+            return
         if path == "/api/health":
             return self._json({
                 "ok": True,
@@ -676,21 +921,61 @@ class Handler(BaseHTTPRequestHandler):
                 "chat": True,
                 "llmConfigured": _llm_ready(),
                 "searchConfigured": _search_configured(),
-                "hasReport": self.last_presentation is not None,
+                "hasReport": self._st()["presentation"] is not None,
                 "model": "deepseek-flash",
             })
         if path == "/api/report":
             # 页面刷新后把最近一次真实报告交还——不然用户一刷新就"丢"了报告
-            if self.last_presentation is None:
+            if self._st()["presentation"] is None:
                 return self._json({"error": "还没有核验任何简历"}, 404)
-            return self._json({"report": self.last_presentation})
+            return self._json({"report": self._st()["presentation"]})
+        if path == "/api/history":
+            return self._history_list()
+        match = re.fullmatch(r"/api/history/(\d+)(/export)?", path)
+        if match:
+            report = self._history_report(int(match.group(1)))
+            if report is None:
+                return self._json({"error": "历史报告不存在或已超过保留的 10 次"}, 404)
+            if match.group(2):
+                fmt = (self.path.split("?", 1)[1] if "?" in self.path else "").lower()
+                return self.do_GET_export("md" if "md" in fmt else "json", report)
+            return self._json({"report": report})
         if path == "/api/export":
             fmt = (self.path.split("?", 1)[1] if "?" in self.path else "").lower()
             return self.do_GET_export("md" if "md" in fmt else "json")
         return self._asset(path.lstrip("/"))
 
+    def _history_list(self) -> None:
+        db = os.environ.get("UNDERBOX_DB")
+        if not db:
+            return self._json({"items": []})
+        import store                                     # noqa: PLC0415
+        with store.connect(db) as conn:
+            return self._json({"items": store.list_reports(conn, self.uid())})
+
+    def _history_report(self, report_id: int) -> dict | None:
+        db = os.environ.get("UNDERBOX_DB")
+        if not db:
+            return None
+        import store                                     # noqa: PLC0415
+        with store.connect(db) as conn:
+            return store.get_report(conn, self.uid(), report_id)
+
     def do_POST(self):                         # noqa: N802
         path = self.path.split("?", 1)[0]
+        if path == "/api/login":
+            return self._login()
+        if path == "/api/logout":
+            return self._logout()
+        if self._deny_api(path):
+            return
+        if path == "/api/query/reset":
+            with _STATE_LOCK:
+                st = _STATES.setdefault(self.uid(), {"presentation": None, "oby": None,
+                                                      "profile": None, "generation": 0})
+                st.update(presentation=None, oby=None, profile=None,
+                          generation=st["generation"] + 1)
+            return self._json({"ok": True})
         if path == "/api/verify/stream":
             return self._verify_stream()
         if path == "/api/split/stream":
@@ -716,13 +1001,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "问题不能为空"}, 400)
         if len(question) > 2000:
             return self._json({"error": "问题太长了（上限 2000 字）"}, 400)
-        if self.oby_report is None:
+        if self._st()["oby"] is None:
             return self._json({"error": "还没有核验任何简历——先上传一份，问答才有材料"}, 409)
 
         # 材料整理必须放在**发响应头之前**并兜住异常：一旦头发出去了再崩，
         # 浏览器只会看到无声断连（"Failed to fetch"），永远不知道服务端发生了什么。
         try:
-            material = render_material(self.oby_report)
+            material = render_material(self._st()["oby"])
         except Exception as exc:
             return self._json({"error": f"整理对话材料失败：{type(exc).__name__}: {exc}"}, 500)
 
@@ -736,36 +1021,45 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         started = time.monotonic()
         acc: list[str] = []
+        from app.usage import METER                       # noqa: PLC0415
+        scope = METER.open_scope()
+        base = METER.mark(scope)
         try:
-            for ev in stream_answer(material, question):
-                if "error" in ev:
+            with METER.bind(scope):
+                for ev in stream_answer(material, question):
+                    if "error" in ev:
+                        self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
+                        self.wfile.flush()
+                        return
+                    acc.append(ev["delta"])
                     self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
                     self.wfile.flush()
-                    return
-                acc.append(ev["delta"])
-                self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
-                self.wfile.flush()
-            self.wfile.write(f"data: {json.dumps({'done': True, 'seconds': round(time.monotonic() - started, 1)}, ensure_ascii=False)}\n\n".encode("utf-8"))
+            self.wfile.write(f"data: {json.dumps({'done': True, 'seconds': round(time.monotonic() - started, 1), 'usage': METER.since(base)}, ensure_ascii=False)}\n\n".encode("utf-8"))
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             # 客户端中断（用户点了停止 / 关了页面）——正常收尾，不算错误
             pass
+        finally:
+            METER.release_scope(scope)
 
     def _plan(self) -> None:
         """某条陈述的检索计划：策略引擎实际会发哪些查询、为什么。"""
         from app.plan import plan_with_notes               # noqa: PLC0415
+        from app.verification_agents import agent_for
         payload = self._read_json()
         cid = payload.get("claimId") or ""
-        rep = self.oby_report
+        rep = self._st()["oby"]
         if rep is None:
             return self._json({"error": "还没有核验任何简历"}, 409)
         vc = next((v for v in rep.claims if v.claim.id == cid), None)
         if vc is None:
             return self._json({"error": f"报告里没有 {cid}"}, 404)
         cats = [v.claim.category for v in rep.claims]
-        plan = plan_with_notes(vc.claim, rep.candidate_name, self.resume_profile, cats)
+        plan = plan_with_notes(vc.claim, rep.candidate_name, self._st()["profile"], cats)
         return self._json({
             "claimId": cid,
+            "verificationAgent": vc.verification_agent or agent_for(vc.claim).describe(),
+            "handoffs": plan.handoffs,
             "strategy": {"id": plan.profile_id, "name": plan.profile_name},
             "budget": plan.budget,
             "queries": [{"text": q.text, "site": q.site, "kind": q.kind,
@@ -775,8 +1069,8 @@ class Handler(BaseHTTPRequestHandler):
             "notes": plan.notes,
         })
 
-    def do_GET_export(self, fmt: str) -> None:      # noqa: N802
-        rep = self.last_presentation
+    def do_GET_export(self, fmt: str, rep: dict | None = None) -> None:      # noqa: N802
+        rep = rep if rep is not None else self._st()["presentation"]
         if rep is None:
             return self._json({"error": "还没有核验任何简历"}, 409)
         no = re.sub(r"[^\w.-]", "", rep.get("reportNo") or "report") or "report"
@@ -799,6 +1093,13 @@ def main() -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8787)
     args = ap.parse_args()
+
+    # 网关模式：本进程只做账号/权限/配额，真正的核验交给每个用户自己的工作进程。
+    # 变量名从 UNDERBOX_ACCOUNTS_FILE 换成 UNDERBOX_GATEWAY_DB——取值由 JSON 文件变成了 SQLite 库。
+    gateway_db = os.environ.get("UNDERBOX_GATEWAY_DB")
+    if gateway_db:
+        from accounts import serve_accounts
+        return serve_accounts(Handler, gateway_db, args.host, args.port)
 
     print(f"underbox  http://{args.host}:{args.port}/", flush=True)
     print(f"  模型     {'deepseek-flash' if _llm_ready() else '⚠ 未配置 DEEPSEEK_API_KEY'}", flush=True)

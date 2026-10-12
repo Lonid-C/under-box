@@ -1,8 +1,9 @@
 PY ?= python3
+NODE ?= node
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: demo serve test fixture llm-check search-check competition-check verify clean help
+.PHONY: demo serve test test-legacy fixture llm-check search-check competition-check verify clean help
 
 ## 离线演示：不需要任何 API key
 demo:
@@ -12,10 +13,13 @@ demo:
 serve:
 	@MODE=mock $(PY) -m uvicorn app.main:app --host $(HOST) --port $(PORT) --reload
 
-## 第 11 节验收
+## 完整回归：规则、旧验收、账户服务与前端
 test:
+	@$(PY) ../scripts/regression.py --node "$(NODE)"
+
+## 单独运行第 11 节旧验收（保留诊断入口）
+test-legacy:
 	@$(PY) -m tests.test_rules
-	@$(PY) -m unittest tests.test_search_recall tests.test_school_search tests.test_document_gate tests.test_official_search tests.test_push_rosters tests.test_enrollment_search tests.test_discover tests.test_competitions tests.test_award_routes tests.test_historical_awards tests.test_parallel tests.test_research_split tests.test_homepage -v
 
 ## 重新生成内置 fixture（状态由 app/judge.py 的规则算出）
 fixture:

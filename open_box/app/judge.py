@@ -9,6 +9,7 @@ import re
 from urllib.parse import urlparse
 
 from .schema import Claim, Evidence, Status, VerifiedClaim
+from .academic import filter_academic_evidence, study_stage, education_scope_matches, academic_supports
 
 # --------------------------------------------------------------------------
 # 6.5 身份判定
@@ -16,12 +17,14 @@ from .schema import Claim, Evidence, Status, VerifiedClaim
 
 WEIGHTS: dict[str, int] = {
     "学校一致": 2,
+    "任职单位一致": 2,
     "时间吻合": 1,            # 文章发布时间落在陈述时段内（规则派生，非模型）
     "发布方为相关机构": 1,    # 发布方/作者为陈述所涉机构（规则派生，非模型）
     "学院一致": 2,
     "专业一致": 1,
     "年级一致": 1,
     "队友或合作者一致": 2,
+    "具体经历一致": 2,
     "候选人自提供该链接": 2,
     "账号由候选人提供": 2,
 }
@@ -136,7 +139,7 @@ WECHAT_HOSTS = {"mp.weixin.qq.com", "mp.weixin.example"}
 # A 级还要求页面属于公示/通知/名单类
 OFFICIAL_DOC_WORDS = ("公示", "通知", "公告", "名单", "决定", "表彰", "获奖", "录取", "授予")
 OFFICIAL_PERSON_WORDS = ("人物专访", "人物介绍", "学子风采", "青年说", "在读", "就读",
-                         "硕士研究生", "博士研究生", "研究生风采")
+                         "硕士研究生", "博士研究生", "研究生风采", "教师个人主页", "导师主页")
 
 
 def _host(url: str) -> str:
@@ -292,13 +295,7 @@ def corroborate_enrollment(
     candidate_name: str,
     school_domains: dict[str, str] | None = None,
 ) -> list[int]:
-    """用同份简历其他条目已取得的官方名单，补「学历·学校」这一个要素。
-
-    背景（2026-10 一份真实简历实测）：本科学历按设计几乎不检索，只有"官网 + 姓名"和
-    公众号两条探针，搜索索引对 PDF 名单里的人名基本搜不到，于是本科永远是
-    "未找到公开记录"。可同一份简历的推免、奖学金、竞赛条目往往已经读到了
-    本科学校官网上列出本人的名单——只有在读学生才会出现在推免资格、学业奖学金
-    名单里，这本身就是就读的公开佐证。
+    """仅复用其他学历条目中的相同学段就读记录，补「学历·学校」这一个要素。
 
     规则（全部确定性，不调模型）：
       · 只补「学校=…」一个要素，不补专业、学位、就读时间；
@@ -316,7 +313,7 @@ def corroborate_enrollment(
     changed: list[int] = []
     for idx, vc in enumerate(verified):
         claim = vc.claim
-        if claim.category != "学历":
+        if claim.category != "学历" or not study_stage(claim):
             continue
         school = claim_school(claim)
         school_el = next((e for e in claim.elements if e.split("=", 1)[0].strip() == "学校"), None)
@@ -330,6 +327,8 @@ def corroborate_enrollment(
         for other_idx, other in enumerate(verified):
             if other_idx == idx:
                 continue
+            if other.claim.category != "学历":
+                continue  # 获奖与就读独立取证，不能把获奖名单反向复制为学历证据。
             for ev in valid_evidence(other.evidence):
                 if ev.source_tier not in ("A", "B") or ev.url in seen:
                     continue
@@ -341,6 +340,8 @@ def corroborate_enrollment(
                 names_person = not name_parts or all(p in text for p in name_parts)
                 names_school = school in text
                 if not names_person or not (on_domain or names_school):
+                    continue
+                if not education_scope_matches(claim, ev.snippet, ev.title):
                     continue
                 copy = deepcopy(ev)
                 copy.title = f"{LINKED_PREFIX}·来自 {other.claim.id} {other.claim.category}］{ev.title}"
@@ -372,14 +373,45 @@ def assess(
 
     唯一的判定入口——pipeline 与 fixture 构建都走这里，保证两边结论一致。
     """
+    from .claim_scope import enrich_claim, filter_supports, summarize
+    from .person_scope import filter_person_evidence, check_person, validated_signals
+    from .source_guard import claim_sources, evidence_excluded
+    audit = getattr(evidences, "github_audit", None)
+    claim = enrich_claim(claim)
+    evidences = [ev for ev in evidences if not evidence_excluded(ev, claim_sources(claim)) and not ev.identity_conflicts
+                 and filter_person_evidence(claim, ev) and filter_academic_evidence(claim, ev)]
+    evidences = [ev.model_copy(update={"supports": filter_supports(claim, ev)}) for ev in evidences]
+    evidences = [ev.model_copy(update={"supports": academic_supports(claim, ev)}) for ev in evidences]
+    from .verification_agents import employment_supports, employment_record
+    evidences = [ev.model_copy(update={"supports": employment_supports(claim, ev)}) for ev in evidences]
+    if claim.category == "任职":
+        evidences = [ev for ev in evidences if employment_record(claim, ev) or ev.contradicts]
+    from .faculty_recall import book_supports,book_contradicts
+    evidences = [ev.model_copy(update={'supports': book_supports(claim,ev)}) for ev in evidences]
+    evidences = [ev.model_copy(update={'contradicts': book_contradicts(claim,ev)}) for ev in evidences]
+    if claim.category=='学历':
+        from .identity import own_education_record
+        name=claim.entities.get('candidate_name') or (claim.entities.get('candidate_identity_context') or {}).get('candidate_name','')
+        evidences=[ev for ev in evidences if own_education_record(ev.snippet,ev.title,name)]
+    for ev in evidences:
+        if ev.github_record is not None:
+            from .github_audit import tier_for_record
+            ev.source_tier = tier_for_record(ev.github_record)
     if rescore:
         for ev in evidences:
+            if ev.github_record is None and (claim.entities.get("candidate_identity_context") or {}).get("policy") == "person_v2":
+                checked = check_person(claim, ev.url, ev.snippet, ev.title, published_at=ev.published_at)
+                ev.identity_signals = validated_signals(ev.identity_signals, checked)
             for sig in corroboration_signals(claim, ev):
                 if sig not in ev.identity_signals:
                     ev.identity_signals.append(sig)
             score_evidence(ev)
 
     status: Status = "none" if search_exhausted and not evidences else decide(claim, evidences)
+    if audit and audit.get("identityUnknown"):
+        status = "who"
+    if audit and audit.get("unmatchedAuthor") and not any(r.get("actorConfirmed") for r in audit.get("records", [])):
+        status = "who"
     proved, unproved = split_elements(claim, evidences)
     valid = valid_evidence(evidences)
     found = dedupe_by_origin(evidences)
@@ -395,6 +427,8 @@ def assess(
         evidence=evidences,
         proved=proved,
         unproved=unproved,
-        needs_human=needs_human(status, evidences),
+        needs_human=needs_human(status, evidences) or bool(audit and audit.get("unverifiedCommit")),
         search_exhausted=search_exhausted,
+        claim_verification=summarize(claim, proved, evidences),
+        github_audit=audit,
     )

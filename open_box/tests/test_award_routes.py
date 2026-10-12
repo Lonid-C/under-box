@@ -39,7 +39,7 @@ class AwardRouteTests(unittest.TestCase):
     def test_english_plan_uses_its_own_site_and_relaxed_title_words(self):
         plan=build_plan(award(school="北京大学"),"张三")
         primary=next(q for q in plan.queries if q.site=="eaedu.org.cn")
-        self.assertEqual(primary.text,"高等院校 英语能力大赛 2024 获奖名单")
+        self.assertEqual(primary.text,"高等院校 英语能力大赛 2024 省赛 获奖名单")
         self.assertNotIn("chinaneccs.cn",[q.site for q in plan.queries])
         self.assertTrue(primary.confirm_empty)
         self.assertLessEqual(sum(q.confirm_empty for q in plan.queries),2)
@@ -148,13 +148,16 @@ class SearchConfirmationTests(unittest.TestCase):
         s=ZhipuSearcher(api_key="test",engine="search_std");s.engine_site_fallback=""
         with patch.object(s,"_call",return_value=[]) as call:
             s.confirm_empty("q","eaedu.org.cn")
-            call.assert_called_once_with("q","eaedu.org.cn","search_pro")
+            self.assertEqual(call.call_args_list,[unittest.mock.call("q","eaedu.org.cn","search_pro"),
+                unittest.mock.call("q site:eaedu.org.cn",None,s.engine_open_alternate)])
         self.assertEqual(s.engine,"search_std")
         for site,fallback,engine in ((None,"","search_std"),("eaedu.org.cn","search_pro","search_std"),
                                      ("eaedu.org.cn","","search_pro")):
             s.engine_site_fallback=fallback;s.engine=engine
-            with patch.object(s,"_call") as call:
-                self.assertEqual(s.confirm_empty("q",site),[]);call.assert_not_called()
+            with patch.object(s,"_call",return_value=[]) as call:
+                self.assertEqual(s.confirm_empty("q",site),[])
+                if site:call.assert_called_once_with("q site:"+site,None,s.engine_open_alternate)
+                else:call.assert_not_called()
 
     def test_confirmation_survives_provider_wrapper(self):
         class Provider:

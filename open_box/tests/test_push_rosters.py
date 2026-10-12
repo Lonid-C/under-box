@@ -83,14 +83,14 @@ class PushRosterTests(unittest.TestCase):
         self.assertEqual(found.source_tier, "D")
         self.assertEqual(found.supports, ["学校=哈尔滨工业大学"])
 
-    def test_bare_same_name_at_receiver_stays_identity_unconfirmed(self):
+    def test_bare_same_name_at_receiver_is_not_education_evidence(self):
         claim = push_claim(receiver="哈尔滨工业大学")
         result = {"snippet": "活动嘉宾张三出席。", "publisher": "哈尔滨工业大学",
                   "supports": ["学校=哈尔滨工业大学"], "identity_signals": []}
         llm = SimpleNamespace(complete_json=lambda *args, **kwargs: result)
         found = extract_evidence(claim, SearchHit("https://news.hit.edu.cn/activity.htm", title="活动报道"),
                                  result["snippet"], llm, candidate_name="张三")
-        self.assertEqual(judge.assess(claim, [found]).status, "who")
+        self.assertIsNone(found)
 
     def test_combined_notice_prioritizes_push_download_without_pdf_suffix(self):
         hit = SearchHit("https://yz.csu.edu.cn/info/1015/1410.htm",

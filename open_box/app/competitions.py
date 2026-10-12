@@ -112,6 +112,11 @@ def competition_site(contest: str) -> str | None:
 
 
 def claim_year(claim) -> int | None:
+    # 原文中唯一明确年份优先；模型填写的 year 或日期不能把 2021 改成别的年度。
+    original = set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)",
+                              unicodedata.normalize("NFKC", claim.raw_text or "")))
+    if len(original) == 1:
+        return int(next(iter(original)))
     for value in [(claim.entities or {}).get("year"), claim.date_start, claim.date_label, *(e.partition("=")[2] for e in claim.elements
                    if e.partition("=")[0].strip() in ("年份", "竞赛年份", "获奖年份"))]:
         match = re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d)", str(value or ""))
@@ -134,7 +139,7 @@ def allowed_official_url(item: dict, url: str) -> bool:
 
 def seed_pages(item: dict, claim, *, limit: int = 2) -> list[dict]:
     year = claim_year(claim)
-    level = competition_level(str(claim.raw_text) + str(claim.entities))
+    level = claim_level(claim)
     from .plan import claim_school, school_domain
     school_host = school_domain(claim_school(claim) or (claim.entities or {}).get("school_search_hint", ""))
     school_pages = [p for p in item.get("school_result_pages", [])
@@ -164,6 +169,9 @@ _PROVINCES = "内蒙古 黑龙江 北京 天津 河北 山西 辽宁 吉林 上�
 def claim_province(claim) -> str:
     """只提取简历明确写出的省份，不把学校搜索线索变成参赛省份。"""
     entities = claim.entities or {}
+    original = provinces_in_text(claim.raw_text or "")
+    if len(original) == 1:
+        return next(iter(original))
     explicit = " ".join(str(entities.get(k) or "") for k in ("province", "region", "level", "track"))
     blob = str(claim.raw_text or "") + " " + explicit + " " + " ".join(
         e.partition("=")[2] for e in claim.elements if e.partition("=")[0] in ("省份", "赛区", "级别"))
@@ -187,20 +195,40 @@ def competition_page_mismatch(claim, title: str) -> str:
         return "教师奖项名单与学生奖项身份不符"
     if re.search(selection, title) and not re.search(selection, context):
         return "校内选拔赛名单与所述赛事阶段不符"
-    target_level, page_level = competition_level(context), competition_level(title)
+    target_level, page_level = claim_level(claim), competition_level(title)
     if target_level and page_level and target_level != page_level:
         return "省赛与全国决赛名单级别不符"
     return ""
 
 
 def competition_level(text: str) -> str:
-    if re.search(r"全国(?:总?决赛|[特一二三]等奖)|\bnational\s+(?:first|second|third|grand)\s+(?:prize|award)", text, re.I):
-        return "national"
-    if re.search(r"省赛|省级|省[特一二三]等奖|\bprovincial\b", text, re.I):
-        return "provincial"
-    if re.search(r"国赛|国家级", text):
-        return "national"
-    return ""
+    national = bool(re.search(
+        r"国赛|国家级|国家?[特一二三]等奖|全国(?:赛|总?决赛|奖|[特一二三]等奖)"
+        r"|\bnational\s+(?:contest|competition|finals?|first|second|third|grand)\b", text, re.I))
+    provincial = bool(re.search(r"省赛|省级|省奖|省[特一二三]等奖|\bprovincial\b", text, re.I))
+    # 混合国赛/省赛的汇总页须看本人条目，不能只用标题断定全部赛级。
+    return "" if national == provincial else "national" if national else "provincial"
+
+
+def claim_level(claim) -> str:
+    original = competition_level(claim.raw_text or "")
+    if original:
+        return original
+    values = " ".join(str((claim.entities or {}).get(k) or "") for k in ("level", "stage"))
+    values += " " + " ".join(e.partition("=")[2] for e in claim.elements
+                              if e.partition("=")[0].strip() in
+                              {"阶段", "赛段", "赛级", "级别", "奖级", "奖项级别", "竞赛级别"})
+    return competition_level(values)
+
+
+def provinces_in_text(text: str) -> set[str]:
+    return {p for p in _PROVINCES if re.search(re.escape(p) + r"(?:省|赛区|分赛|省赛)", text)}
+
+
+def result_page_metadata(item: dict | None, url: str) -> dict:
+    item = item or {}
+    return next((p for p in [*item.get("result_pages", []), *item.get("school_result_pages", [])]
+                 if not p.get("inactive") and p["url"].rstrip("/") == url.rstrip("/")), {})
 
 
 def useful_roster_hit(claim, hit) -> bool:
@@ -237,8 +265,8 @@ def catalog_query_specs(item: dict, claim, name: str) -> list[dict]:
     label = label if item.get("quote_search_label") is False else f'"{label}"'
     province = claim_province(claim)
     # 不强制匹配带“全国/大学生”的完整标题：各官网公告常省略这些词。
-    scope = (province + " 省赛" if province and item.get("regional_query")
-             and competition_level(str(claim.raw_text) + str(claim.entities)) == "provincial" else "")
+    level = claim_level(claim)
+    scope = " ".join(filter(None, [province, "省赛"])) if level == "provincial" else "全国" if level == "national" else ""
     out = []
     for index, domain in enumerate(domains):
         out.append(dict(text=" ".join(f'{label} {year} {scope} {terms}'.split()), site=domain,
@@ -427,16 +455,26 @@ def roster_links(html: str, page, claim, *, limit: int | None = None,
     return [value for _, value, _, _ in choices[:limit]]
 
 
-def lookup_summary(item: dict) -> dict:
+def lookup_summary(item: dict, claim=None) -> dict:
     pub = item["publication"]
+    year = claim_year(claim) if claim is not None else None
+    scope = pub.get("scope_note", "")
+    if year:
+        scope = " ".join(filter(None, [scope, (pub.get("year_notes") or {}).get(str(year), "")]))
+    pages = seed_pages(item, claim, limit=100) if claim is not None else item.get("result_pages", [])
+    source = next((p["url"] for p in pages if p.get("year") == year and year),
+                  pub.get("source_url") if claim is None else
+                  next((p["url"] for p in pages if p.get("kind") == "index"), None))
     return dict(id=item["id"],name=item["name"],subjects=item["subjects"],
                 official_urls=item.get("official_urls", []),publication_status=pub["status"],
-                checked_at=pub.get("checked_at"),scope_note=pub.get("scope_note", ""),
-                publication_source_url=pub.get("source_url"),policy_quote=pub.get("policy_quote"),
-                result_urls=[p["url"] for p in item.get("result_pages", [])])
+                target_year=year, target_level=claim_level(claim) if claim is not None else "",
+                target_province=claim_province(claim) if claim is not None else "",
+                checked_at=pub.get("checked_at"),scope_note=scope,
+                publication_source_url=source,policy_quote=pub.get("policy_quote"),
+                result_urls=[p["url"] for p in pages if not p.get("inactive")])
 
 
-def publication_note(item: dict) -> str:
+def publication_note(item: dict, claim=None) -> str:
     pub = item["publication"]
     status = pub["status"]
     lead = {
@@ -448,7 +486,13 @@ def publication_note(item: dict) -> str:
         "public_teams": "官网公开团队/学校/作品赛果；团队获奖不能单独证明本人属于该队。",
         "public_results": "官网已发现获奖公告或查询入口，需继续核对具体年度及附件。",
     }[status]
-    note = f'{item["name"]}：{lead} {pub.get("scope_note", "")}'.strip()
+    summary = lookup_summary(item, claim)
+    year = summary["target_year"]
+    context = f"当前核验年份：{year}；其他年度的名单不用于证明本条。" if year else ""
+    level_label = {"national": "全国赛", "provincial": "省赛"}.get(summary["target_level"])
+    if level_label:
+        context += f"赛级：{summary['target_province']}{level_label}；其他赛级的奖项不能替代。"
+    note = f'{item["name"]}：{lead} {context} {summary["scope_note"]}'.strip()
     if status == "not_public":
         note += f' 官方说明：{pub["policy_quote"]}（{pub["source_url"]}）'
     return note

@@ -27,11 +27,14 @@ SYSTEM = """你在把一份简历拆成可以逐条核验的陈述。
    找到接收学校的同名在读记录，只证明对应就读要素，不代表入学方式也已证明。
    奖学金、荣誉、竞赛**必须各自成条**——它们有独立的公示记录，
    并进学历就永远不会被检索（学历按设计不检索）。
+   本科、硕士、博士每个学位各自一条，即使学校相同也不能合并。elements 明确保留原文的学段/学位及该阶段起止时间。
+   每项奖学金/荣誉独立拆分；原文写明本科/硕士/博士阶段或获奖年度时保留为“获奖学段”“获奖年份”要素，不能从就读阶段或毕业时间猜测获奖。
 6. 模糊表达保持模糊，不要替候选人下定论。
    简历写"参与某项目"就是"参与"，不要写成"负责"。
-7. 只拆职业与学业事实。婚恋、健康、宗教、政治、家庭等内容一律跳过，不要出现在输出里。
+7. 只拆职业与学业事实，包括艺术专业的演出、首演、创作成果以及明确的教学活动。婚恋、健康、宗教、政治、家庭等内容一律跳过，不要出现在输出里。
 8. 无法判断日期时 date_start/date_end 填 null，不要猜测。
-9. 总数不超过 20 条。超了先合并非科研条目：同一机构、同一赛事、同一项目的并成一条。
+9. 总数不超过 20 条。超了先合并非科研条目：同一机构、同一项目的并成一条。
+   同一赛事不同年份、国赛/省赛等不同赛段、不同奖项必须各自成条，不得合并；年份和赛级按各条原文分别填写。
    用户会在页面上勾选要核验哪些，但碎片照样搜不出东西——宁可少拆，不要拆碎。
 10. **科研成果逐项识别**：每篇论文、每件专利、每次学术会议报告各自一条，不同题目绝不合并，
     也不要并进项目、学历或任职里（"在某课题组发表 2 篇论文"要拆出两篇各自的条目，
@@ -57,10 +60,11 @@ SYSTEM = """你在把一份简历拆成可以逐条核验的陈述。
 输出 JSON 对象 {"claims": [Claim, ...]}，不要输出任何解释文字。
 
 Claim 字段：id, raw_text, raw_locator, category, date_label, date_start, date_end, elements, entities
-category 只能取：学历 校内荣誉 奖学金 学生工作 竞赛 论文 专利 会议 项目 开源项目 实习 任职
+category 只能取：学历 校内荣誉 奖学金 学生工作 竞赛 论文 专利 会议 项目 开源项目 实习 任职 教学活动 艺术成果 著作
 entities 形如 {"org":"某大学","dept":"计算机学院","role":"部长","level":"校级"}
 **这些键直接决定检索策略能不能展开，务必填准**：
-  GitHub     → github（用户名，从 github.com/<用户名> 里取）、repo（user/repo）
+  GitHub     → provided_urls（本条项目明确关联的仓库、PR、commit 原始链接），repo（user/repo）。不要从仓库 owner 猜测候选人的账号，也不要把个人主页链接传播给所有项目。
+  强主张     → elements 分别保留事实锚点、个人角色、工作范围、修饰语、量化指标；“项目存在/本人参与”不等于“主导/核心/独立/自研”。角色、范围和指标必须是原文，不能从技术词、学校或经历长短推断。
   自提供链接 → provided_urls（简历里出现的个人主页 / 公示链接原样列入）
   竞赛      → contest（赛事全称）、team（队伍名，若有）、role（担任的角色）、
               year（原文明确的比赛年份）、edition（届次）、track（赛道/组别）、
@@ -78,8 +82,9 @@ entities 形如 {"org":"某大学","dept":"计算机学院","role":"部长","lev
               form（口头报告/墙报/特邀报告/分会场主席/参会）、year、location（举办地，若有）、
               award（会议奖项，若有）
   项目      → title（项目名称）；没有公开仓库或开源声明时使用本类
+  著作      → title（书籍/教材名称）、role（主编/执行主编/编著等原词）、publisher（仅该书明确写出的出版社）、isbn（原文明示），每本书独立成条；多家出版社不可猜测与各本书的对应，总出版数量单独核验。参考书目/使用教材不是本人著作。
   开源项目  → repo（仓库路径，形如 user/repo）、title（项目名称）；仅限明确开源的项目
-  实习/任职 → company（公司全称）、role（岗位）
+  实习/任职 → company（原文明示的公司全称，不将品牌/集团简称猜成注册主体）、role（岗位）、location（原文明示的工作地点）、dept（部门）；保留公司、岗位和起止时间为分别核对的要素。实习后续只整理公司公开联系方式供人工背调。
   校内/学历 → org（机构全称）、dept（院系）
   凡本条明确提到所属学校（含竞赛/奖项/学生组织），另填 school（学校本名，去掉院系/学生会后缀）；不要把主办方当学校，也不要从另一条经历猜所属学校。
 **两个不同的赛事、两家不同的公司，各自成一条，不要合并**——合并后的
@@ -98,7 +103,23 @@ def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
     默认的 4096 从来没露馅。max_tokens 只是上限不是成本（按真实输出计费），
     放开只防截断。
     """
-    raw = llm.complete_json(SYSTEM, wrap_untrusted(resume_text), max_tokens=12000)
+    # Faculty profile pages often put education in a sidebar, the current post in a
+    # self-introduction, and publications in a separate list. Give the model an
+    # explicit coverage objective so it does not focus only on the introduction.
+    webpage = resume_text.lstrip().startswith("网页标题：")
+    system = SYSTEM
+    if webpage:
+        system += """
+
+网页教师/学者主页的栏目覆盖要求（仅提取页面明示内容，不推断缺失事实）：
+· 按栏目逐段阅读正文，包括侧栏和自我介绍；不要只拆第一段简介。常见标题有“教育背景/教育经历/学历/学位”“工作经历/任职/主要职务/自我介绍”“出版物/发表论文/科研成果”，也可能是英文 Education, Employment, Publications, Biography。
+· 学历：教育背景中每个学位单独一条“学历”，保留学校、学位、专业和页面明确写出的年份；没有年份就不补。若栏目只列“学校+学位”，也要拆出，不因缺少时间而漏掉。
+· 出版物：每一篇列出的论文单独一条“论文”，raw_text 保留完整书目信息；从原文明示提取标题、作者、年份、刊物/会议、卷期页码、DOI 和收录分级。不能把多篇论文合成一条，也不能把研究方向或课程当论文。
+· 工作和任职：页面明确写出的当前职称、院系/学院及过去任职逐项提取为“任职”；带有起止时间的每段经历独立成条。自我介绍中的“曾任/曾在/加入/任职于”等也要识别。仅有当前职称时只记录当前职位，不推测过往经历或起始年份。
+· 在输出前检查上述每个实际存在的栏目：有学历内容就应有学历条目，有出版物清单就逐篇产生论文条目，有明确过往经历就有对应任职条目。忽略普通课表、导航、联系方式和纯研究兴趣；具体授课活动或艺术成果按对应类别保留。
+· 侧栏与自我介绍重复同一学历/职务时只保留一条，优先采用信息更完整的原文；介绍中“曾在期刊发表论文”只作概述，不要代替出版物清单中的逐篇条目。
+"""
+    raw = llm.complete_json(system, wrap_untrusted(resume_text), max_tokens=12000)
     if isinstance(raw, dict):
         # JSON 模式只能返回对象：约定键是 claims，模型偶尔换个键名（"陈述"、"items"……），
         # 取第一个"由对象组成的数组"，别因为键名不同就拆出 0 条
@@ -135,7 +156,10 @@ def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
             LAST_SPLIT["dropped"].append(f"{item.get('category') or '无类别'}"
                                          + (f"（{loc} 不合规）" if loc else ""))
             continue
-    return add_research_ids(claims)
+    from .github_audit import bind_input
+    from .claim_scope import enrich_claim
+    claims = [correct_activity_category(c) for c in add_research_ids(claims)]
+    return [enrich_claim(c) for c in bind_input(claims, resume_text)]
 
 
 # 最近一次拆分的统计（模型给了几条、丢了哪些），流水线写进进度日志——
@@ -143,7 +167,7 @@ def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
 LAST_SPLIT: dict = {}
 
 _CATEGORIES = {"学历", "校内荣誉", "奖学金", "学生工作", "竞赛", "论文", "专利", "会议", "项目",
-               "开源项目", "实习", "任职"}
+               "开源项目", "实习", "任职", "教学活动", "艺术成果", "著作"}
 # 模型偶尔用简历栏目名当类别。只收含义确定的别名；拿不准的（如"获奖"）不猜。
 _CATEGORY_ALIASES = {
     "教育经历": "学历", "教育背景": "学历", "学位": "学历",
@@ -155,7 +179,42 @@ _CATEGORY_ALIASES = {
     "工作经历": "任职", "任职经历": "任职", "工作经验": "任职", "职务": "任职", "社会兼职": "任职",
     "实习经历": "实习",
     "奖学金": "奖学金", "竞赛获奖": "竞赛", "学科竞赛": "竞赛",
+    "教学经历": "教学活动", "授课经历": "教学活动", "演出经历": "艺术成果", "艺术经历": "艺术成果",
+    "专著": "著作", "教材": "著作", "书籍": "著作",
 }
+
+
+def correct_activity_category(claim):
+    """仅修正明显错放进项目的活动；工程/科研项目保留项目性质。"""
+    if claim.category not in {'项目', '开源项目'}:
+        return claim
+    text = claim.raw_text
+    concrete_project = re.search(r'(?:科研|研究|基金|课题|教学改革|教改)项目|课题(?:编号|号)|'
+                                 r'(?:开发|研发|实现|构建)[^。；;\n]{0,30}(?:系统|软件|平台|算法|模型|工具)|'
+                                 r'(?:软件|系统|平台|算法|模型|工具)[^。；;\n]{0,20}(?:开发|研发)', text, re.I)
+    if concrete_project:
+        return claim
+    category = None
+    if re.search(r'公开课|大师班|授课|讲授|执教|教学活动|教学论坛|教学艺术周|开设[^。；;\n]{0,15}课程', text):
+        category = '教学活动'
+    elif re.search(r'首演|演奏|音乐会|巡演|独奏|指挥|作曲|艺术展|参展|舞台演出|艺术创作', text):
+        category = '艺术成果'
+    if not category:
+        return claim
+    ent = {k: v for k, v in claim.entities.items() if not k.startswith('github') and k != 'repo'}
+    elements = [re.sub(r'^项目名称(?=\s*[=：:])', '活动名称' if category == '教学活动' else '作品/演出', e)
+                for e in claim.elements]
+    return claim.model_copy(update={'category': category, 'entities': ent, 'elements': elements})
+
+
+SYSTEM += """
+
+分类边界：项目/开源项目只用于原文确实描述的具体工程、软件、科研或课题项目，不能作为无法分类的兜底。
+公开课、大师班、授课活动归“教学活动”；音乐会、演奏、世界首演、作曲、艺术展等归“艺术成果”。
+例：“组织徐洪武音钢琴公开课受好评”是教学活动；“世界首演 Frederic Rzewski、高平的作品”是艺术成果，不能归项目。
+普通课表/课程名称列表不拆；具体授课、组织公开课、艺术演出等职业事实可拆，保留可检索的课程、人物、作品、举办机构和原文评价。
+不要虚构项目名或把艺术活动变成软件项目。GitHub 账号、熟悉 GitHub 不表示每个项目都有仓库；只有项目原段落明确提供仓库/PR/commit或说明源码在 GitHub，才关联该项目。
+"""
 
 
 # ── 规则侧补识别 ─────────────────────────────────────────────────────────
@@ -206,8 +265,7 @@ def add_research_ids(claims: list[Claim]) -> list[Claim]:
             if not ent.get("patent_no") and (m := _PATENT_NO.search(blob)):
                 ent["patent_no"] = re.sub(r"[\s,]+", "", m.group(1)).upper()
         elif c.category == "任职":
-            # 实习不进入核验（见 pipeline.skip_categories）；模型偶尔把实习归成任职，
-            # 那样它会被当成正式任职去检索。原文或岗位里明说实习的，改回实习。
+            # 实习进入公司联系方式/人工背调流程；不得当作正式任职检索。
             role = ent.get("role") if isinstance(ent.get("role"), str) else ""
             if _INTERN.search((c.raw_text or "") + " " + role):
                 update["category"] = "实习"

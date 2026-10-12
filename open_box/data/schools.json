@@ -38,6 +38,12 @@
       ]
     },
     {
+      "name": "阿尔托大学",
+      "aliases": ["芬兰阿尔托大学", "Aalto University"],
+      "domain": "aalto.fi",
+      "dept_domains": []
+    },
+    {
       "name": "清华大学",
       "aliases": [
         "清华"
@@ -325,6 +331,12 @@
     },
     {
       "name": "华南理工大学",
+      "faculty_directories": [{
+        "name": "工商管理学院师资名录",
+        "url": "https://cnsba.scut.edu.cn/gygcx_24832/list.htm",
+        "fields": ["工业工程", "管理科学与工程"],
+        "_verified": "2026-10-09 官网名录提供教师主页链接，含导师培养记录；目录本身不作学历证据"
+      }],
       "aliases": [
         "华工",
         "华南理工"
@@ -548,7 +560,8 @@
     {
       "name": "四川大学",
       "aliases": [
-        "川大"
+        "川大",
+        "Sichuan University"
       ],
       "domain": "scu.edu.cn",
       "dept_domains": [
@@ -3055,7 +3068,7 @@
     },
     {
       "name": "成都理工大学",
-      "aliases": [],
+      "aliases": ["Chengdu University of Technology"],
       "domain": "cdut.edu.cn",
       "province": "四川",
       "push_qualified": true

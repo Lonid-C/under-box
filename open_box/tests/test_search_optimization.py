@@ -95,6 +95,8 @@ class PaperIdentityTests(unittest.TestCase):
         self.assertEqual(rows[0].author_records[1]["institutions"],[])
         self.assertEqual(rows[0].author_records[0]["position"],1)
         self.assertEqual(len(rows[0].registry_sources),2)
+        e=from_hit(paper(),rows[0])
+        self.assertTrue(all(u in e.snippet for u in rows[0].registry_sources))
 
     def test_conflicting_title_same_doi_does_not_merge(self):
         cross=hit(); cross.author_records=tuple({**r,"institutions":[]} for r in cross.author_records)

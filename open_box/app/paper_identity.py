@@ -151,6 +151,7 @@ def from_hit(claim, hit):
     if not checked.allowed:
         return None
     lines = ["论文登记题名：" + hit.title, "DOI：" + doi, "刊物：" + hit.venue, "发表年份：" + hit.year]
+    lines += ["公开登记来源：" + url for url in hit.registry_sources]
     lines += ["作者 " + str(r.get("position")) + "：" + r["name"] + "；单位：" + "、".join(r.get("institutions", [])) for r in hit.author_records]
     return Evidence(url=hit.registry_sources[0], title=hit.title, publisher="Crossref / OpenAlex 公开登记",
                     source_tier="C", snippet="\n".join(lines), identity_signals=checked.signals,

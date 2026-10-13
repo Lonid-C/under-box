@@ -25,6 +25,7 @@ WEIGHTS: dict[str, int] = {
     "年级一致": 1,
     "队友或合作者一致": 2,
     "具体经历一致": 2,
+    "英文作者联合关联": 3,
     "候选人自提供该链接": 2,
     "账号由候选人提供": 2,
 }
@@ -68,6 +69,8 @@ def _has_identity_anchor(ev) -> bool:
 def score_evidence(ev: Evidence) -> Evidence:
     """按规则重算 identity_score，覆盖模型给出的任何数值。"""
     ev.identity_score = identity_score(ev.identity_signals, ev.identity_conflicts)
+    if ev.paper_record is not None:
+        ev.identity_score = min(ev.identity_score, 3)  # 英文姓名与中文本人仍需人工确认
     return ev
 
 
@@ -388,7 +391,16 @@ def assess(
         evidences = [ev for ev in evidences if employment_record(claim, ev) or ev.contradicts]
     from .faculty_recall import book_supports,book_contradicts
     evidences = [ev.model_copy(update={'supports': book_supports(claim,ev)}) for ev in evidences]
+    from .verification_agents import teaching_supports
+    evidences = [ev.model_copy(update={"supports": teaching_supports(claim, ev)}) for ev in evidences]
     evidences = [ev.model_copy(update={'contradicts': book_contradicts(claim,ev)}) for ev in evidences]
+    from .paper_identity import supports_for
+    for ev in evidences:
+        if ev.paper_record is not None:
+            ev.supports = supports_for(claim, ev.paper_record)
+            ev.identity_signals = ["英文作者联合关联"]
+            ev.source_tier = "C"
+            score_evidence(ev)
     if claim.category=='学历':
         from .identity import own_education_record
         name=claim.entities.get('candidate_name') or (claim.entities.get('candidate_identity_context') or {}).get('candidate_name','')
@@ -399,7 +411,7 @@ def assess(
             ev.source_tier = tier_for_record(ev.github_record)
     if rescore:
         for ev in evidences:
-            if ev.github_record is None and (claim.entities.get("candidate_identity_context") or {}).get("policy") == "person_v2":
+            if ev.github_record is None and ev.paper_record is None and (claim.entities.get("candidate_identity_context") or {}).get("policy") == "person_v2":
                 checked = check_person(claim, ev.url, ev.snippet, ev.title, published_at=ev.published_at)
                 ev.identity_signals = validated_signals(ev.identity_signals, checked)
             for sig in corroboration_signals(claim, ev):

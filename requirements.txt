@@ -7,3 +7,5 @@ lxml
 pymupdf
 python-docx
 truststore
+pypinyin>=0.51,<1
+xlrd>=2,<3

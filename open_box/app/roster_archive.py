@@ -33,7 +33,7 @@ def archive_text(data: bytes, *, hint: str = "", pdf_parser, office_parser,
             for name in names[:500]:
                 path = PurePosixPath(name)
                 if (path.is_absolute() or ".." in path.parts or name.startswith("-")
-                        or not re.search(r"\.(?:pdf|xlsx|docx|zip|rar)$",name,re.I)
+                        or not re.search(r"\.(?:pdf|xlsx?|docx?|zip|rar)$",name,re.I)
                         or re.search(r"教师|组织|优胜学校",name)):
                     continue
                 if re.search(r"算法|C/C\+\+|C\+\+|Java|Python|程序|软件",hint,re.I) and re.search(r"设计赛|电子类",name):
@@ -79,6 +79,9 @@ def archive_text(data: bytes, *, hint: str = "", pdf_parser, office_parser,
                                         _depth=_depth+1,_deadline=deadline)
                 else:
                     text = pdf_parser(blob) if blob.startswith(b"%PDF-") else office_parser(blob)
+                    if not text and blob.startswith(b"\xd0\xcf\x11\xe0"):
+                        from .public_documents import legacy_office_text
+                        text = legacy_office_text(blob)
                 if text and text.strip():
                     out.append(f"\n［名单包内文件：{name}］\n{text}")
             if zipped:

@@ -809,6 +809,20 @@ def build_plan(
                 variant=bool(variant_index),
             ))
 
+    # 精确学段查询可能漏掉附件未被索引的公示；实名校内入口和明确毕业年
+    # 只用于召回，正文仍须通过学校、学段及年份约束。推免保留名单优先顺序。
+    if claim.category == "学历" and ctx.get("school") and ctx.get("name") and not roster_first:
+        site = _resolve_site("school", claim, ctx)
+        probes = [(f'"{ctx["name"]}"', 108, "实名校内入口")]
+        end = (claim.date_end or "")[:4]
+        if end.isdigit(): probes.insert(0, (f'"{ctx["name"]}" {end} 毕业', 110, "原文明示毕业年"))
+        for text, weight, purpose in probes:
+            key = (text, site, "web")
+            if key not in seen:
+                seen.add(key)
+                queries.append(Query(text=text, site=site, round=2, weight=weight,
+                                     source="education_navigation", purpose=purpose + "；不得据检索词推断就读或年份"))
+
     # 教师主页经常省略入学方式；仍可从推免、导师学生列表、硕博连读记录
     # 发现学历线索。只增加查询渠道，不给原陈述补“保研”或猜测年份。
     education_routes = prof.identity == "researcher" and claim.category == "学历"

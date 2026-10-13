@@ -297,6 +297,9 @@ class SearchHit:
     authors: tuple[str, ...] = ()
     venue: str = ""
     year: str = ""
+    author_records: tuple[dict, ...] = ()  # 单位必须绑定该作者，不能借同篇其他作者的单位
+    registry_sources: tuple[str, ...] = ()
+    publication_type: str = ""
 
 
 class Searcher(Protocol):
@@ -842,15 +845,20 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
 
 def _crossref_hit(it: dict) -> SearchHit | None:
     """Crossref 的一条 work 记录 → SearchHit（标题查询与 DOI 精确查询共用）。"""
+    from urllib.parse import quote
     paper_title = " ".join(it.get("title") or []).strip()
     doi = (it.get("DOI") or "").strip()
     if not paper_title or not doi:
         return None
     authors = []
+    author_records = []
     for a in it.get("author") or []:
         name = " ".join(x for x in (a.get("given"), a.get("family")) if x).strip()
         if name:
             authors.append(name)
+            author_records.append({"name": name, "given": a.get("given") or "", "family": a.get("family") or "",
+                "position": len(authors), "institutions": [v.get("name") for v in a.get("affiliation", []) if v.get("name")],
+                "orcid": a.get("ORCID") or ""})
     venue = " ".join(it.get("container-title") or []).strip()
     parts = ((it.get("published") or {}).get("date-parts") or [[]])[0]
     published = "-".join(str(x) for x in parts) if parts else ""
@@ -871,6 +879,8 @@ def _crossref_hit(it: dict) -> SearchHit | None:
         publisher=it.get("publisher") or "Crossref", content=content,
         official_url=official_url, authors=tuple(authors), venue=venue,
         year=str(parts[0]) if parts else "",
+        author_records=tuple(author_records), publication_type=it.get("type") or "",
+        registry_sources=("https://api.crossref.org/works/" + quote(doi, safe="/"),),
     )
 
 
@@ -941,12 +951,18 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
         if not paper_title:
             continue
         authors = []
+        author_records = []
         for a in it.get("authorships") or []:
             name = ((a.get("author") or {}).get("display_name") or "").strip()
             if name:
                 insts = "、".join(
                     (i.get("display_name") or "") for i in (a.get("institutions") or []))
                 authors.append(f"{name}（{insts}）" if insts else name)
+                author_records.append({"name": name, "position": len(authors),
+                    "institutions": [i.get("display_name") for i in a.get("institutions", []) if i.get("display_name")],
+                    "institution_records": [{"name": i.get("display_name") or "", "ror": i.get("ror") or ""}
+                                            for i in a.get("institutions", [])],
+                    "orcid": (a.get("author") or {}).get("orcid") or ""})
         loc = (it.get("primary_location") or {}).get("source") or {}
         venue = (loc.get("display_name") or "").strip()
         landing = ((it.get("primary_location") or {}).get("landing_page_url") or "").strip()
@@ -966,7 +982,9 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
             publisher=venue or "OpenAlex", content=content,
             official_url=landing if landing.startswith(("https://", "http://")) else "",
             authors=tuple(authors), venue=venue,
-            year=str(it.get("publication_year") or "")))
+            year=str(it.get("publication_year") or ""), author_records=tuple(author_records),
+            registry_sources=(str(it.get("id") or "").replace("https://openalex.org/", "https://api.openalex.org/works/"),),
+            publication_type="journal-article" if loc.get("type") == "journal" and it.get("type") == "article" else it.get("type") or ""))
     return out[:max(1, int(limit))]
 
 
@@ -998,6 +1016,19 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
             previous = out[positions[key]]
             if not previous.official_url and hit.official_url:
                 previous.official_url = hit.official_url
+            # 同 DOI 且题名一致，按作者全名逐人合并；不把整篇机构列表归给第一作者。
+            if norm(previous.title) == norm(hit.title):
+                from copy import deepcopy
+                records = [deepcopy(r) for r in previous.author_records]
+                by_name = {norm(r["name"]): r for r in records}
+                for other in hit.author_records:
+                    row = by_name.get(norm(other["name"]))
+                    if row is not None:
+                        row["institutions"] = list(dict.fromkeys([*row.get("institutions", []), *other.get("institutions", [])]))
+                        row["institution_records"] = list(other.get("institution_records") or row.get("institution_records") or [])
+                        if not row.get("orcid"): row["orcid"] = other.get("orcid") or ""
+                previous.author_records = tuple(records or hit.author_records)
+                previous.registry_sources = tuple(dict.fromkeys([*previous.registry_sources, *hit.registry_sources]))
             continue
         positions[key] = len(out)
         out.append(hit)
@@ -1023,7 +1054,50 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
 
     out = [hit for hit in out if relevance(hit)[0] >= 0.75]
     out.sort(key=relevance, reverse=True)
-    return out[:max(1, int(limit))]
+    selected = out[:max(1, int(limit))]
+    from .paper_identity import latin_names, compact
+    aliases = {compact(n) for n in latin_names(author)}
+    resolved = {}; remaining = 3
+    for hit in selected:
+        for row in hit.author_records:
+            if compact(row.get("name")) not in aliases:
+                continue
+            for inst in row.get("institution_records", []):
+                key = inst.get("ror") or ""
+                if key not in resolved and remaining:
+                    remaining -= 1; resolved[key] = institution_record(key)
+                if resolved.get(key): inst.update(resolved[key])
+    return selected
+
+
+_INSTITUTIONS = {}
+_INSTITUTIONS_LOCK = threading.Lock()
+
+
+def institution_record(ror: str) -> dict:
+    """ROR 公开机构目录只用于域名对应，不证明任何人的就读或获奖。"""
+    p = urlparse(ror)
+    if p.scheme != "https" or p.netloc != "ror.org" or not re.fullmatch(r"/[a-z0-9]{9}", p.path) or p.query or p.fragment:
+        return {}
+    with _INSTITUTIONS_LOCK:
+        cached = _INSTITUTIONS.get(ror)
+        if cached and time.monotonic() - cached[0] < 3600: return dict(cached[1])
+    import httpx
+    source = "https://api.ror.org/v2/organizations" + p.path
+    try:
+        response = httpx.get(source, headers={"User-Agent": UA, "Accept": "application/json"}, timeout=8)
+        response.raise_for_status(); data = response.json()
+        if data.get("id") != ror: return {}
+        domains = list(data.get("domains") or [])
+        domains += [urlparse(r.get("value") or "").hostname for r in data.get("links", []) if r.get("type") == "website"]
+        result = {"domains": list(dict.fromkeys(d.lower() for d in domains if isinstance(d, str) and re.fullmatch(r"[a-zA-Z0-9.-]+", d))),
+                  "source": source}
+        with _INSTITUTIONS_LOCK:
+            if len(_INSTITUTIONS) >= 128: _INSTITUTIONS.pop(next(iter(_INSTITUTIONS)))
+            _INSTITUTIONS[ror] = (time.monotonic(), result)
+        return result
+    except Exception:
+        return {}
 
 
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_\-]+)""", re.I)
@@ -1168,9 +1242,11 @@ class PageFetcher:
                         self.failures[url] = "返回内容不是有效 PDF"
                         return None
                     if r.content.startswith(b"\xd0\xcf\x11\xe0"):
-                        # 旧版 DOC/XLS 不作二进制文本解码。
-                        self.failures[url] = "暂不支持旧版 DOC/XLS 文件"
-                        return None
+                        from .public_documents import legacy_office_text
+                        text = legacy_office_text(r.content)
+                        if not text:
+                            self.failures[url] = "旧版 DOC/XLS 未读到文本（读取器缺失、超限或文件受保护）"
+                        return text
                     if (r.content.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"))
                             or r.content[:4] == b"RIFF" and r.content[8:12] == b"WEBP"):
                         from .ocr import recognize_image

@@ -206,8 +206,12 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         return None
     if claim.category == "竞赛" and competition_page_mismatch(claim, hit.title or ""):
         return None
-    if claim.category == '竞赛' and competition_page_mismatch(claim, hit.title or ""):
-        return None
+    if claim.category == "论文" and hit.author_records:
+        from .paper_identity import from_hit
+        evidence = from_hit(claim, hit)
+        if evidence:
+            evidence.accessed_at = _now()
+        return evidence
     if claim.category == "学历" and not education_school_matches(
             claim, hit.url, page_text, hit.title, school_domains):
         return None
@@ -432,6 +436,8 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     ev.supports = academic_supports(claim, ev)
     from .faculty_recall import book_supports
     ev.supports = book_supports(claim,ev)
+    from .verification_agents import teaching_supports
+    ev.supports = teaching_supports(claim, ev)
     from .faculty_recall import book_contradicts
     ev.contradicts = book_contradicts(claim,ev)
     return judge.score_evidence(ev)
@@ -718,7 +724,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                       organizer_hosts: set[str], *, candidate_name: str = "",
                       budget: Budget | None = None, progress=None,
                       seen_urls: set[str] | None = None,
-                      school_domains: dict[str, str] | None = None) -> list[Evidence]:
+                      school_domains: dict[str, str] | None = None,
+                      searcher: Searcher | None = None) -> list[Evidence]:
     """把已选中的页面**按域分组并发回读**（同域串行由 fetcher 的按域锁保证），
     再逐页交给模型逐字摘录。抓取可以并行，模型抽取仍是串行，保持确定性。"""
     from .source_guard import excluded, claim_sources
@@ -766,6 +773,47 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             else:
                 usable.append((hit, html))
         fetched = usable
+    # 旧版校园 URL 迁移时，以公告原标题寻找同一机构的新地址；不猜 URL，
+    # 不绕过 robots/403/SSL，搜索和回读仍扣本条预算，最多修复两个失效入口。
+    seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
+    recovered = []; recovery_attempts = 0
+    if searcher and budget and claim.category in {"学历", "著作", "教学活动"}:
+        got = {h.url for h, _ in fetched}
+        for old in selected[:4]:
+            reason = incomplete.get(old.url) or getattr(fetcher, "failures", {}).get(old.url, "")
+            domain = _base_domain(_host_of(old.url))
+            title = re.sub(r"\s+", " ", old.title or "").strip()[:160]
+            if (old.url in got or not (re.search(r"\b(?:404|410)\b", reason) or old.url in incomplete)
+                    or not judge.is_school_host(old.url) or len(title) < 6
+                    or recovery_attempts >= 2 or not budget.can_search() or not budget.can_read()):
+                continue
+            recovery_attempts += 1
+            budget.note_search()
+            if progress: progress(f"    原链接失效，按原标题查同校新地址：{title} · {domain}")
+            try:
+                replacements = searcher.search('"' + title.replace('"', '') + '"', site=domain)
+            except SearchFiltered:
+                if progress: progress("    原标题补查被搜索服务过滤，保留读取失败状态")
+                continue
+            for new in replacements:
+                if (not url_in_domain(new.url, domain) or excluded(new.url, sources, new.publisher)
+                        or _url_key(new.url) in seen_urls): continue
+                # 需要同一公告题名，或本条明确书名；没有靠摘要换地址的猜测。
+                key = re.sub(r"[^\w\u3400-\u9fff]", "", title).casefold()
+                blob = re.sub(r"[^\w\u3400-\u9fff]", "", new.title + new.snippet).casefold()
+                book = str((claim.entities or {}).get("title") or "") if claim.category == "著作" else ""
+                if key not in blob and not (book and book in new.title + new.snippet): continue
+                if not budget.can_read(): break
+                budget.note_read(); seen_urls.add(_url_key(new.url))
+                try: body = fetcher.get(new.url)
+                except Exception: body = None
+                if not body: continue
+                text = extract_main_text(body) if "<" in body[:2000] else body
+                if len(text.strip()) < 200 and re.search(r"Loading|正在加载|enable.*JavaScript", text, re.I): continue
+                recovered.append((new, body))
+                if progress: progress(f"    已回读同校新地址：{new.url}（仍逐项核对本人及经历）")
+                break
+    fetched.extend(recovered)
     # robots/超时/访问失败时，可保留引擎已公开收录的本人摘要；标注未回读，降级为线索。
     # 只在摘要里出现本人姓名时才送去抽取，并在标题上写明"摘要、未回读原文"。
     snippet_urls: set[str] = set()
@@ -784,7 +832,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     evidences: list[Evidence] = []
     # 下载按域并发；提取始终按选页顺序，避免域分组改变有序模型桩或证据展示顺序。
     order = {hit.url: i for i, hit in enumerate(selected)}
-    fetched.sort(key=lambda pair: order[pair[0].url])
+    fetched.sort(key=lambda pair: order.get(pair[0].url, len(order)))
     seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
     follow_budget = budget or Budget(max_searches=0, max_page_reads=4)
     followed = 0
@@ -827,9 +875,15 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
         if has_name or (not links and claim.category != "学历"
                         and (not competition or has_team_anchor)):
             from .person_scope import check_person
-            checked = check_person(claim, hit.url, text, hit.title,
-                                   school_domains=school_domains, final=False)
-            if not checked.allowed and progress:
+            if claim.category == "论文" and hit.author_records:
+                from .paper_identity import from_hit
+                structured = from_hit(claim, hit)
+                checked = None if structured else check_person(claim, hit.url, text, hit.title,
+                                                               school_domains=school_domains, final=False)
+            else:
+                checked = check_person(claim, hit.url, text, hit.title,
+                                       school_domains=school_domains, final=False)
+            if checked and not checked.allowed and progress:
                 progress(f"    排除未能关联本人的来源：{checked.reason} · {hit.url}")
             ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
                                   candidate_name=candidate_name, school_domains=school_domains)
@@ -864,10 +918,11 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             children.append((linked, roster, depth + 1))
         queue.extendleft(reversed(children))
     if progress:
-        read_ok = len(fetched) - len(snippet_urls)
+        read_ok = len(fetched) - len(snippet_urls) - len(recovered)
         progress(f"    回读 {len(selected)} 页：成功 {read_ok}，失败/未完成 "
                  f"{len(selected) - read_ok}；跟进名单链接 {followed} 个、失败 {failures}；"
                  f"提取证据 {len(evidences)} 条"
+                 + (f"（另回读迁移地址 {len(recovered)} 页）" if recovered else "")
                  + (f"（其中 {len(snippet_urls)} 页只用了搜索摘要）" if snippet_urls else ""))
         # 失败原因必须看得见：robots、超时、404、验证码、时间预算用尽是完全不同的问题，
         # 之前日志只给一个"失败/未完成"计数，排查时只能猜。
@@ -1040,6 +1095,10 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
 
     def read_batch(limit):
         selected = []
+        # 大批回读先留两个原有读页名额，以便真正读取公告迁移后的地址。
+        # 首批仍照常读取；未用掉的预留名额由最后的 read_batch 消化。
+        if limit > 4 and claim.category in {"学历", "著作", "教学活动"} and budget.can_search():
+            limit -= 2
         while len(selected) < limit and budget.can_read():
             available = []
             for bucket in per_query:
@@ -1063,7 +1122,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 selected.append(hit)
         found = _read_and_extract(
             claim, selected, fetcher, llm, organizer_hosts, candidate_name=candidate_name,
-            budget=budget, progress=say, seen_urls=seen_urls, school_domains=school_domains)
+            budget=budget, progress=say, seen_urls=seen_urls, school_domains=school_domains,
+            searcher=searcher)
         evidences.extend(found)
         # 短的实名/导师查询定位到届别后，先读当年的整批录取材料，避免继续盲扫年代。
         for ev in found:

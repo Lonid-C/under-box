@@ -145,6 +145,7 @@ class Evidence(BaseModel):
     origin_url: str | None = None   # 转载时填原始出处，用于去重
     extraction_method: Literal["text", "ocr", "search_snippet"] = "text"
     github_record: dict | None = None   # 只由受限公共 API 适配器填入；LLM 输出不接入
+    paper_record: dict | None = None    # 原始论文登记字段；身份与要素由规则重算
 
     @field_validator("identity_signals", "identity_conflicts", "supports", "contradicts",
                      mode="before")

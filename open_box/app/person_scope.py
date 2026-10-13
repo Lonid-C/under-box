@@ -32,7 +32,7 @@ def _name_patterns(name):
     for n in _name_variants(name):
         if re.search(r"[\u4e00-\u9fff]", n):
             # 唐思远不是唐思；“唐思于/唐思现任”仍是有效的本人叙述。
-            tail = r"(?=$|[^\u4e00-\u9fff]|于|是|为|现任|目前|担任|获得|荣获|就读|来自|同学|老师|教授|副教授|助理教授|讲师|研究员|博士|硕士|本科|参加|参与|曾|的|主编|执行主编|编著|编写|通过|攻读|毕业|进入|在)"
+            tail = r"(?=$|[^\u4e00-\u9fff]|于|是|为|现任|目前|担任|获得|荣获|就读|来自|同学|老师|教授|副教授|助理教授|讲师|研究员|博士|硕士|本科|参加|参与|曾|的|主编|执行主编|编著|编写|通过|攻读|毕业|进入|讲授|授课|面向|承担|在)"
             prefixes = ("本科生", "研究生", "博士生", "硕士生", "副教授", "助理教授", "教授", "讲师",
                         "研究员", "导师", "作者", "成员", "队长", "负责人", "志愿者", "同学", "学生", "的")
             head = r"(?:(?<![\u4e00-\u9fff])|" + "|".join("(?<="+p+")" for p in prefixes) + ")"
@@ -235,6 +235,9 @@ def validated_signals(signals, check):
 
 
 def filter_person_evidence(claim, evidence):
+    if evidence.paper_record is not None:
+        from .paper_identity import author_match
+        return author_match(claim, evidence.paper_record).allowed
     if evidence.github_record is not None:
         return True  # 公共 API 适配器已有独立的账号和作者门禁。
     return check_person(claim, evidence.url, evidence.snippet, evidence.title,

@@ -189,7 +189,7 @@ AGENTS = (
         "项目存在、参与、主导及指标分别核对；只有原文明确提及本项目仓库时才提供GitHub入口，不用数量评价能力。"),
     VerificationAgent("teaching", "教学经历核验", ("教学活动",),
         ("独立课程/活动主办方", "公开课程与教学记录"),
-        "分别核对课程、授课/组织/指导角色及时间；学生学历不是导师本人学历，出版教材不证明实际授课，活动存在不能证明评价或最长等修饰语。"),
+        "分别核对课程、授课/组织/指导角色及时间；硕士生导师只证明指导角色，不证明讲授研究生课程，专业生/全院不能推定本科授课对象。学生学历不是导师本人学历，出版教材不证明实际授课，活动存在不能证明评价或最长等修饰语。"),
     VerificationAgent("art", "艺术成果核验", ("艺术成果",),
         ("独立主办方节目单", "公开作品/演出记录"),
         "核对具体作品、创作或演出角色及时间；组织演出不等于创作或首演，引用作品不是作者，首演等修饰语需独立材料。"),
@@ -258,6 +258,41 @@ def employment_supports(claim, evidence):
                                   r"\b(?:since|from|appointed in|joined in)\s+(?:19|20)\d{2}", body, re.I)
             if not dated_job:
                 continue
+        kept.append(element)
+    return kept
+
+
+def teaching_supports(claim, evidence):
+    """逐项约束教学字段；导师身份不升级为授课对象，课程不从职称推断。"""
+    if claim.category != "教学活动":
+        return evidence.supports
+    from .person_scope import _name_patterns, _records
+    name = claim.entities.get("candidate_name") or (claim.entities.get("candidate_identity_context") or {}).get("candidate_name", "")
+    patterns = _name_patterns(name)
+    rows = _records(evidence.snippet, patterns) if patterns else [evidence.snippet]
+    rows = [r for r in rows if not re.search(re.escape(name) + r"(?:的导师|的学生|在.{0,20}指导下)", r)] if name else rows
+    text = "\n".join(rows)
+    kept = []
+    for element in evidence.supports:
+        field, _, value = element.partition("="); field, value = field.strip(), value.strip()
+        if field in {"授课对象", "教学对象", "对象学段"}:
+            stage = {"本科": r"本科(?:生)?|undergraduate", "研究生": r"研究生(?!导师)|硕士(?:研究生|生)?(?!研究生?导师|生?导师)|博士(?:研究生|生)?(?!研究生?导师|生?导师)",
+                     "硕士": r"硕士(?:研究生|生)?(?!研究生?导师|生?导师)", "博士": r"博士(?:研究生|生)?(?!研究生?导师|生?导师)"}.get(value)
+            if not stage or not re.search(r"(?:授课对象|面向|讲授|教授|讲课|承担)[^，,。｡；;\n]{0,20}(?:" + stage + r")|(?:"
+                     + stage + r")[^，,。｡；;\n]{0,18}(?:课程|公共课|共同课|专业课|授课|班教学)", text, re.I):
+                continue
+        elif field in {"角色", "role", "教学角色"}:
+            if value == "研究生导师":
+                if not re.search(r"研究生导师|硕士(?:研究)?生导师|博士(?:研究)?生导师", text): continue
+            elif value == "教师":
+                if not re.search(r"教师|老师|讲授|授课|教授[^，。；;\n]{0,40}(?:课程|公共课|共同课)", text): continue
+            elif value not in text:
+                continue
+        elif field in {"课程", "课程名称"}:
+            if _compact(value).replace("公共课", "共同课") not in _compact(text).replace("公共课", "共同课"):
+                continue
+        elif re.search(r"时间|年份|年限|起止|数量|比例|评价|最长", field):
+            if _compact(value) not in _compact(text): continue
         kept.append(element)
     return kept
 

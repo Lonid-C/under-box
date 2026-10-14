@@ -93,6 +93,8 @@ python3 scripts/regression.py
 
 专项职责、数据源与协作边界见 [指导老师建议的落地](open_box/docs/ADVISOR_ARCHITECTURE_2026-10-12.md)，实习人工背调见 [分类核验说明](open_box/docs/VERIFICATION_AGENTS_2026-10-12.md)。公开登记接口、本地目录与报告数据库各有用途；本项目没有学信网或企业内部人事库的自动访问权限。
 
-**仍待处理**：覆盖度自检（`app/coverage.py`）未实现；完整回归中仍有五项旧验收差异，见 [REGRESSION.md](REGRESSION.md)。
+**v2 开发中（尚未验证）**：增加逐要素证明、证据溯源、检索覆盖度、运行计划回放、临时 token
+隔离和最小人工复核 API。开发记录与限制见 [v2 变更记录](docs/optimization-v2/CHANGELOG.md)。
+本轮按用户要求未运行测试；五项旧验收差异仍保留，见 [REGRESSION.md](REGRESSION.md)。
 
 细节与设计取舍见 `search-strategy/DESIGN.md`，各部分的踩坑记录在各自的 README 里。

@@ -288,15 +288,17 @@ body[data-stage="app"] #gateCard{display:none}
 .hero-foot b{color:var(--ink-2);font-weight:500}
 
 /* ══ 主界面顶栏 ═════════════════════════════════════ */
-header.site{border-bottom:2px solid var(--ink);background:var(--paper)}
-.hdr-in{display:flex;align-items:center;gap:20px;padding:15px 28px;max-width:1400px;margin:0 auto}
+header.site{position:relative;z-index:70;border-bottom:2px solid var(--ink);background:var(--paper)}
+.hdr-in{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:center;gap:10px 24px;padding:15px 28px;max-width:1400px;margin:0 auto}
 .mark{font-family:var(--disp);font-size:21px;letter-spacing:-.01em;line-height:1}
 .mark em{color:var(--pink);font-style:normal}
 .mark small{display:block;font-family:var(--sans);font-weight:500;font-size:10px;letter-spacing:.06em;color:var(--ink-2);margin-top:5px}
-.top-nav{display:flex;gap:22px;margin-left:26px;font-size:13.5px}
-.top-nav span{padding-bottom:2px;color:var(--ink-2)}
-.top-nav span.on{color:var(--ink);font-weight:500;border-bottom:2px solid var(--pink)}
-.top-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--ink-2)}
+.top-nav{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;min-width:0;font-size:13.5px}
+.top-nav button,.top-nav .navlink{font:inherit;color:var(--ink-2);background:none;border:0;border-bottom:2px solid transparent;padding:3px 0;white-space:nowrap;cursor:pointer;text-decoration:none}
+.top-nav button:hover,.top-nav .navlink:hover{color:var(--ink)}
+.top-nav .on{color:var(--ink);font-weight:600;border-bottom-color:var(--pink)}
+.top-right{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px 12px;min-width:0;font-size:12.5px;color:var(--ink-2)}
+.top-right>*{white-space:nowrap}
 .badge{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--ink);background:var(--pink-soft);padding:3px 9px;font-size:11px;font-weight:600;border-radius:999px}
 .badge i{width:7px;height:7px;border-radius:50%;background:var(--pink);display:block}
 .ghost{font:inherit;font-size:12px;font-weight:500;background:var(--paper);border:2px solid var(--ink);border-radius:999px;padding:4px 12px;cursor:pointer}
@@ -513,7 +515,16 @@ body[data-picking] .chat-dock,body[data-picking] .chat{display:none}
 .navlink{color:inherit;text-decoration:none;padding-bottom:2px}
 .navlink:hover{color:var(--ink)}
 body[data-noreport] .navlink{opacity:.4;pointer-events:none}
-.tierpanel{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:80;width:min(640px,94vw);max-height:70vh;overflow:auto;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);padding:16px}
+.tierpanel{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);z-index:80;width:min(640px,94vw);max-height:70vh;overflow:auto;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);padding:16px}
+.history-dialog{width:min(560px,calc(100vw - 28px));max-height:min(72vh,680px);padding:0;border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);background:var(--paper);color:var(--ink)}
+.history-dialog::backdrop{background:rgba(20,19,15,.42)}
+.history-head{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:2px solid var(--ink)}
+.history-head h2{font-size:15px;margin:0}.history-head button{margin-left:auto}
+.history-list{padding:12px 16px;overflow:auto;max-height:calc(72vh - 64px)}
+.history-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:11px;border:1.5px solid #D8D4C9;border-radius:var(--rad);background:var(--paper);font:inherit;cursor:pointer}
+.history-item+.history-item{margin-top:8px}.history-item:hover{background:var(--pink-soft)}
+.history-item span{flex:1;min-width:0;overflow-wrap:anywhere}.history-item small{display:block;color:var(--ink-3)}
+.history-empty{padding:12px;color:var(--ink-2)}
 .tierpanel h3{margin:0 0 4px;font-size:14px}
 .tierpanel .sub{font-size:11.5px;color:var(--ink-2);margin-bottom:12px}
 .tierpanel .grp{margin-bottom:10px}
@@ -696,17 +707,20 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 
 @media(max-width:980px){
   main.grid{grid-template-columns:minmax(0,1fr)}
-  .hdr-in{flex-wrap:wrap}
-  .top-right{width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-end}
+  .hdr-in{grid-template-columns:max-content minmax(0,1fr)}
+  .top-nav{grid-column:1/-1;grid-row:2}
+  .top-right{grid-column:2;grid-row:1}
   body[data-stage="hero"] .col-left,body[data-stage="app"] .col-left,body[data-stage="gate"] .col-left{width:100%}
-  .top-nav{display:none}
   .top-right .badge,.top-right .ghost{white-space:nowrap}
   .row{grid-template-columns:14px 96px minmax(0,1fr) 20px}
+  .row .dt,.row .ct,.row .tr{display:none}
 }
 @media(max-width:600px){
   body[data-stage="gate"] main.grid{padding:0 16px}
   body[data-stage="gate"] #gateCard{box-shadow:6px 6px 0 var(--ink)}
-  .hdr-in{padding:12px 16px;gap:12px}
+  .hdr-in{display:flex;flex-direction:column;align-items:stretch;padding:12px 16px;gap:8px}
+  .top-nav{order:2}
+  .top-right{order:3;justify-content:flex-start}
   .top-right{gap:10px}
   .top-right .rno{display:none}
   .row .dt,.row .ct,.row .tr{display:none}
@@ -717,6 +731,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </style>
 </head>
 <body data-stage="gate">
+
 <!-- 云层：登录前盖住整页（深色主题）。鼠标移出登录卡先透一线光，
      登录成功才散尽露出浅色主题。纯视觉层，不接收指针事件。 -->
 <!-- ── 登录布景：两层画布 + 一层挖洞 ──────────────────────────
@@ -736,10 +751,11 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 <header class="site anim down" data-enter="0">
   <div class="hdr-in">
     <div class="mark">UNDER<em>BOX</em><small>TA 的优秀，滴水不漏</small></div>
-    <nav class="top-nav">
-      <span class="on">逐条检验</span>
-      <span id="navTier" role="button" tabindex="0" title="按来源等级汇总">来源分级</span>
+    <nav class="top-nav" aria-label="报告导航">
+      <button class="on" id="navClaims" type="button">逐条检验</button>
+      <button id="navTier" type="button" title="按来源等级汇总" aria-expanded="false">来源分级</button>
       <a id="navExport" class="navlink" href="/api/export?format=md" title="下载 Markdown 报告">报告导出 ↓</a>
+      <button id="navHistory" type="button">历史记录</button>
     </nav>
     <div class="tierpanel" id="tierPanel" hidden></div>
     <div class="top-right">
@@ -789,6 +805,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
         <span id="heroAccountName"></span>
         <span class="ad-pill" id="heroQuota"></span>
         <span class="sp"></span>
+        <button class="ad-act" id="heroHistory" type="button">历史记录</button>
         <button class="ad-act" id="acctOpen" type="button">我的配额</button>
         <button class="ad-act primary" id="adminOpen" type="button" hidden>管理台</button>
         <button class="ghost" id="heroLogout" type="button" title="退出当前账号，返回登录页">退出登录</button>
@@ -940,6 +957,11 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   <div class="ad-body" id="adBody"></div>
 </div>
 
+<dialog id="historyDialog" class="history-dialog" aria-labelledby="historyTitle">
+  <div class="history-head"><h2 id="historyTitle">最近 10 次检验</h2><button class="ghost" id="historyClose" type="button">关闭</button></div>
+  <div class="history-list" id="historyList"></div>
+</dialog>
+
 <!-- 面板放在 dock 之外：dock 上有入场动画的 transform，会把后代的 position:fixed
      捕获成"相对 dock 定位"，面板就会偏掉。同级才是真的相对视口。
      也**不要**给面板套 .anim 入场动画——它在入场那一刻还是 display:none（默认关着），
@@ -976,6 +998,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </div>
 <script>
 let REPORT = null;
+let HISTORY_VIEW_ID = null;
 let QUERY_EPOCH = 0;
 const QUERY_STREAMS = new Set();
 
@@ -987,7 +1010,7 @@ const STATUS = {
   who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'}
 };
 const ORDER = ['ok','part','ask','none','who'];
-const TIER_NAME = {A:'A 级 · 官方站点上的公示 / 通知 / 名单', B:'B 级 · 认证主体公众号 / 权威媒体', C:'C 级 · 平台元数据（GitHub / Crossref / ORCID）', D:'D 级 · 判不出更高等级'};
+const TIER_NAME = {A:'A 级 · 官方站点上的公示 / 通知 / 名单', B:'B 级 · 官网人物记录 / 认证主体 / 可追溯原始贡献记录', C:'C 级 · 平台元数据（GitHub / Crossref / ORCID）', D:'D 级 · 判不出更高等级'};
 /* 摘要里不要重复日期：原文逐字保留日期，而旁边已经有日期列。
    多数在行首（`2023.05　…`），但也有在行尾的（c01：`…本科在读　2022.09 — 2026.06`），
    所以两头都剥。只在列表里剥；详情里的「简历原文」仍然逐字原样。 */
@@ -1006,6 +1029,12 @@ const el = (tag, attrs = {}, ...kids) => {
     if (v === null || v === undefined || v === false) continue;
     if (k === 'class') n.className = v;
     else if (k === 'text') n.textContent = v;
+    else if (k === 'href') {
+      try {
+        const u = new URL(v, location.href);
+        if (['http:', 'https:'].includes(u.protocol) && !u.username && !u.password) n.setAttribute(k, u.href);
+      } catch {}
+    }
     else n.setAttribute(k, v);
   }
   for (const kid of kids.flat()) {
@@ -1051,7 +1080,8 @@ function renderOverview() {
   [['检索到公开来源', pct(REPORT.claims.filter(x=>x.evidence.length).length, total)],
    ['来源可关联到本人', pct(REPORT.claims.filter(x=>['ok','part','ask'].includes(x.status)).length, total)],
    ['要素被全部证明', pct(c.ok, total)],
-   ['要素级覆盖率', pct(proved, elements)],
+   ['要素级覆盖率', REPORT.coverage ? pct(REPORT.coverage.coveredElements, REPORT.coverage.selectedElements) : pct(proved, elements)],
+   ['本次检索状态', REPORT.claims.some(x => x.retrievalStatus && x.retrievalStatus !== 'complete') ? '存在未完成来源' : '已完成/未记录'],
    ['需人工复核', pct(human, total)]
   ].forEach(([k,v]) => met.appendChild(el('div', {class:'metric'}, el('span',{text:k}), el('span',{text:v}))));
   $('disc').textContent = REPORT.disclaimer + ' 覆盖率只反映公开信息的多少，不代表候选人的可信程度。';
@@ -1064,15 +1094,43 @@ function detailOf(c) {
     el('div', {class:'raw'}, c.rawText, el('span', {class:'loc', text:c.locator}))));
   if (c.elements.length) {
     const list = el('div', {class:'el'});
+    const proofs = Object.fromEntries((c.elementProofs || []).map(p => [p.element, p]));
     c.elements.forEach(e => {
-      const yes = c.proved.includes(e);
+      const proof = proofs[e];
+      const yes = proof ? proof.state === 'verified' : c.proved.includes(e);
+      const label = proof ? `${e} · ${proof.state}${proof.accepted_tier ? ' · ' + proof.accepted_tier + '级' : ''}` : e;
       list.appendChild(el('div', {class:'e ' + (yes ? 'yes' : 'no')},
-        el('span', {class:'mk', text: yes ? '✓' : '–'}), el('span', {text:e})));
+        el('span', {class:'mk', text: yes ? '✓' : '–'}), el('span', {text:label})));
+      if (proof?.decision_reasons?.length) list.appendChild(el('div', {class:'hint', text:proof.decision_reasons.join('；')}));
+      if (proof) {
+        const passport = el('details', {style:'overflow-wrap:anywhere'});
+        passport.appendChild(el('summary', {text:'展开此要素的实际支持材料'}));
+        const sources = (c.evidence || []).filter(ev => (proof.evidence_ids || []).includes(ev.evidenceId));
+        for (const ev of sources) {
+          passport.appendChild(el('div', {class:'ev'},
+            el('b', {text:`${ev.tier || '未定级'} · ${ev.title || '无标题'}`}),
+            el('div', {class:'q', text:ev.snippet || '无可定位引文'}),
+            el('div', {text:`${ev.publisher || '发布方未记录'} · ${ev.provenanceState || '旧版未记录'} · 抓取 ${ev.fetchedAt || '未记录'}`}),
+            el('div', {text:`身份依据：${(proof.identity_basis || []).join('；') || '待人工'}`}),
+            el('a', {href:ev.url, target:'_blank', rel:'noopener noreferrer', text:'打开来源'})));
+        }
+        if (!sources.length) passport.appendChild(el('p', {text:'没有合格证据链或旧版本未记录支持关系。'}));
+        list.appendChild(passport);
+      }
     });
     d.appendChild(el('div', {class:'dsec'},
-      el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
-      c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
+       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
+      el('div', {class:'hint', text:(c.elementProofs || []).length ? '各要素独立核对；最高来源等级不代表全部要素。未充分证明不等于没有发生。' : '旧版本未记录完整证据护照，保留报告当时结论。'})));
   }
+  if (c.claimVerification) {
+    const checks = el('div');
+    c.claimVerification.checks.forEach(check => checks.appendChild(el('p', {text:check.element + ' · ' + check.state})));
+    checks.appendChild(el('div', {class:'hint',text:c.claimVerification.note}));
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'主张与修饰语逐项核对'}), checks));
+  }
+  if (c.githubAudit?.triggered) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'GitHub 贡献核验 · 本条关联范围'}), renderGithubAudit(c.githubAudit)));
+  if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
+    el('h4', {text:'实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
     const scope = el('div');
     c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
@@ -1101,7 +1159,11 @@ function detailOf(c) {
         el('span', {class:'t', text:ev.tier || '—', style:`background:${tint}`}),
         el('b', {text:ev.title || '（无标题）'})));
       card.appendChild(el('div', {class:'ev-m'}, `${ev.publisher || '（无发布主体）'}${ev.date ? ' · ' + ev.date : ''} · ${ev.url}`));
-      if (ev.snippet) card.appendChild(el('div', {class:'q', text:'“' + ev.snippet + '”'}));
+       if (ev.snippet) card.appendChild(el('div', {class:'q', text:'“' + ev.snippet + '”'}));
+       card.appendChild(el('div', {class:'hint', text:ev.provenanceState === 'page_text_verified'
+         ? `已回读原文并定位引文${ev.quoteStart != null ? `（字符 ${ev.quoteStart}–${ev.quoteEnd}）` : ''}`
+         : ev.provenanceState === 'structured_metadata_verified' ? '结构化登记字段，经专项适配器校验'
+         : `仅作线索：${ev.provenanceState || '旧版未记录来源溯源'}`}));
       const sig = [];
       if (ev.signals && ev.signals.length) sig.push(el('div', {}, el('b', {text:'身份信号 '}), ev.signals.join(' · ')));
       if (ev.conflicts && ev.conflicts.length) sig.push(el('div', {}, el('b', {text:'身份矛盾 '}), ev.conflicts.join(' · ')));
@@ -1123,7 +1185,11 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:'公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
+      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : c.retrievalStatus && c.retrievalStatus !== 'complete' ? '本次核验未完成或部分来源不可访问，不能据此认为没有公开记录。' : '公开检索暂未找到可关联到本人的记录，不等于经历不实，可请候选人提供材料。'})));
+  }
+  if (c.retrievalSummary && c.retrievalStatus !== 'complete') {
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'检索未完成'}),
+      el('div', {class:'hint', text:`状态：${c.retrievalStatus}。本次不能据此显示“没有公开记录”。`})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1135,17 +1201,143 @@ function detailOf(c) {
       el('div', {text:conflicts.join('；')}))));
   if (c.nextStep) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'下一步'}), el('div', {class:'next', text:c.nextStep})));
   if (c.question) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'可问的问题'}), el('div', {class:'raw', text:c.question})));
-  // 检索策略：点开才请求（9 条 × 一次请求没必要），数据来自策略引擎
   const psec = el('div', {class:'dsec'}, el('h4', {text:'检索策略'}));
   const pbtn = el('button', {class:'ghost', type:'button', text:'查看这条的检索计划'});
   const pout = el('div', {class:'planout'});
   pbtn.addEventListener('click', () => loadClaimPlan(c.id, pout, pbtn));
   psec.append(pbtn, pout);
   d.appendChild(psec);
+  if (REPORT.coverage && !c.manualReview) {
+    const rsec = el('div', {class:'dsec'}, el('h4', {text:'人工复核'}));
+    const rbtn = el('button', {class:'ghost', type:'button', text:'发起/录入复核'});
+    const rout = el('div', {class:'planout'});
+    rbtn.addEventListener('click', () => toggleReviewForm(c.id, rout, rbtn));
+    rsec.append(rbtn, rout);
+    d.appendChild(rsec);
+  }
   const close = el('button', {class:'ghost', type:'button', text:'收起 ▴'});
   close.dataset.close = '1';
   d.appendChild(el('div', {class:'dclose'}, close));
   return d;
+}
+
+function toggleReviewForm(claimId, container, btn) {
+  if (container.dataset.open === '1') {
+    container.innerHTML = '';
+    container.dataset.open = '';
+    btn.textContent = '发起/录入复核';
+    return;
+  }
+  container.dataset.open = '1';
+  btn.textContent = '收起复核表单';
+  const form = el('div', {class:'review-form'});
+  form.appendChild(el('label', {text:'操作类型'}));
+  const action = el('select');
+  [['open', '发起复核任务'], ['supplement', '录入补充材料'], ['decide', '录入复核决定']].forEach(([v, label]) => {
+    action.appendChild(el('option', {value:v, text:label}));
+  });
+  form.appendChild(action);
+  form.appendChild(el('label', {text:'材料索引（可选）'}));
+  form.appendChild(el('input', {type:'text', placeholder:'如：候选人补充说明、公开链接等'}));
+  form.appendChild(el('label', {text:'理由（必填）'}));
+  const reason = el('textarea', {rows:'3', placeholder:'请填写复核理由'});
+  form.appendChild(reason);
+  form.appendChild(el('label', {text:'复核结果（仅 decide 需要）'}));
+  const outcome = el('select');
+  [['pending', '待定'], ['supported', '已支持'], ['unresolved', '未解决'], ['corrected', '已更正']].forEach(([v, label]) => {
+    outcome.appendChild(el('option', {value:v, text:label}));
+  });
+  form.appendChild(outcome);
+  const submit = el('button', {class:'btn', type:'button', text:'提交复核'});
+  submit.addEventListener('click', async () => {
+    if (!reason.value.trim()) { alert('请填写复核理由'); return; }
+    submit.disabled = true;
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claimId, action: action.value, source: '', reason: reason.value, outcome: outcome.value, expectedVersion: 0})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '提交失败');
+      alert('复核已提交，版本：' + data.version);
+      container.innerHTML = '';
+      container.dataset.open = '';
+      btn.textContent = '发起/录入复核';
+    } catch (err) {
+      alert('提交失败：' + err.message);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  form.appendChild(submit);
+  container.appendChild(form);
+}
+
+function renderManualReview(review) {
+  const box = el('div', {class:'manual-review'});
+  box.appendChild(el('p', {text:'实习公司：' + (review.company || '待补充公司全称')}));
+  const qccLink = (url, label) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'https:' && ['www.qcc.com','qcc.com','m.qcc.com'].includes(u.hostname)
+          && !u.username && !u.password && (!u.port || u.port === '443')) {
+        return el('a', {href:u.href,target:'_blank',rel:'noopener noreferrer',text:label,style:'overflow-wrap:anywhere'});
+      }
+    } catch {}
+    return null;
+  };
+  const link = qccLink(review.companyUrl || review.queryUrl, review.companyUrl ? '打开对应公司企查查页面' : '到企查查确认公司主体');
+  if (link) box.appendChild(el('p', {}, link));
+  for (const contact of review.contacts || []) {
+    const card = el('div', {class:'ev'});
+    card.appendChild(el('b', {text:'公司公开联系电话：' + contact.phone}));
+    card.appendChild(el('div', {class:'q',text:'原文：' + contact.excerpt}));
+    const source = qccLink(contact.sourceUrl, '查看电话出处');
+    if (source) card.appendChild(el('div', {}, source));
+    card.appendChild(el('div', {class:'hint',text:'读取时间：' + contact.accessedAt}));
+    box.appendChild(card);
+  }
+  if (!(review.contacts || []).length) box.appendChild(el('p', {text:'未取得可核实出处的完整公开电话，请打开企查查入口确认。'}));
+  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
+  if (review.authorizationNotice) box.appendChild(el('p', {class:'hint',text:review.authorizationNotice}));
+  (review.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
+  const list = el('ol');
+  (review.checks || []).forEach(check => list.appendChild(el('li', {text:check})));
+  box.appendChild(list);
+  return box;
+}
+
+function renderGithubAudit(audit) {
+  const box = el('div');
+  box.appendChild(el('p', {text:'归属依据：' + audit.identityBasis}));
+  const link = url => el('a', {href:url, target:'_blank', rel:'noopener noreferrer', text:url});
+  (audit.scope || []).forEach(url => box.appendChild(el('div', {}, link(url))));
+  for (const repo of audit.repositories || []) {
+    box.appendChild(el('p', {text:`${repo.repo} · ${repo.kind} · ${repo.fork ? 'fork' : '非 fork'} · Stars ${repo.stars}（背景信息）`}));
+  }
+  for (const record of audit.records || []) {
+    if (record.kind === 'repo') continue;
+    const card = el('div', {class:'ev'});
+    card.appendChild(el('b', {text:record.title || record.kind}));
+    card.appendChild(el('div', {}, link(record.url)));
+    card.appendChild(el('p', {text:`记录作者：${record.actor} · ${record.kind === 'pr' ? (record.merged === true ? '已合并' : record.merged === false ? '未合并 · ' + (record.state || '状态未返回') : '合并状态未知') : (record.actorConfirmed ? '签名可关联的 commit 记录' : 'commit 作者关联尚待确认')} · ${record.filesComplete ? '文件列表已读完' : '文件列表不完整'}`}));
+    for (const file of record.files || []) {
+      const detail = el('details');
+      detail.appendChild(el('summary', {text:`${file.path} · ${file.type} · ${file.domainHint || '领域待确认'} · +${file.additions}/−${file.deletions}（改动范围，不评价能力）`}));
+      detail.appendChild(el('pre', {style:'white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font-size:12px',text:file.patch || '该文件 diff 未返回或未在本次预算中保存，不推断其内容。'}));
+      if (file.patchTruncated) detail.appendChild(el('p', {class:'hint',text:'diff 仅为部分摘录，可通过上方 PR/commit 链接核对完整原文。'}));
+      card.appendChild(detail);
+    }
+    if (record.analysis?.observations?.length) {
+      card.appendChild(el('p', {class:'hint',text:record.analysis.note}));
+      record.analysis.observations.forEach(o => card.appendChild(el('p', {text:`${o.path}：${o.description}；类型解读：${o.suggestedType || '未确认'}（待复核）；原文：${o.quote}`})));
+    }
+    box.appendChild(card);
+  }
+  (audit.warnings || []).forEach(note => box.appendChild(el('div', {class:'hint',text:note})));
+  if (audit.truncated) box.appendChild(el('div', {class:'hint',text:'本次受分页、请求或时间上限限制；采样数量不代表全部贡献，未检查部分保持未知。'}));
+  (audit.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
+  return box;
 }
 
 function renderClaims() {
@@ -1155,10 +1347,10 @@ function renderClaims() {
     const st = STATUS[c.status];
     const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':c.status},
       el('span', {class:'dot', style:`background:${st.dot}`}),
-      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:st.label}),
+      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:c.manualReview?.kind === 'internship' ? '待人工背调' : st.label}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
-      el('span', {class:'tx'}, summaryOf(c.rawText), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
+      el('span', {class:'tx'}, claimSummary(c), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
       el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);
@@ -1415,16 +1607,20 @@ function initIntake() {
     QUERY_STREAMS.forEach(controller => controller.abort());
     QUERY_STREAMS.clear();
     Chat.abort();
-    clearInterval(StatusDock.timer);
+    fetch('/api/query/reset', { method: 'POST' }).catch(() => {});
+    StatusDock.clear();
     clearReportView();
     Usage.reset();
     window.__chatReset?.();
-    $('statusDock').hidden = true; $('statusPill').hidden = true;
     $('tierPanel').hidden = true;
+    $('navTier').setAttribute('aria-expanded', 'false');
     $('risk-panel').classList.remove('open'); $('risk-body').innerHTML = '';
     $('risk-line').textContent = '—';
     $('risk-btn').textContent = '查看详情'; $('risk-btn').setAttribute('aria-expanded', 'false');
-    try { sessionStorage.setItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`, '1'); } catch {}
+    try {
+      sessionStorage.setItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`, '1');
+      sessionStorage.removeItem(`ub-history-view:${ACCOUNT?.id || 'local'}`);
+    } catch {}
     if (location.hash === '#app') history.replaceState(null, '', location.pathname + location.search);
     morphToHero();
     setTimeout(() => {
@@ -1446,7 +1642,8 @@ function initIntake() {
       $('steps').classList.remove('on');
       document.querySelectorAll('#steps .step').forEach(s => s.className = 'step');
       document.querySelectorAll('#steps .step .t').forEach((t, i) => { t.textContent = StatusDock.stages[i] || t.textContent; });
-      PICK.token = null; PICK.claims = []; PICK.skipped = []; PICK.selected = new Set(); PICK.fileType = ''; PICK.lead = '';
+      PICK.token = null;
+    PICK.materials = {}; PICK.claims = []; PICK.skipped = []; PICK.selected = new Set(); PICK.fileType = ''; PICK.lead = '';
       $('skipNote').hidden = true; $('pickSkipped').hidden = true;
       delete document.body.dataset.picking;
       $('pickBlocks').innerHTML = '';
@@ -1513,7 +1710,7 @@ function renderLeads() {
 /* 来源分级面板：真实报告按等级分组。等级只说明"来源有多权威"，不说明人可信与否。 */
 function toggleTierPanel() {
   const p = $('tierPanel');
-  if (!p || p.hidden === false) { p.hidden = true; return; }
+  if (!p || p.hidden === false) { p.hidden = true; $('navTier').setAttribute('aria-expanded', 'false'); return; }
   if (!REPORT) return;
   p.innerHTML = '';
   const close = el('button', { class: 'close', type: 'button', text: '✕' });
@@ -1541,10 +1738,15 @@ function toggleTierPanel() {
     p.appendChild(g);
   }
   p.hidden = false;
+  $('navTier').setAttribute('aria-expanded', 'true');
 }
 
 /* 检索策略：把策略引擎对这条陈述实际会发的查询摊开给人看。 */
 async function loadClaimPlan(claimId, out, btn) {
+  if (HISTORY_VIEW_ID !== null) {
+    out.textContent = '历史报告可回看与导出；检索计划只对当前核验开放。';
+    return;
+  }
   btn.disabled = true;
   out.textContent = '加载中…';
   try {
@@ -1585,7 +1787,7 @@ async function loadClaimPlan(claimId, out, btn) {
 /* 本次查询用量：拆分、核验、问答是三个独立后端任务，各自回报「自任务开始」的累计，
    这里把已完成任务的累计（done）与进行中任务的累计（cur）相加。新上传一份简历才清零。 */
 const Usage = {
-  done: null, cur: null,
+  done: null, active: new Map(), seq: 0,
   blank: () => ({ deepseek: { calls: 0, in: 0, cached: 0, out: 0, tokens: 0, yuan: 0 },
                   glm: { calls: 0, in: 0, out: 0, tokens: 0, searches: 0, searchYuan: 0, yuan: 0 } }),
   add(a, b) {
@@ -1597,26 +1799,33 @@ const Usage = {
     }
     return o;
   },
-  reset() { this.done = this.blank(); this.cur = null; this.render(); },
-  live(u) { this.cur = u; this.render(); },
-  commit() { if (this.cur) { this.done = this.add(this.done, this.cur); this.cur = null; this.render(); } },
-  total() { return this.add(this.done || this.blank(), this.cur); },
+  start() { const id = ++this.seq; this.active.set(id, null); this.render(); return id; },
+  reset() { this.done = this.blank(); this.active.clear(); this.render(); },
+  live(u, id) { if (this.active.has(id)) { this.active.set(id, u); this.render(); } },
+  commit(id) {
+    if (!this.active.has(id)) return;
+    const u = this.active.get(id);
+    if (u) this.done = this.add(this.done, u);
+    this.active.delete(id); this.render();
+  },
+  total() { let t = this.done || this.blank(); for (const u of this.active.values()) t = this.add(t, u); return t; },
   render() {
     const t = this.total(), d = t.deepseek, g = t.glm;
     const dock = document.getElementById('usageDock');
     const any = d.calls || g.calls || g.searches;
     dock.hidden = !any;
-    dock.classList.toggle('idle', !this.cur);
+    dock.classList.toggle('idle', !this.active.size);
     const n = v => Number(v || 0).toLocaleString('zh-CN');
-    const yuan = v => v === null ? '' : ' · ¥' + Number(v).toFixed(v < 1 ? 4 : 2);
+    const yuan = v => v === null ? '' : ' · 估算 ¥' + Number(v).toFixed(v < 1 ? 4 : 2);
     const row = (k, main, sub) => `<div class="u-row"><span class="u-k">${k}</span><span class="u-v">${main}<span class="u-sub">${sub}</span></span></div>`;
     const dsMain = `${n(d.tokens)} tokens` + yuan(d.yuan);
     const dsSub = `输入 ${n(d.in)}${d.cached ? `（缓存 ${n(d.cached)}）` : ''} · 输出 ${n(d.out)} · ${n(d.calls)} 次调用`;
-    const glMain = `${n(g.searches)} 次搜索` + yuan(g.yuan ?? g.searchYuan);
+    const glMain = `${n(g.searches)} 次搜索` + yuan(g.yuan) + (g.yuan === null ? `（搜索估算 ¥${Number(g.searchYuan).toFixed(4)}）` : '');
     const glSub = g.tokens ? `搜索 ${n(g.searches)} 次 · 模型 ${n(g.tokens)} tokens` : '按次计费（智谱 web_search）';
     document.getElementById('usageBody').innerHTML =
       row('DeepSeek', dsMain, dsSub) + row('GLM', glMain, glSub) +
-      (d.yuan === null && d.tokens ? '<div class="u-note">DeepSeek 折算金额需配置单价环境变量，当前仅显示 tokens。</div>' : '');
+      (d.yuan === null && d.calls ? '<div class="u-note">DeepSeek 用量返回不完整或单价未配置，金额暂不可估算。</div>' : '') +
+      (g.yuan === null && g.calls ? '<div class="u-note">GLM 模型费用未知，搜索估算不含模型费用。</div>' : '');
   },
 };
 document.getElementById('usageHead').addEventListener('click', () => {
@@ -1633,6 +1842,8 @@ const Chat = {
   /** 返回完整回答文本；onDelta(已累计文本) 逐段回调。 */
   async askStream(question, onDelta, onDone) {
     const epoch = QUERY_EPOCH;
+    const usageTask = Usage.start();
+    try {
     this.ctrl = new AbortController();
     const res = await fetch('/api/ask/stream', {
       method: 'POST',
@@ -1662,12 +1873,14 @@ const Chat = {
         if (ev.error) throw new Error(ev.error);
         if (ev.delta) { full += ev.delta; onDelta(full); }
         if (ev.done) { seconds = ev.seconds; finished = true; }
-        if (ev.usage) { Usage.live(ev.usage); }
+        if (ev.usage) { Usage.live(ev.usage, usageTask); }
       }
     }
-    Usage.commit();
     onDone?.(seconds);
     return full;
+    } finally {
+      if (epoch === QUERY_EPOCH) Usage.commit(usageTask);
+    }
   },
   abort() { this.ctrl?.abort(); },
 };
@@ -2105,7 +2318,7 @@ function openViewer() {
    由 serve.py 提供页面时走**真实流水线**（open_box：解析 → 画像 → 拆分 → 按策略检索 → 规则判定）；
    从 file:// 打开时没有后端，退回本地 fixture 演示，并在徽标上写明"演示数据"。
    两种模式的差别如实展示，不混着装。 */
-const MODE = { real: false, searchConfigured: false, llmConfigured: false };
+const MODE = { real: false, searchConfigured: false, llmConfigured: false, error: '' };
 
 function setFirstEmpty(text) {
   const e = $('emptyFirst'); if (!e) return;
@@ -2114,15 +2327,19 @@ function setFirstEmpty(text) {
 
 async function probeMode() {
   try {
-    const h = await (await fetch('/api/health')).json();
+    const response = await fetch('/api/health', { cache: 'no-store' });
+    const h = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(h.error || '连接核验服务失败，请稍后重试。');
     MODE.real = !!h.verify;
     MODE.searchConfigured = !!h.searchConfigured;
     MODE.llmConfigured = h.llmConfigured !== false;
-  } catch { MODE.real = false; }
+    MODE.error = MODE.real ? '' : (h.loginRequired ? '登录已过期，请重新登录。' : '核验服务暂时未就绪，请稍后重试。');
+  } catch (error) { MODE.real = false; MODE.error = error.message || '连接核验服务失败，请稍后重试。'; }
   if (!MODE.real) {
-    setFirstEmpty('本页需要 serve.py 提供后端。用 python3 serve.py 启动后，从 http://127.0.0.1:8787/ 打开。');
+    setFirstEmpty(MODE.error);
   }
   updateModeBadge();
+  return MODE.real;
 }
 
 function updateModeBadge() {
@@ -2137,19 +2354,22 @@ function updateModeBadge() {
 }
 
 /** 把真实结果替换进页面：渲染函数都吃全局 REPORT，所以换掉它再各跑一次即可。 */
-function applyReport(report) {
+function applyReport(report, { historyId = null } = {}) {
   REPORT = report;
+  HISTORY_VIEW_ID = historyId;
+  $('navExport').href = historyId === null ? '/api/export?format=md' : `/api/history/${historyId}/export?format=md`;
   activeStatus = null;
   $('emptyFirst').hidden = true;
   $('toolbar').hidden = false;
-  window.__chatReady?.(true);
-  window.__chatStatus?.('就绪 · 依据真实核验结果');
-  $('chatSt').classList.add('on');
+  window.__chatReady?.(historyId === null);
+  window.__chatStatus?.(historyId === null ? '就绪 · 依据真实核验结果' : '历史报告 · 只读');
+  $('chatSt').classList.toggle('on', historyId === null);
   delete document.body.dataset.noreport;
   renderRisks(); renderOverview(); buildFilters(); renderLeads();
   // 台账在这里就渲染——刷新恢复路径不走核验流程的 finish()，不在这里渲染就永远是空的
   renderClaims(); applyFilter();
   $('pending').hidden = true;
+  if (historyId !== null) $('repick').hidden = true;
 }
 
 /* ══ 核验状态窗口 ════════════════════════════════
@@ -2160,6 +2380,20 @@ const StatusDock = {
   stages: ['解析并检测输入风险', '画像归纳并拆成可独立证伪的陈述', '勾选要核验的条目', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
   started: 0, timer: null,
   el: id => document.getElementById(id),
+  clear() {
+    clearInterval(this.timer);
+    this.timer = null;
+    this.started = 0;
+    this.el('spLog').replaceChildren();
+    this.el('spSteps').replaceChildren();
+    this.el('spTime').textContent = '';
+    this.el('spPillTxt').textContent = '';
+    this.el('spFoot').textContent = '';
+    this.el('statusDock').classList.remove('done', 'failed', 'collapsed');
+    this.el('statusDock').hidden = true;
+    this.el('statusPanel').hidden = true;
+    this.el('statusPill').hidden = true;
+  },
   reset() {
     const dock = this.el('statusDock');
     dock.hidden = false;
@@ -2354,6 +2588,7 @@ async function sseRequest(url, init, onEv) {
   const controller = new AbortController();
   QUERY_STREAMS.add(controller);
   if (url === '/api/split/stream') Usage.reset();      // 新上传 = 新的一次查询
+  const usageTask = Usage.start();
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
     if (!res.ok || !(res.headers.get('Content-Type') || '').includes('text/event-stream')) {
@@ -2375,14 +2610,14 @@ async function sseRequest(url, init, onEv) {
         const ev = JSON.parse(line.slice(6));
         if (epoch !== QUERY_EPOCH) throw new DOMException('查询已退出', 'AbortError');
         if (ev.ping) continue;
-        if (ev.usage) Usage.live(ev.usage);
+        if (ev.usage) Usage.live(ev.usage, usageTask);
         if (ev.usage && !ev.done) continue;           // 纯用量事件，不进业务回调
         onEv(ev);
       }
     }
   } finally {
     QUERY_STREAMS.delete(controller);
-    if (epoch === QUERY_EPOCH) Usage.commit();
+    if (epoch === QUERY_EPOCH) Usage.commit(usageTask);
   }
 }
 
@@ -2401,27 +2636,39 @@ const Steps = {
 const BLOCKS = [
   { name: '学历',         cats: ['学历'],             why: '就读学校、学位、保研 / 推免' },
   { name: '论文',         cats: ['论文'],             why: '题目、期刊或会议、作者位次' },
+  { name: '著作与教材',   cats: ['著作'],             why: '书名、责任者角色、出版社、版本与数量' },
   { name: '学术会议',     cats: ['会议'],             why: '会议、报告题目、报告形式' },
   { name: '专利与软著',   cats: ['专利'],             why: '名称、专利号、发明人位次' },
   { name: '竞赛获奖',     cats: ['竞赛'],             why: '赛事、年份、奖项' },
   { name: '荣誉与奖学金', cats: ['校内荣誉', '奖学金'], why: '名称、授予单位、年份' },
   { name: '项目经历',     cats: ['项目', '开源项目'],   why: '项目名、角色、仓库' },
+  { name: '教学活动',     cats: ['教学活动'],           why: '课程、授课角色、活动与评价' },
+  { name: '艺术成果',     cats: ['艺术成果'],           why: '作品、演出、创作角色与时间' },
   { name: '任职经历',     cats: ['任职'],             why: '单位、职务、时间' },
+  { name: '实习背调',     cats: ['实习'],             why: '公司企查查入口、公开电话；岗位与时间待人工核对' },
   { name: '学生工作',     cats: ['学生工作'],          why: '组织、职务' },
 ];
-/** 按设置不核验的条目（默认实习）：写清楚没核、为什么没核，列出原文摘要。 */
+/** 显式按设置不核验的条目：列出原文摘要。 */
 function renderSkipped(box, items) {
   box.innerHTML = '';
   if (!items || !items.length) { box.hidden = true; return; }
   const kinds = [...new Set(items.map(c => c.category === '实习' ? '实习经历' : c.category))].join('、');
   box.append(el('b', { text: `${kinds} ${items.length} 条不核验` }),
-    '（按设置跳过，不去检索；实习一般没有公开记录）：',
+    '（按设置跳过，不去检索）：',
     items.map(c => summaryOf(c.rawText)).join('；'));
   box.hidden = false;
 }
-const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileType: '', lead: '' };
+const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileType: '', lead: '', materials: {} };
 
 function blockOf(c) { return BLOCKS.find(b => b.cats.includes(c.category)) || { name: '其他', cats: [], why: '' }; }
+function claimSummary(c) {
+  if (c.category === '著作') {
+    const values = Object.fromEntries((c.elements || []).filter(e => e.includes('=')).map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]));
+    if (values['书名']) return `《${values['书名']}》${values['角色'] ? ' · ' + values['角色'] : ''}`;
+    if (values['出版数量']) return `出版总量：${values['出版数量']}`;
+  }
+  return summaryOf(c.rawText);
+}
 function pageOfLocator(loc) { const m = /第\s*(\d+)\s*页/.exec(loc || ''); return m ? +m[1] : null; }
 const CHECK_SVG = '<svg viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7"/></svg>';
 
@@ -2458,15 +2705,29 @@ function renderPick() {
       });
       const row = el('label', { class: 'pk' + (input.checked ? ' on' : ''), for: id },
         input, boxEl,
-        el('span', { class: 'tx' }, summaryOf(c.rawText),
-          keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null),
+        el('span', { class: 'tx' }, claimSummary(c),
+          c.category === '实习' ? el('small', {text:'提供企查查公司链接和公开电话，岗位与时间待人工背调'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
         el('span', { class: 'meta' }, el('span', { text: c.date || '' }), pgBtn));
       input.addEventListener('change', () => {
         input.checked ? PICK.selected.add(c.id) : PICK.selected.delete(c.id);
         row.classList.toggle('on', input.checked);
         syncPick();
       });
-      ul.appendChild(el('li', {}, row));
+      const item = el('li', {}, row);
+      if (['项目','开源项目'].includes(c.category) && c.githubMaterialEligible === true) {
+        const material = PICK.materials[c.id] ||= {accounts:[],urls:[]};
+        const extra = el('details', {style:'padding:10px 18px'});
+        extra.appendChild(el('summary', {text:'补充候选人主动提供的 GitHub 材料（可选）'}));
+        extra.appendChild(el('p', {class:'hint',text:'只关联本条项目。没有关联项目链接不启动 GitHub 审计；本人账号归属不明确时停止贡献分析。'}));
+        for (const [key,title,placeholder] of [['accounts','候选人本人 GitHub 账号链接','https://github.com/本人账号'],['urls','本项目的仓库 / PR / commit 链接','https://github.com/组织/仓库/pull/编号']]) {
+          const input = el('textarea', {rows:2,placeholder,style:'width:100%;max-width:100%;font:inherit;resize:vertical'});
+          input.value = material[key].join('\n');
+          input.addEventListener('input', () => {material[key]=input.value.split(/\s+/).filter(Boolean);});
+          extra.appendChild(el('label', {}, el('span', {text:title+'（每行一个）'}), input));
+        }
+        item.appendChild(extra);
+      }
+      ul.appendChild(item);
     });
     all.addEventListener('click', () => {
       const ids = items.map(c => c.id);
@@ -2549,6 +2810,8 @@ function showPick() {
 /** 换一份简历时，上一份的结论不能留在概览和台账里冒充这一份的。 */
 function clearReportView() {
   REPORT = null;
+  HISTORY_VIEW_ID = null;
+  $('navExport').href = '/api/export?format=md';
   activeStatus = null;
   document.body.dataset.noreport = '1';
   window.__chatReady?.(false);
@@ -2566,9 +2829,19 @@ async function runSplit(src) {
   $('pending').hidden = true;
   $('toolbar').hidden = true;
   $('pick').hidden = true;
-  if (!MODE.real) { setFirstEmpty('本页需要 serve.py 提供后端才能核验。用 python3 serve.py 启动后刷新。'); return; }
+  if (!MODE.real) await probeMode();
+  if (!MODE.real) {
+    setFirstEmpty(MODE.error);
+    started = false;
+    $('url').disabled = false; $('urlGo').disabled = false;
+    $('modeSw').removeAttribute('aria-disabled');
+    return;
+  }
   if (!src) return;
-  try { sessionStorage.removeItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`); } catch {}
+  try {
+    sessionStorage.removeItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`);
+    sessionStorage.removeItem(`ub-history-view:${ACCOUNT?.id || 'local'}`);
+  } catch {}
   const isWeb = !!src.url;
   clearReportView();
   // 第一步的说法跟着输入方式走：网页要先读取并确认是个人主页
@@ -2605,6 +2878,7 @@ async function runSplit(src) {
     if (doneEv.failed || !doneEv.split) throw new Error(doneEv.error || '拆分失败（后端没有返回陈述）');
     const sp = doneEv.split;
     PICK.token = sp.token;
+    PICK.materials = {};
     PICK.claims = sp.claims || [];
     PICK.skipped = sp.skipped || [];
     PICK.fileType = (sp.fileType || '').toLowerCase();
@@ -2687,7 +2961,7 @@ async function runVerify() {
     await sseRequest('/api/verify/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: PICK.token, claimIds: ids }),
+      body: JSON.stringify({ token: PICK.token, claimIds: ids, githubMaterials: Object.fromEntries(Object.entries(PICK.materials).filter(([id,m]) => ids.includes(id) && (m.accounts.length || m.urls.length))) }),
     }, ev => {
       if (ev.done) { doneEv = ev; return; }
       const L = ev.log || '';
@@ -3010,7 +3284,8 @@ const Sheet = {
                    '选「自定义」时用'),
         this.field('带域查询引擎', this.select('search_engine', s.search_engine || 'search_std', op.search_engine || [])),
         this.field('裸查询引擎', this.select('search_engine_open', s.search_engine_open || 'search_pro_sogou', op.search_engine_open || [])),
-        this.field('搜索密钥', this.input('search_api_key', { type: 'password', ph: ph('search_api_key') })),
+        this.field('搜索密钥', this.input('search_api_key', { type: 'password', ph: ph('search_api_key') }),
+                   '智谱可留空，默认使用上方智谱密钥；单独填写会覆盖共用密钥'),
         this.field('Brave 密钥', this.input('brave_api_key', { type: 'password', ph: ph('brave_api_key') }),
                    '仅 Brave 搜索需要'),
         this.field('搜索自定义端点', this.input('search_endpoint', { ph: s.search_endpoint || '留空用预设' }))),
@@ -3275,6 +3550,11 @@ addEventListener('touchstart', e => {
 
 DockDrag.bind();          // 状态窗口可拖动（位置记在 localStorage）
 $('navTier').addEventListener('click', toggleTierPanel);
+$('navClaims').addEventListener('click', () => {
+  $('tierPanel').hidden = true;
+  $('navTier').setAttribute('aria-expanded', 'false');
+  $('claims').scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+});
 $('pickGo').addEventListener('click', runVerify);
 $('repick').addEventListener('click', () => {
   if (!PICK.token) return;
@@ -3285,8 +3565,81 @@ $('repick').addEventListener('click', () => {
   Steps.all()[4].querySelector('.t').textContent = StatusDock.stages[4];
 });
 document.body.dataset.noreport = '1';
+const History = {
+  async open() {
+    const dialog = $('historyDialog');
+    const list = $('historyList');
+    list.replaceChildren(el('p', { class: 'history-empty', text: '正在读取历史记录…' }));
+    dialog.showModal();
+    try {
+      const response = await fetch('/api/history');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      list.replaceChildren();
+      if (!data.items?.length) {
+        list.appendChild(el('p', { class: 'history-empty', text: '还没有可回看的检验结果。完成一次核验后会自动保存。' }));
+        return;
+      }
+      for (const item of data.items) {
+        const button = el('button', { class: 'history-item', type: 'button' },
+          el('span', {}, el('b', { text: item.candidateName || item.reportNo || '未命名报告' }),
+            el('small', { text: `${item.createdAt} · ${item.reportNo || '报告'} · ${item.claims} 条` })),
+          el('span', { text: '查看 ›' }));
+        button.addEventListener('click', () => this.select(item.id));
+        list.appendChild(button);
+      }
+    } catch (error) {
+      list.replaceChildren(el('p', { class: 'history-empty', text: `读取失败：${error.message}` }));
+    }
+  },
+  async select(id) {
+    const response = await fetch(`/api/history/${id}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.report) {
+      $('historyList').prepend(el('p', { class: 'history-empty', text: data.error || '这份记录已不可用' }));
+      return;
+    }
+    ++QUERY_EPOCH;
+    QUERY_STREAMS.forEach(controller => controller.abort());
+    QUERY_STREAMS.clear();
+    Chat.abort();
+    StatusDock.clear();
+    Usage.reset();
+    Viewer.clear();
+    PICK.token = null;
+    PICK.materials = {};
+    started = false;
+    $('tierPanel').hidden = true;
+    $('navTier').setAttribute('aria-expanded', 'false');
+    $('historyDialog').close();
+    document.body.dataset.stage = 'app';
+    delete document.body.dataset.picking;
+    $('pick').hidden = true;
+    $('pickWait').hidden = true;
+    $('steps').classList.remove('on');
+    applyReport(data.report, { historyId: id });
+    try { sessionStorage.setItem(`ub-history-view:${ACCOUNT?.id || 'local'}`, String(id)); } catch {}
+    scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  },
+};
+$('navHistory').addEventListener('click', () => History.open());
+$('heroHistory').addEventListener('click', () => History.open());
+$('historyClose').addEventListener('click', () => $('historyDialog').close());
 // 页面刷新后向服务端要回最近一次真实报告——不然一刷新就"丢"了
 async function restoreReport() {
+  try {
+    const id = sessionStorage.getItem(`ub-history-view:${ACCOUNT?.id || 'local'}`);
+    if (id && /^\d+$/.test(id)) {
+      const response = await fetch(`/api/history/${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        document.body.dataset.stage = 'app';
+        applyReport(data.report, { historyId: Number(id) });
+        return;
+      }
+      sessionStorage.removeItem(`ub-history-view:${ACCOUNT?.id || 'local'}`);
+    }
+  } catch { /* 记录不可用时按原逻辑恢复 */ }
   try { if (sessionStorage.getItem(`ub-query-ended:${ACCOUNT?.id || 'local'}`)) return; } catch {}
   try {
     const r = await fetch('/api/report');
@@ -3310,6 +3663,9 @@ async function logoutAccount() {
     QUERY_EPOCH++;
     QUERY_STREAMS.forEach(controller => controller.abort());
     Chat.abort();
+    StatusDock.clear();
+    clearReportView();
+    try { sessionStorage.removeItem(`ub-history-view:${ACCOUNT?.id || 'local'}`); } catch {}
     ACCOUNT = null;
     location.reload();
   } catch {

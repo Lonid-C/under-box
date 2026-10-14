@@ -22,6 +22,7 @@ import json
 import os
 import signal
 import socket
+import secrets
 import subprocess
 import sys
 import threading
@@ -37,6 +38,16 @@ COOKIE = "ub_account"
 MAX_UPLOAD = 20 * 1024 * 1024
 VERIFY_PATHS = ("/api/verify/stream",)          # 扣配额的路由
 ACCESS_SKIP = (".css", ".js", ".png", ".jpg", ".svg", ".ico", ".woff2", ".pdf")
+
+
+def zhipu_search_key(settings: dict, fallback_env: dict) -> str:
+    """统一管理台与工作进程的智谱搜索密钥优先级。
+
+    显式搜索密钥 > 管理台智谱共用密钥 > env 搜索密钥 > env 智谱密钥。
+    管理台填写了共用密钥时，不能仍然使用旧 env 文件中另一账户的搜索密钥。
+    """
+    return (settings.get("search_api_key") or settings.get("zhipu_api_key")
+            or fallback_env.get("SEARCH_API_KEY") or fallback_env.get("ZHIPU_API_KEY") or "")
 
 
 class Accounts:
@@ -109,6 +120,7 @@ class Workers:
         self.accounts, self.script, self.port = accounts, script, port
         self.process: subprocess.Popen | None = None
         self.stopping = threading.Event()
+        self.internal_token = secrets.token_urlsafe(32)
 
     def _env_file(self) -> Path:
         with store.connect(self.accounts.path) as conn:
@@ -124,12 +136,16 @@ class Workers:
         from app.env import parse_env_text
         env_file = self._env_file()
         env = {k: v for k, v in os.environ.items()
-               if k in {"PATH", "HOME", "LANG", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR"}
+               if k in {"PATH", "HOME", "LANG", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR", "BNBU_TLS_CA_FILE"}
                or k.startswith("LC_")}
-        env.update(parse_env_text(env_file.read_text()))
+        raw_env = parse_env_text(env_file.read_text())
+        env.update(raw_env)
         # 管理台里改过的配置优先于 env 文件（映射表在 store.SETTING_ENVS）
         with store.connect(self.accounts.path) as conn:
+            settings = store.get_settings(conn)
             env.update(store.settings_env(conn))
+        if (env.get("SEARCH_PROVIDER") or "zhipu").lower() == "zhipu":
+            env["SEARCH_API_KEY"] = zhipu_search_key(settings, raw_env)
         env.update(
             UNDERBOX_ENV_FILE=str(env_file),
             UNDERBOX_PASSWORD="",                    # 单实例口令门禁已由本网关取代
@@ -139,6 +155,7 @@ class Workers:
             # 工作进程只需要这两样：库在哪、以及"该记账"这个标记。
             UNDERBOX_DB=str(self.accounts.path),
             UNDERBOX_GATEWAY_WORKER="1",
+            UNDERBOX_INTERNAL_TOKEN=self.internal_token,
             OPEN_BOX_ROOT=str(self.script.parent.parent / "open_box"),
             PYTHONUNBUFFERED="1", MODE="live")
         env.pop("UNDERBOX_ACCOUNTS_FILE", None)
@@ -354,7 +371,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
             return True
 
         def _cookie_header(self, value: str, age: int) -> dict:
-            secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+            secure = "; Secure" if os.environ.get("UNDERBOX_SECURE_COOKIES") == "1" else ""
             return {"Set-Cookie": f"{COOKIE}={value}; Path=/; Max-Age={age}; "
                                   f"HttpOnly; SameSite=Strict{secure}"}
 
@@ -481,6 +498,8 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                 kind = spec["kind"]
                 keys = [value_of(f) for f in spec["key_fields"]]
                 first = next((k for k in keys if k), "")     # 专属 key 优先，其次通用 key
+                if kind == "search" and spec["id"] == "zhipu":
+                    first = zhipu_search_key(stored, raw_env)
                 item = {
                     "id": spec["id"], "name": spec["name"], "hint": spec.get("hint", ""),
                     "key_fields": list(spec["key_fields"]),
@@ -558,6 +577,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
             """
             with store.connect(accounts.path) as conn:
                 merged = dict(store.get_settings(conn))
+            explicit = dict(merged)
             raw_env = self._env_fallback()
             for key, env_name in store.SETTING_ENVS.items():
                 if not merged.get(key) and raw_env.get(env_name):
@@ -573,6 +593,10 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                 if not value or (key in store.SECRET_KEYS and value.startswith(MASK_CHAR)):
                     continue
                 merged[key] = value
+                explicit[key] = value
+            provider = merged.get("search_provider") or "zhipu"
+            if provider.lower() == "zhipu":
+                merged["search_api_key"] = zhipu_search_key(explicit, raw_env)
             return merged
 
         def _save_settings(self) -> None:
@@ -728,7 +752,9 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
             # 关键：告诉工作进程"这次是谁在用"。共享进程靠这个头把报告、画像、
             # 台账按用户分存，记账时也靠它认人（不能再依赖进程自己的环境变量）。
             headers["X-Underbox-User"] = user["id"]
-            headers["X-Underbox-Name"] = user["name"]
+            if workers is not None:
+                headers["X-Underbox-Internal"] = workers.internal_token
+            # 显示名只在 JSON 中返回；HTTP 头不能直接编码中文，工作进程也不需要它。
             conn = http.client.HTTPConnection("127.0.0.1", int(worker_port), timeout=1800)
             sent = False
             try:

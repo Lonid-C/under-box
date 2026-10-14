@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from app import homepage, pipeline
 from app.homepage import (HomepageError, NotHomepageError, ensure_personal_homepage, html_to_snapshot,
-                          normalize_url, read_homepage, same_page, to_document)
+                          homepage_whitelist, normalize_url, read_homepage, same_page, to_document)
 from app.schema import Claim, Evidence
 from app.strategy import ResumeProfile
 
@@ -55,6 +55,17 @@ class UrlTests(unittest.TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(HomepageError):
                     normalize_url(bad)
+
+    def test_bnbu_college_faculty_shell_maps_to_staff_site(self):
+        self.assertEqual(normalize_url("https://fbm.bnbu.edu.cn/faculty/faculty.htm#/ericjhzhang/"),
+                         "https://staff.bnbu.edu.cn/ericjhzhang/cn")
+        self.assertEqual(normalize_url("https://fbm.bnbu.edu.cn/en/faculty/faculty.htm#/ericjhzhang/en"),
+                         "https://staff.bnbu.edu.cn/ericjhzhang/en")
+        with self.assertRaises(HomepageError):
+            normalize_url("https://fbm.bnbu.edu.cn/faculty/faculty.htm")
+        # 仿冒域名不映射
+        self.assertEqual(normalize_url("https://fbm.bnbu.edu.cn.example.com/faculty/faculty.htm#/x/"),
+                         "https://fbm.bnbu.edu.cn.example.com/faculty/faculty.htm")
 
     def test_same_page_ignores_scheme_www_and_slash(self):
         self.assertTrue(same_page("https://www.a.edu.cn/x/", "http://a.edu.cn/x#top"))
@@ -119,13 +130,16 @@ class ReadTests(unittest.TestCase):
             read_homepage(URL, FakeFetcher(soft))
         with self.assertRaisesRegex(HomepageError, "几乎没有文字"):
             read_homepage(URL, FakeFetcher("<html><body><div id='app'></div></body></html>"))
+        # 数字里含 404 的短页面不是「页面未找到」
+        with self.assertRaisesRegex(HomepageError, "几乎没有文字"):
+            read_homepage(URL, FakeFetcher("<html><body><p>备案号 4049102496044</p></body></html>"))
         with self.assertRaisesRegex(HomepageError, "不是网页"):
             read_homepage(URL, FakeFetcher("%PDF-1.7 纯文本内容" * 20))
 
 
 class GateTests(unittest.TestCase):
     def doc(self, html=None):
-        return to_document(html_to_snapshot(html or FIX.read_text(encoding="utf-8"), URL))
+        return to_document(html_to_snapshot(html or FIX.read_text(encoding="utf-8"), "https://example.com/profile"))
 
     def test_personal_homepage_passes(self):
         doc = self.doc()
@@ -156,6 +170,70 @@ class GateTests(unittest.TestCase):
         self.assertEqual(llm.calls, 0)
 
 
+class WhitelistTests(unittest.TestCase):
+    def test_education_domains_skip_model_rejection_and_failure(self):
+        for url in (URL, "https://profiles.stanford.edu/person", "https://cs.example.edu.hk/staff",
+                    "https://example.edu.tw/teacher", "https://example.edu.au/person",
+                    "https://www.example.ac.uk/~person", "HTTPS://CS.EXAMPLE.EDU.CN./info/1.htm"):
+            for answer in ({"is_personal_homepage": False, "page_type": "机构页面"}, RuntimeError("model unavailable")):
+                with self.subTest(url=url, answer=answer):
+                    doc = to_document(html_to_snapshot(FIX.read_text(encoding="utf-8"), url))
+                    llm = FakeLLM(answer)
+                    verdict = ensure_personal_homepage(doc, llm)
+                    self.assertTrue(verdict['whitelisted'])
+                    self.assertTrue(doc.resume_validated)
+                    self.assertEqual(llm.calls, 0)
+
+    def test_professional_profile_pages_are_allowed(self):
+        for url in ("https://www.linkedin.com/in/person/?trk=public_profile",
+                    "https://cn.linkedin.com/in/person", "https://www.linkedin.com/pub/person/1/2/3",
+                    "https://www.researchgate.net/profile/Some-Person/",
+                    "https://orcid.org/0000-0002-1825-0097",
+                    "https://scholar.google.com/citations?user=example&hl=en",
+                    "https://github.com/some-person", "https://some-person.github.io/cv/"):
+            with self.subTest(url=url):
+                doc = to_document(html_to_snapshot(FIX.read_text(encoding="utf-8"), url))
+                llm = FakeLLM({"is_personal_homepage": False, "page_type": "社交媒体"})
+                verdict = ensure_personal_homepage(doc, llm)
+                self.assertTrue(verdict['whitelisted'])
+                self.assertEqual(llm.calls, 0)
+
+    def test_domain_spoofing_and_platform_non_profile_pages_are_not_whitelisted(self):
+        for url in ("https://university.edu.cn.example.com/teacher", "https://linkedin.com.example.com/in/person",
+                    "https://example.com/?url=https://example.edu.cn/profile", "https://fakeedu.cn/teacher",
+                    "https://www.linkedin.com/feed/", "https://www.linkedin.com/company/example",
+                    "https://www.linkedin.com/posts/person", "https://www.researchgate.net/publication/123",
+                    "https://scholar.google.com/citations?hl=en", "https://github.com/search",
+                    "https://github.com/some-person/repo", "https://github.io/profile"):
+            with self.subTest(url=url):
+                self.assertIsNone(homepage_whitelist(url))
+
+    def test_redirect_uses_destination_domain_for_trust(self):
+        f = FakeFetcher(FIX.read_text(encoding="utf-8"))
+        f.resolved_urls[URL] = "https://example.com/article"
+        doc = to_document(read_homepage(URL, f))
+        llm = FakeLLM({"is_personal_homepage": False, "page_type": "新闻报道"})
+        with self.assertRaises(NotHomepageError):
+            ensure_personal_homepage(doc, llm)
+        self.assertEqual(llm.calls, 1)
+        f.resolved_urls[URL] = "https://faculty.example.edu.cn/profile"
+        doc = to_document(read_homepage(URL, f))
+        self.assertTrue(ensure_personal_homepage(doc, FakeLLM(RuntimeError()))['whitelisted'])
+
+    def test_redirect_to_private_address_is_rejected(self):
+        for final in ("http://127.0.0.1/private", "http://10.0.0.1/private", "http://localhost/private"):
+            f = FakeFetcher(FIX.read_text(encoding="utf-8"))
+            f.resolved_urls[URL] = final
+            with self.subTest(final=final), self.assertRaises(HomepageError):
+                read_homepage(URL, f)
+
+    def test_private_information_is_still_rejected_on_whitelisted_hosts(self):
+        doc = to_document(html_to_snapshot("<html><body><p>身份证号：11010520000101002X</p></body></html>", URL))
+        with self.assertRaises(NotHomepageError):
+            ensure_personal_homepage(doc, FakeLLM(ACCEPT))
+        self.assertFalse(getattr(doc, 'resume_validated', False))
+
+
 class SourcePageNotEvidenceTests(unittest.TestCase):
     def test_the_submitted_homepage_is_not_evidence_for_itself(self):
         doc = to_document(html_to_snapshot(FIX.read_text(encoding="utf-8"), URL))
@@ -166,7 +244,7 @@ class SourcePageNotEvidenceTests(unittest.TestCase):
         own = Evidence(url="http://example.edu.cn/info/1041/1.htm", title="林知远", publisher="晴川大学",
                        source_tier="D", snippet="副教授")
         other = Evidence(url="https://news.example.edu.cn/a.htm", title="学院新闻", publisher="晴川大学",
-                         source_tier="B", snippet="林知远副教授")
+                         source_tier="B", snippet="晴川大学软件学院 林知远副教授")
         with patch.dict(os.environ, {"CLAIM_WORKERS": "1"}), \
              patch.object(pipeline, "derive_profile", lambda t, l: ResumeProfile(identity="researcher", name="林知远")), \
              patch.object(pipeline, "split_claims", lambda t, l: [claim]), \

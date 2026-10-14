@@ -17,7 +17,7 @@ open_box/            规则层（Python，纯规则）
   app/collect.py       检索与页面回读（含学校域动态发现、GitHub 一等锚点）
   app/judge.py         来源分级、身份判定、状态判定（规则）
   data/strategies.json 策略档案：加一种简历类型 = 加一个档案，不改代码
-  tests/test_rules.py  23 项验收（`python -m tests.test_rules`）
+  tests/test_rules.py  33 项旧验收（完整回归入口见 scripts/regression.py）
 
 underbox/            界面层（单页 + 本地服务）
   index.html           落地页 → 拖入简历 → FLIP 动画切到主界面
@@ -42,17 +42,21 @@ search-strategy/     检索策略的设计文档与对照脚本
 | `SEARCH_API_KEY` | 检索证据（默认智谱 web_search） | 同上 |
 
 ```bash
+python3 -m pip install -r requirements.txt
 cp open_box/.env.example open_box/.env     # 填入两个 key
 cd underbox && ./start.sh                  # 打开 http://127.0.0.1:8787/
 ```
 
 拖一份 PDF 进去，约 3–10 分钟出结果。左下角状态窗口会实时显示流水线的**真实日志**。
 
-跑规则层验收（不需要 key）：
+每次修改后跑完整回归（不需要 key）：
 
 ```bash
-cd open_box && python -m tests.test_rules   # 23 项
+python3 scripts/regression.py
+# 或：make test PY=/path/to/python NODE=/path/to/node
 ```
+
+覆盖当前规则、账户/历史/导出、SSE 和前端检查，并额外运行旧版 33 项验收。检查日志、已知失败及浏览器/部署验证要求见 [REGRESSION.md](REGRESSION.md)；退出码 2 表示仍有已知旧失败，不能当作全部通过。
 
 ## 为什么是这套设计
 
@@ -69,6 +73,8 @@ cd open_box && python -m tests.test_rules   # 23 项
 ## 不在仓库里的东西
 
 - `open_box/.env`（两个 key）
+- 账户 SQLite 数据库、会话、账户专用密钥与 `users/` 目录
+- `outputs/` 中的本地测试结果、部署包及服务器备份
 - 真实简历样例与真实核验报告——**含个人隐私，只在本地**
 - `search-strategy/probe_*.py` 两个一次性调查脚本（硬编码了某份真实简历的路径与姓名）
 
@@ -76,11 +82,19 @@ cd open_box && python -m tests.test_rules   # 23 项
 
 ## 已实现与未实现
 
-**已实现**：解析 + 注入检测 → 画像 → 拆陈述（≤12 条）→ 策略引擎生成三轮查询 →
+**已实现**：解析 + 注入检测 → 画像 → 拆陈述 → 策略引擎生成查询 →
 检索 + 整页回读 → 逐要素判定 → 澄清问题；界面上的流式核验状态窗、流式问答、
 来源分级面板、逐条检索计划、报告导出；搜索结果统一排序与跨查询分配读取预算、
 不同域页面并发回读（`COLLECT_WORKERS` 默认 3）；dsh 插件 6 工具。
 
-**未实现**：覆盖度自检（`app/coverage.py`）还没写；报告只在服务内存里，重启即失。
+核验按十三类专项 agent 分工，使用受类别约束的数据源与带出处的协作线索；学历学段、年份、人员身份、奖项及第三方来源分别核对。实习提供企查查公司入口和可取得的公开电话，保持“待人工背调”，不自动证明本人实习。项目只有原文明示 GitHub 材料时才启动仓库核验。
+
+账户网关支持角色、配额、管理台 API 设置及账户专用搜索密钥；成功报告按账户持久化最近十次，可回看与导出。“退出此次查询”清空当前日志和进度、保留登录；登出后须重新认证才可读取历史。单机直接启动与账户网关模式的配置见 [账户与历史说明](underbox/ACCOUNTS.md)。
+
+专项职责、数据源与协作边界见 [指导老师建议的落地](open_box/docs/ADVISOR_ARCHITECTURE_2026-10-12.md)，实习人工背调见 [分类核验说明](open_box/docs/VERIFICATION_AGENTS_2026-10-12.md)。公开登记接口、本地目录与报告数据库各有用途；本项目没有学信网或企业内部人事库的自动访问权限。
+
+**v2 开发中（尚未验证）**：增加逐要素证明、证据溯源、检索覆盖度、运行计划回放、临时 token
+隔离和最小人工复核 API。开发记录与限制见 [v2 变更记录](docs/optimization-v2/CHANGELOG.md)。
+本轮按用户要求未运行测试；五项旧验收差异仍保留，见 [REGRESSION.md](REGRESSION.md)。
 
 细节与设计取舍见 `search-strategy/DESIGN.md`，各部分的踩坑记录在各自的 README 里。

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sqlite3
@@ -100,6 +101,14 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
+-- Optional per-account search key. Unbound users retain the original shared API.
+-- Secrets stay in this protected database and are never returned by account APIs.
+CREATE TABLE IF NOT EXISTS user_search_keys (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  api_key TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- 访问流水：看板的"访问量"来自这里。只记路径与状态，不记正文
 CREATE TABLE IF NOT EXISTS access_log (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,9 +121,36 @@ CREATE TABLE IF NOT EXISTS access_log (
 );
 CREATE INDEX IF NOT EXISTS idx_access_at   ON access_log(at);
 CREATE INDEX IF NOT EXISTS idx_access_user ON access_log(user_id, at);
+
+-- 只保留每位用户最近 10 次成功核验的报告正文；会话结束与服务重启均不删除。
+CREATE TABLE IF NOT EXISTS report_history (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  report_no   TEXT NOT NULL,
+  candidate   TEXT NOT NULL,
+  claims      INTEGER NOT NULL,
+  report_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_report_history_user ON report_history(user_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS review_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL REFERENCES report_history(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  reviewer_id TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL,
+  outcome TEXT NOT NULL DEFAULT 'pending',
+  at TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  UNIQUE(report_id, claim_id, version)
+);
 """
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "4"
 
 
 def now() -> str:
@@ -169,6 +205,84 @@ def _migrate(conn: sqlite3.Connection) -> None:
                      ("last_login_at", "TEXT")):
         if col not in have:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+
+
+def save_report(conn: sqlite3.Connection, user_id: str, report: dict) -> int:
+    """保存成功核验，原子裁剪为该账户最新 10 份。"""
+    payload = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
+    cursor = conn.execute(
+        "INSERT INTO report_history(user_id,created_at,report_no,candidate,claims,report_json) "
+        "VALUES(?,?,?,?,?,?)",
+        (user_id, now(), str(report.get("reportNo") or ""),
+         str(report.get("candidate") or ""), len(report.get("claims") or []), payload),
+    )
+    conn.execute(
+        "DELETE FROM report_history WHERE user_id=? AND id NOT IN "
+        "(SELECT id FROM report_history WHERE user_id=? ORDER BY id DESC LIMIT 10)",
+        (user_id, user_id),
+    )
+    return int(cursor.lastrowid)
+
+
+def list_reports(conn: sqlite3.Connection, user_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id,created_at,report_no,candidate,claims FROM report_history "
+        "WHERE user_id=? ORDER BY id DESC LIMIT 10", (user_id,),
+    ).fetchall()
+    return [{"id": row["id"], "createdAt": row["created_at"],
+             "reportNo": row["report_no"], "candidateName": row["candidate"],
+             "claims": row["claims"]} for row in rows]
+
+
+def get_report(conn: sqlite3.Connection, user_id: str, report_id: int) -> dict | None:
+    row = conn.execute("SELECT report_json FROM report_history WHERE id=? AND user_id=?",
+                       (report_id, user_id)).fetchone()
+    if not row:
+        return None
+    report = json.loads(row["report_json"])
+    report["reviewHistory"] = [dict(r) for r in conn.execute(
+        "SELECT claim_id,action,reviewer_id,source,reason,outcome,at,version FROM review_events "
+        "WHERE report_id=? AND user_id=? ORDER BY id", (report_id, user_id))]
+    return report
+
+
+def append_review(conn, *, owner_id, actor_id, report_id, claim_id, action, source, reason,
+                  outcome="pending", expected_version=0):
+    actor = get_user(conn, actor_id)
+    if not actor or not actor["enabled"] or actor["role"] not in {"admin", "reviewer"}:
+        raise PermissionError("仅管理员或授权复核角色可录入复核")
+    if actor_id != owner_id:
+        raise PermissionError("只能处理当前账户拥有的报告")
+    report = get_report(conn, owner_id, report_id)
+    if not report or claim_id not in {c.get("id") for c in report.get("claims", [])}:
+        raise LookupError("报告或陈述不存在")
+    if action not in {"open", "supplement", "decide"}:
+        raise ValueError("无效复核操作")
+    if outcome not in {"pending", "supported", "unresolved", "corrected"}:
+        raise ValueError("无效复核结果")
+    if action != "decide" and outcome != "pending":
+        raise ValueError("补充材料不能直接产生复核决定")
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
+        raise ValueError("请填写复核理由")
+    if not isinstance(source, str) or len(source) > 1000:
+        raise ValueError("材料索引过长")
+    row = conn.execute("SELECT COALESCE(MAX(version),0) AS v FROM review_events WHERE report_id=? AND claim_id=?",
+                       (report_id, claim_id)).fetchone()
+    version = row["v"]
+    if version != expected_version:
+        raise ValueError("复核版本已变化，请刷新后重试")
+    if version == 0 and action != "open":
+        raise ValueError("请先发起复核任务")
+    if version > 0 and action == "open":
+        raise ValueError("复核任务已存在")
+    conn.execute("INSERT INTO review_events(report_id,user_id,claim_id,action,reviewer_id,source,reason,outcome,at,version) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                 (report_id, owner_id, claim_id, action, actor_id, source, reason.strip(), outcome, now(), version + 1))
+    return version + 1
+
+
+def clear_history(conn, owner_id):
+    conn.execute("DELETE FROM review_events WHERE user_id=?", (owner_id,))
+    conn.execute("DELETE FROM report_history WHERE user_id=?", (owner_id,))
 
 
 # ── 口令 ──────────────────────────────────────────────────────────────────
@@ -448,6 +562,21 @@ def settings_env(conn) -> dict[str, str]:
         if env and value:
             out[env] = value
     return out
+
+
+def set_user_search_key(conn, user_id: str, api_key: str) -> None:
+    from app.api_config import SearchCredentials
+    SearchCredentials(api_key)  # validate without including the secret in errors
+    if get_user(conn, user_id) is None:
+        raise ValueError("账号不存在")
+    conn.execute("INSERT INTO user_search_keys(user_id,api_key,updated_at) VALUES(?,?,?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET api_key=excluded.api_key,updated_at=excluded.updated_at",
+                 (user_id, api_key, now()))
+
+
+def user_search_key(conn, user_id: str) -> str | None:
+    row = conn.execute("SELECT api_key FROM user_search_keys WHERE user_id=?", (user_id,)).fetchone()
+    return row["api_key"] if row is not None else None
 
 
 # ── 访问统计 ──────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ from app.competitions import (catalog_query_specs, competition_for_claim, find_c
 from app.schema import Claim, Report
 from app.search import PageFetcher, SearchHit, _award_table_text
 from app.strategy import ResumeProfile, add_competition_school_hints, build_plan
+from http_kit import PUBLIC_DNS
 
 
 def claim(contest="CISCN", year="2024", **entities):
@@ -328,7 +329,7 @@ class CompetitionTests(unittest.TestCase):
         original='https://contest.comap.com/2024/results'
         response=httpx.Response(200,text='<p>Results</p>',request=httpx.Request('GET',original+'/'))
         fetcher=PageFetcher()
-        with patch('app.search.robots_allows',return_value=True),patch('httpx.get',return_value=response):
+        with patch('app.search.robots_allows',return_value=True),patch('app.safe_http.DNS_RESOLVER',PUBLIC_DNS),patch('httpx.get',return_value=response):
             self.assertTrue(fetcher.get(original))
         self.assertEqual(fetcher.resolved_urls[original],original+'/')
 

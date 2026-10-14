@@ -4,6 +4,13 @@
 !.env.example
 *.key
 .credentials.yaml
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+underbox/users/
+users/
 
 # ── 真实个人信息（绝不绝入库）────────────────────
 # 真实简历样例：含姓名、电话、邮箱、照片。只在本地用作测试。
@@ -12,6 +19,7 @@ open_box/CV_example/
 open_box/out/
 out/
 *.报告.json
+outputs/
 
 # ── 一次性调查脚本 ──────────────────────────────
 # 这两个脚本把某个真实简历的路径与姓名硬编码在里面，属于本地排查工具，

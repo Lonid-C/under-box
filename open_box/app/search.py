@@ -9,14 +9,16 @@ from __future__ import annotations
 import os
 import posixpath
 import re
+import ssl
 import threading
 import time
 import zipfile
 from xml.etree import ElementTree as ET
 import urllib.robotparser as robotparser
 from io import BytesIO
+from pathlib import Path
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
+from .usage import UsageExecutor as ThreadPoolExecutor
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -65,7 +67,12 @@ def _office_text(data: bytes) -> str | None:
         return None
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
-            if sum(info.file_size for info in archive.infolist()) > 48 * 1024 * 1024:
+            members = archive.infolist()
+            if (len(members) > 1000 or sum(info.file_size for info in members) > 48 * 1024 * 1024
+                    or any(info.flag_bits & 1 or info.file_size > 16 * 1024 * 1024
+                           or len(info.filename.split("/")) > 12
+                           or info.file_size > max(1024 * 1024, info.compress_size * 100)
+                           for info in members)):
                 return None
             names = set(archive.namelist())
             if "word/document.xml" in names:
@@ -295,6 +302,9 @@ class SearchHit:
     authors: tuple[str, ...] = ()
     venue: str = ""
     year: str = ""
+    author_records: tuple[dict, ...] = ()  # 单位必须绑定该作者，不能借同篇其他作者的单位
+    registry_sources: tuple[str, ...] = ()
+    publication_type: str = ""
 
 
 class Searcher(Protocol):
@@ -305,13 +315,16 @@ class NullSearcher:
     """没有配置搜索 key 时使用。返回空列表——查不到就是查不到，不编造。"""
 
     def search(self, query: str, site: str | None = None) -> list[SearchHit]:
-        return []
+        raise SearchUnavailable("未配置搜索供应商，查询未执行")
 
 
 class CachedSearcher:
     """只在单份报告内复用完全相同的查询；跨报告不共享个人信息或旧结果。"""
 
     def __init__(self, inner: Searcher):
+        # 调用方可能已包缓存；新报告仍建独立缓存，并保留供应商的空结果补查能力。
+        while isinstance(inner, CachedSearcher):
+            inner = inner.inner
         self.inner = inner
         self.cache: dict[tuple[str, str | None], list[SearchHit]] = {}
         self._guard = threading.Lock()
@@ -409,6 +422,8 @@ class ZhipuSearcher:
         #   search_pro 的域限定是准的（pku.edu.cn → 只回 pku、微信 → 只回微信）。
         # 所以：带 site 用 self.engine（过滤生效），不带 site 用 self.engine_open。
         self.engine_open = os.environ.get("SEARCH_ENGINE_OPEN", "search_pro_sogou")
+        self.engine_open_alternate = os.environ.get("SEARCH_ENGINE_OPEN_ALTERNATE") or (
+            "search_pro_sogou" if self.engine_open == "search_pro_quark" else "search_pro_quark")
         self.timeout = timeout
         self.calls = 0
         self._last: dict[str, float] = {}
@@ -443,7 +458,9 @@ class ZhipuSearcher:
             return []
         if not site:
             # 裸查询必须换引擎：search_std/search_pro 的裸结果没有 link（见 __init__）
-            return self._call(query, None, self.engine_open)
+            # 书目 PDF 是有意换索引的最后一条查询，避免不同关键词一直返回同批商店页。
+            catalog = 'filetype:pdf' in query.lower() and bool(re.search(r'书目|馆藏|出版社',query))
+            return self._call(query, None, self.engine_open_alternate if catalog else self.engine_open)
 
         # 官方仅为 std/pro/sogou 声明域过滤支持；夸克配置不能使官网限定失效。
         engine = self.engine if self.engine != "search_pro_quark" else "search_pro"
@@ -456,11 +473,19 @@ class ZhipuSearcher:
         return hits
 
     def confirm_empty(self, query: str, site: str | None = None) -> list[SearchHit]:
-        """关键整批名单的空结果用 pro 确认，不修改共享实例的默认引擎。"""
-        if (not self.api_key or not site or self.engine != "search_std"
-                or self.engine_site_fallback and self.engine_site_fallback != self.engine):
+        """关键官网记录空结果换索引补查，结果仍须落在原目标域。
+
+        原生域过滤和开放索引的覆盖不同；补查最多一次，调用者按查询缓存。
+        不修改共享实例引擎，也不放宽目标学校或现任机构的排除范围。
+        """
+        if not self.api_key or not site:
             return []
-        return self._call(query, site, "search_pro")
+        if self.engine == "search_std" and not self.engine_site_fallback:
+            found = self._call(query, site, "search_pro")
+            if found:
+                return found
+        found = self._call(f'{query} site:{site}', None, self.engine_open_alternate)
+        return [h for h in found if url_in_domain(h.url, site)]
 
     def _call(self, query: str, site: str | None, engine: str) -> list[SearchHit]:
         import httpx
@@ -666,6 +691,26 @@ _robots_guard = threading.Lock()
 ROBOTS_TIMEOUT_SECONDS = 5.0
 
 
+def _verify_for_url(url: str):
+    """补足 BNBU 的中间证书链，仍使用系统根证书和主机名校验。
+
+    公共中间证书随代码保存，避免工作进程重启或账户配置更新漏传环境变量后
+    再次报 SSL 错误；显式配置存在时仍优先使用它。
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if host == "staff.bnbu.edu.cn":
+        bundled = Path(__file__).resolve().parent.parent / "data" / "certs" / "globalsign-atlas-r3-ov-tls-ca-2026-q2.pem"
+        configured = os.environ.get("BNBU_TLS_CA_FILE", "")
+        ca_file = configured if configured and os.path.isfile(configured) else str(bundled)
+        if not os.path.isfile(ca_file):
+            return True
+        context = ssl.create_default_context()
+        context.load_verify_locations(cafile=ca_file)
+        return context
+    return True
+
+
 def _load_robots(root: str) -> robotparser.RobotFileParser | None:
     """用本项目的 UA 和短超时取 robots.txt。
 
@@ -681,8 +726,10 @@ def _load_robots(root: str) -> robotparser.RobotFileParser | None:
     """
     import httpx
     try:
-        r = httpx.get(root + "/robots.txt", headers={"User-Agent": UA},
-                      timeout=ROBOTS_TIMEOUT_SECONDS, follow_redirects=True)
+        from .safe_http import public_request
+        r = public_request("GET", root + "/robots.txt", headers={"User-Agent": UA},
+                      timeout=ROBOTS_TIMEOUT_SECONDS, max_bytes=512 * 1024,
+                      verify=_verify_for_url(root))
     except Exception:
         return None
     if r.status_code != 200:
@@ -752,8 +799,12 @@ def github_hits(entities: dict, limit: int = 4) -> list[SearchHit]:
                     url=u.get("html_url", ""),
                     title=f"GitHub 仓库 · {u.get('full_name', '')}",
                     snippet=snippet, publisher="github.com", content=snippet))
+    except httpx.TimeoutException:
+        pass
+    except httpx.HTTPError:
+        pass
     except Exception:
-        return out
+        pass
     return out[:limit]
 
 
@@ -784,6 +835,12 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
         )
         r.raise_for_status()
         items = ((r.json().get("message") or {}).get("items") or [])
+    except httpx.TimeoutException:
+        return []
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (429, 500, 502, 503, 504):
+            return []
+        return []
     except Exception:
         return []
 
@@ -804,15 +861,20 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
 
 def _crossref_hit(it: dict) -> SearchHit | None:
     """Crossref 的一条 work 记录 → SearchHit（标题查询与 DOI 精确查询共用）。"""
+    from urllib.parse import quote
     paper_title = " ".join(it.get("title") or []).strip()
     doi = (it.get("DOI") or "").strip()
     if not paper_title or not doi:
         return None
     authors = []
+    author_records = []
     for a in it.get("author") or []:
         name = " ".join(x for x in (a.get("given"), a.get("family")) if x).strip()
         if name:
             authors.append(name)
+            author_records.append({"name": name, "given": a.get("given") or "", "family": a.get("family") or "",
+                "position": len(authors), "institutions": [v.get("name") for v in a.get("affiliation", []) if v.get("name")],
+                "orcid": a.get("ORCID") or ""})
     venue = " ".join(it.get("container-title") or []).strip()
     parts = ((it.get("published") or {}).get("date-parts") or [[]])[0]
     published = "-".join(str(x) for x in parts) if parts else ""
@@ -833,6 +895,8 @@ def _crossref_hit(it: dict) -> SearchHit | None:
         publisher=it.get("publisher") or "Crossref", content=content,
         official_url=official_url, authors=tuple(authors), venue=venue,
         year=str(parts[0]) if parts else "",
+        author_records=tuple(author_records), publication_type=it.get("type") or "",
+        registry_sources=("https://api.crossref.org/works/" + quote(doi, safe="/"),),
     )
 
 
@@ -887,6 +951,12 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
         )
         r.raise_for_status()
         items = r.json().get("results") or []
+    except httpx.TimeoutException:
+        return []
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (429, 500, 502, 503, 504):
+            return []
+        return []
     except Exception:
         return []
 
@@ -903,12 +973,18 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
         if not paper_title:
             continue
         authors = []
+        author_records = []
         for a in it.get("authorships") or []:
             name = ((a.get("author") or {}).get("display_name") or "").strip()
             if name:
                 insts = "、".join(
                     (i.get("display_name") or "") for i in (a.get("institutions") or []))
                 authors.append(f"{name}（{insts}）" if insts else name)
+                author_records.append({"name": name, "position": len(authors),
+                    "institutions": [i.get("display_name") for i in a.get("institutions", []) if i.get("display_name")],
+                    "institution_records": [{"name": i.get("display_name") or "", "ror": i.get("ror") or ""}
+                                            for i in a.get("institutions", [])],
+                    "orcid": (a.get("author") or {}).get("orcid") or ""})
         loc = (it.get("primary_location") or {}).get("source") or {}
         venue = (loc.get("display_name") or "").strip()
         landing = ((it.get("primary_location") or {}).get("landing_page_url") or "").strip()
@@ -928,7 +1004,9 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
             publisher=venue or "OpenAlex", content=content,
             official_url=landing if landing.startswith(("https://", "http://")) else "",
             authors=tuple(authors), venue=venue,
-            year=str(it.get("publication_year") or "")))
+            year=str(it.get("publication_year") or ""), author_records=tuple(author_records),
+            registry_sources=(str(it.get("id") or "").replace("https://openalex.org/", "https://api.openalex.org/works/"),),
+            publication_type="journal-article" if loc.get("type") == "journal" and it.get("type") == "article" else it.get("type") or ""))
     return out[:max(1, int(limit))]
 
 
@@ -960,6 +1038,19 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
             previous = out[positions[key]]
             if not previous.official_url and hit.official_url:
                 previous.official_url = hit.official_url
+            # 同 DOI 且题名一致，按作者全名逐人合并；不把整篇机构列表归给第一作者。
+            if norm(previous.title) == norm(hit.title):
+                from copy import deepcopy
+                records = [deepcopy(r) for r in previous.author_records]
+                by_name = {norm(r["name"]): r for r in records}
+                for other in hit.author_records:
+                    row = by_name.get(norm(other["name"]))
+                    if row is not None:
+                        row["institutions"] = list(dict.fromkeys([*row.get("institutions", []), *other.get("institutions", [])]))
+                        row["institution_records"] = list(other.get("institution_records") or row.get("institution_records") or [])
+                        if not row.get("orcid"): row["orcid"] = other.get("orcid") or ""
+                previous.author_records = tuple(records or hit.author_records)
+                previous.registry_sources = tuple(dict.fromkeys([*previous.registry_sources, *hit.registry_sources]))
             continue
         positions[key] = len(out)
         out.append(hit)
@@ -985,7 +1076,54 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
 
     out = [hit for hit in out if relevance(hit)[0] >= 0.75]
     out.sort(key=relevance, reverse=True)
-    return out[:max(1, int(limit))]
+    selected = out[:max(1, int(limit))]
+    from .paper_identity import latin_names, compact
+    aliases = {compact(n) for n in latin_names(author)}
+    resolved = {}; remaining = 3
+    for hit in selected:
+        for row in hit.author_records:
+            if compact(row.get("name")) not in aliases:
+                continue
+            for inst in row.get("institution_records", []):
+                key = inst.get("ror") or ""
+                if key not in resolved and remaining:
+                    remaining -= 1; resolved[key] = institution_record(key)
+                if resolved.get(key): inst.update(resolved[key])
+    return selected
+
+
+_INSTITUTIONS = {}
+_INSTITUTIONS_LOCK = threading.Lock()
+
+
+def institution_record(ror: str) -> dict:
+    """ROR 公开机构目录只用于域名对应，不证明任何人的就读或获奖。"""
+    p = urlparse(ror)
+    if p.scheme != "https" or p.netloc != "ror.org" or not re.fullmatch(r"/[a-z0-9]{9}", p.path) or p.query or p.fragment:
+        return {}
+    with _INSTITUTIONS_LOCK:
+        cached = _INSTITUTIONS.get(ror)
+        if cached and time.monotonic() - cached[0] < 3600: return dict(cached[1])
+    import httpx
+    source = "https://api.ror.org/v2/organizations" + p.path
+    try:
+        response = httpx.get(source, headers={"User-Agent": UA, "Accept": "application/json"}, timeout=8)
+        response.raise_for_status(); data = response.json()
+        if data.get("id") != ror: return {}
+        domains = list(data.get("domains") or [])
+        domains += [urlparse(r.get("value") or "").hostname for r in data.get("links", []) if r.get("type") == "website"]
+        result = {"domains": list(dict.fromkeys(d.lower() for d in domains if isinstance(d, str) and re.fullmatch(r"[a-zA-Z0-9.-]+", d))),
+                  "source": source}
+        with _INSTITUTIONS_LOCK:
+            if len(_INSTITUTIONS) >= 128: _INSTITUTIONS.pop(next(iter(_INSTITUTIONS)))
+            _INSTITUTIONS[ror] = (time.monotonic(), result)
+        return result
+    except httpx.TimeoutException:
+        return {}
+    except httpx.HTTPStatusError:
+        return {}
+    except Exception:
+        return {}
 
 
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_\-]+)""", re.I)
@@ -1068,9 +1206,10 @@ class PageFetcher:
         hints = [hint for p in item.get("school_result_pages", []) if p.get("school_domain") == school
                  for hint in p.get("archive_hints", [])]
         # 学校所在地只影响包内文件读取优先级，不据此声称候选人的参赛省份。
-        return self.get(url, archive_hint=str(claim.raw_text) + str(claim.entities) + " ".join(hints))
+        return self.get(url, archive_hint=str(claim.raw_text) + str(claim.entities) + " ".join(hints),
+                        publication_catalog=claim.category=='著作')
 
-    def get(self, url: str, *, archive_hint: str = "") -> str | None:
+    def get(self, url: str, *, archive_hint: str = "", publication_catalog: bool = False) -> str | None:
         import httpx
         host = urlparse(url).hostname or ""
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
@@ -1088,8 +1227,13 @@ class PageFetcher:
             timeout = httpx.Timeout(self.timeout, connect=self.connect_timeout)
             for attempt in range(self.PAGE_RETRIES + 1):
                 try:
-                    r = httpx.get(url, headers={"User-Agent": UA}, timeout=timeout,
-                                  follow_redirects=True)
+                    from .safe_http import public_request, UnsafeURL
+                    def check_redirect(target):
+                        if not robots_allows(target):
+                            raise UnsafeURL("跳转目标 robots.txt 不允许访问")
+                        self._throttle(urlparse(target).hostname or "")
+                    r = public_request("GET", url, headers={"User-Agent": UA}, timeout=timeout,
+                                       redirect_check=check_redirect, verify=_verify_for_url(url))
                     status = getattr(r, "status_code", 200)
                     if isinstance(status, int) and 400 <= status < 500:
                         # 404/403 之类重试也不会变，直接记原因，别再等。
@@ -1103,7 +1247,11 @@ class PageFetcher:
                         if len(r.content) > MAX_PUBLIC_PDF_BYTES:
                             self.failures[url] = "PDF 超过公开名单读取上限（32 MB）"
                             return None
-                        text = _pdf_text(r.content)
+                        if publication_catalog:
+                            from .book_catalog import pdf_catalog_text
+                            text = pdf_catalog_text(r.content) or _pdf_text(r.content)
+                        else:
+                            text = _pdf_text(r.content)
                         if not text:
                             self.failures[url] = "PDF 未提取到文本，可能是扫描件或受保护文件"
                         return text
@@ -1125,9 +1273,11 @@ class PageFetcher:
                         self.failures[url] = "返回内容不是有效 PDF"
                         return None
                     if r.content.startswith(b"\xd0\xcf\x11\xe0"):
-                        # 旧版 DOC/XLS 不作二进制文本解码。
-                        self.failures[url] = "暂不支持旧版 DOC/XLS 文件"
-                        return None
+                        from .public_documents import legacy_office_text
+                        text = legacy_office_text(r.content)
+                        if not text:
+                            self.failures[url] = "旧版 DOC/XLS 未读到文本（读取器缺失、超限或文件受保护）"
+                        return text
                     if (r.content.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"))
                             or r.content[:4] == b"RIFF" and r.content[8:12] == b"WEBP"):
                         from .ocr import recognize_image
@@ -1185,6 +1335,103 @@ class PageFetcher:
                 time.sleep(0.5 * (attempt + 1))
         return None
 
+    def post_public_json(self, url: str, data: dict) -> dict | None:
+        """POST only to BNBU's public, read-only profile API, respecting robots and pacing."""
+        import httpx
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if (parsed.scheme != "https" or parsed.hostname != "staff.bnbu.edu.cn"
+                or parsed.path not in {"/api/teacher/v1/category/lists",
+                                      "/api/teacher/v1/content/list"}):
+            return None
+        if not robots_allows(url):
+            self.failures[url] = "robots.txt 不允许访问"
+            return None
+        host = parsed.hostname
+        with self._host_lock(host):
+            self._throttle(host)
+            try:
+                from .safe_http import public_request
+                response = public_request("POST", url, data=data, headers={"User-Agent": UA},
+                                      timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
+                                      max_redirects=0, max_bytes=2 * 1024 * 1024, verify=_verify_for_url(url))
+                response.raise_for_status()
+                payload = response.json()
+                if isinstance(payload, dict) and payload.get("code") in (0, 200):
+                    return payload
+                self.failures[url] = "BNBU 公开接口未返回成功结果"
+            except Exception as exc:
+                if isinstance(exc, httpx.ConnectError) and ("SSL" in str(exc).upper()
+                                                            or "CERTIFICATE" in str(exc).upper()):
+                    self.failures[url] = "证书校验失败（SSL）"
+                else:
+                    self.failures[url] = f"公开接口请求失败（{type(exc).__name__}）"
+        return None
+
+    def read_bnbu_profile_sections(self, page_url: str, html: str) -> list[tuple[str, list[str]]] | None:
+        """Read public profile sections omitted from BNBU's JavaScript-only HTML shell."""
+        from bs4 import BeautifulSoup
+
+        email_match = re.search(r"\bEmail\s*=\s*['\"]([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})['\"]",
+                                html or "", re.I)
+        if not email_match:
+            return None
+        lang = urlparse(page_url).path.strip("/").split("/")[-1].lower()
+        if lang not in {"cn", "en"}:
+            return None
+        base = "https://staff.bnbu.edu.cn"
+        email = email_match.group(1)
+        common = {"email": email, "lang": lang}
+        categories = self.post_public_json(base + "/api/teacher/v1/category/lists",
+                                           {**common, "pid": 0, "area": "content"})
+        if not categories:
+            return None
+
+        def plain(value) -> str:
+            if not value:
+                return ""
+            return re.sub(r"\s+", " ", BeautifulSoup(str(value), "lxml").get_text(" ", strip=True)).strip()
+
+        output: list[tuple[str, list[str]]] = []
+        queue = list(categories.get("data") or [])
+        while queue:
+            category = queue.pop(0)
+            if not isinstance(category, dict):
+                continue
+            queue.extend(x for x in category.get("children", []) if isinstance(x, dict))
+            category_id = category.get("category_id")
+            name = plain(category.get("name"))
+            if not category_id or not name or category.get("type") not in {"content", "list"}:
+                continue
+            endpoint = base + "/api/teacher/v1/content/list"
+            payload = self.post_public_json(endpoint, {**common, "category_id": category_id,
+                                                       "pageSize": 50, "page": 0})
+            if not payload or not isinstance(payload.get("data"), dict):
+                return None
+            data = payload["data"]
+            items = data.get("list") or []
+            last_page = min(10, max(1, int(data.get("last_page") or 1)))
+            for page in range(1, last_page):
+                more = self.post_public_json(endpoint, {**common, "category_id": category_id,
+                                                        "pageSize": 50, "page": page})
+                if not more or not isinstance(more.get("data"), dict):
+                    return None
+                items.extend(more["data"].get("list") or [])
+            entries = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                value = plain(item.get("title")) or plain(item.get("content"))
+                extra = plain(item.get("content"))
+                if value and extra and extra != value:
+                    value += " " + extra
+                if value:
+                    entries.append(value)
+            if entries:
+                output.append((name, entries))
+        return output
+
 
 SEARCH_PROVIDERS = {"zhipu": ZhipuSearcher, "generic": HTTPSearcher,
                     "brave": BraveSearcher}
@@ -1201,6 +1448,12 @@ def build_searcher(provider: str | None = None) -> Searcher:
     SEARCH_ENDPOINT=...                # 可选：端点有变时覆盖
     SEARCH_PROVIDER=zhipu|brave|generic # 可选
     """
+    from .api_config import search_credentials
+    credentials = search_credentials()
+    if credentials is not None:
+        # Account binding is exclusive: never borrow another account's Brave key
+        # or send the bound Zhipu key to a globally configured custom endpoint.
+        return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
     name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
     if name == "brave":

@@ -292,6 +292,57 @@ class OpenAICompatLLM:
             "请回复 {\"ok\": true}", max_tokens=32)
         return json.dumps(got, ensure_ascii=False)
 
+    def stream_text(self, system: str, user: str, *, max_tokens: int = 4096, stream_factory=None):
+        """One provider-configured stream, no replay after partial output."""
+        import httpx
+        if not (self.endpoint and self.api_key and self.model):
+            yield {"error": "模型配置不完整：需要 endpoint、API key 和 model"}
+            return
+        body = {"model": self.model, "messages": [{"role": "system", "content": system},
+                                                  {"role": "user", "content": user}],
+                "max_tokens": max_tokens, "temperature": 0, "stream": True}
+        if self.provider in {"deepseek", "zhipu"}:
+            body["stream_options"] = {"include_usage": True}
+            if self.thinking in {"enabled", "disabled"}:
+                body["thinking"] = {"type": self.thinking}
+        factory = stream_factory or httpx.stream
+        finished = False
+        try:
+            with factory("POST", self.endpoint, json=body, timeout=self.timeout,
+                         headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}) as response:
+                if response.status_code != 200:
+                    # Provider bodies may echo secrets or user content; expose status only.
+                    yield {"error": f"模型服务 HTTP {response.status_code}；请检查供应商配置或稍后重试"}
+                    return
+                for line in response.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    value = line[5:].strip()
+                    if value == "[DONE]":
+                        finished = True
+                        break
+                    try:
+                        chunk = json.loads(value)
+                    except ValueError:
+                        continue
+                    if not isinstance(chunk, dict):
+                        continue
+                    if isinstance(chunk.get("usage"), dict):
+                        METER.record_llm(self.provider, chunk["usage"])
+                    choices = chunk.get("choices") or []
+                    if not choices or not isinstance(choices[0], dict):
+                        continue
+                    choice = choices[0]
+                    if choice.get("finish_reason"):
+                        finished = True
+                    delta = (choice.get("delta") or {}).get("content")
+                    if isinstance(delta, str) and delta:
+                        yield {"delta": delta}
+                if not finished:
+                    yield {"error": "模型流未完整结束，已生成内容不能视为完整回答"}
+        except httpx.HTTPError:
+            yield {"error": "模型连接失败或流中断，请稍后重试"}
+
 
 def build_llm(provider: str | None = None) -> LLM:
     """按环境变量装配。默认 DeepSeek。

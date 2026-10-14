@@ -14,6 +14,7 @@ from app.roster_archive import archive_text
 from app.schema import Claim, Evidence
 from app.search import PageFetcher, SearchHit
 from app.strategy import Query, ResumeProfile, build_plan
+from http_kit import PUBLIC_DNS
 
 
 def claim(contest="蓝桥杯", year="2021", **entities):
@@ -61,14 +62,14 @@ class HistoricalAwardTests(unittest.TestCase):
         api='https://www.guoxinlanqiao.com/api/web/news/selectone?nnid=860'
         shell=b'<html><title>Blue cup</title><div id="app"></div></html>'
         body=json.dumps({'news':{'title':'历届获奖名单','content':'<a href="https://upload.lanqiao.cn/a.rar">第十二届获奖名单</a>'}}).encode()
-        with patch('app.search.robots_allows',return_value=True),patch('httpx.get',side_effect=[response(shell,url),response(body,api)]) as get:
+        with patch('app.search.robots_allows',return_value=True),patch('app.safe_http.DNS_RESOLVER',PUBLIC_DNS),patch('httpx.get',side_effect=[response(shell,url),response(body,api)]) as get:
             html=PageFetcher().get(url)
         self.assertIn('第十二届',html)
         self.assertEqual([call.args[0] for call in get.call_args_list],[url,api])
 
     def test_dynamic_empty_payload_is_failure_not_readable_title(self):
         response=SimpleNamespace(content=b'<html>app</html>',status_code=200,url='',headers={},raise_for_status=lambda:None)
-        with patch('app.search.robots_allows',return_value=True),patch('httpx.get',return_value=response):
+        with patch('app.search.robots_allows',return_value=True),patch('app.safe_http.DNS_RESOLVER',PUBLIC_DNS),patch('httpx.get',return_value=response):
             f=PageFetcher();self.assertIsNone(f.get('https://dasai.lanqiao.cn/notices/860/'))
         self.assertIn('动态公告',f.failures['https://dasai.lanqiao.cn/notices/860/'])
 
@@ -98,10 +99,13 @@ class HistoricalAwardTests(unittest.TestCase):
         self.assertEqual([p['url'] for p in roster_image_links(html,page,c)],['http://eaedu.org.cn/ueditor/php/upload/image/one.png'])
 
     def test_ocr_only_cannot_be_final_verified(self):
+        from app.provenance import bind_page
         c=claim();ev=Evidence(url='https://school.edu.cn/list.png',title='名单',publisher='学校',source_tier='A',
                             snippet='张三 一等奖',identity_score=4,identity_signals=['学校一致'],supports=c.elements,extraction_method='ocr')
+        ev=bind_page(ev,ev.snippet)
         self.assertEqual(judge.decide(c,[ev]),'part');self.assertTrue(judge.needs_human('part',[ev]))
-        ev.extraction_method='text';self.assertEqual(judge.decide(c,[ev]),'ok')
+        ev.extraction_method='text';ev=bind_page(ev,ev.snippet)
+        self.assertEqual(judge.decide(c,[ev]),'ok')
 
     def test_wrong_year_result_does_not_consume_reads_but_biography_can(self):
         c=claim('全国高等院校英语能力大赛')

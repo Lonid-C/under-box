@@ -35,8 +35,9 @@ def award(stage="本科", year="2020"):
 
 
 def evidence(text, supports, title="本人介绍"):
-    return Evidence(url=URL, title=title, publisher=SCHOOL, source_tier="B", snippet=text,
-                    identity_signals=["学校一致", "专业一致"], supports=supports)
+    from app.provenance import bind_page
+    return bind_page(Evidence(url=URL, title=title, publisher=SCHOOL, source_tier="B", snippet=text,
+                              identity_signals=["学校一致", "专业一致"], supports=supports), text)
 
 
 def extract(claim, text, title="本人介绍"):
@@ -193,15 +194,22 @@ class HonorRosterTests(unittest.TestCase):
                      entities={"org": SCHOOL, "award": name})
 
     def test_old_three_good_student_and_outstanding_graduate_fixtures_are_confirmed(self):
+        """荣誉 fixture 的**存档结论**保持 ok/A（当时按 2026-10 规则判定）。
+
+        存档材料早于证据溯源契约：缺逐字定位与哈希，新规则重算必须失败保守
+        （不重算出 ok、不产出已核实要素），但不得改写历史报告的结论。
+        """
         path = Path(__file__).resolve().parents[1] / "fixtures" / "report_lin.json"
         report = Report(**json.loads(path.read_text(encoding="utf-8")))
         for item in report.claims:
             if item.claim.id in {"c02", "c11"}:
                 with self.subTest(id=item.claim.id):
+                    self.assertEqual(item.status, "ok")
+                    self.assertEqual(item.best_tier, "A")
                     result = judge.assess(item.claim, list(item.evidence))
-                    self.assertEqual(result.status, "ok")
-                    self.assertEqual(result.best_tier, "A")
-                    self.assertEqual(result.proved, item.claim.elements)
+                    self.assertNotEqual(result.status, "ok",
+                                        "缺溯源的旧材料不得重算出已证实")
+                    self.assertTrue(all(p.state != "verified" for p in result.element_proofs))
 
     def test_named_honor_roster_supplies_award_year_not_enrollment_year(self):
         for name in ("校级三好学生", "校级优秀毕业生", "优秀学生干部", "学习标兵"):

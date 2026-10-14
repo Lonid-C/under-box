@@ -81,6 +81,9 @@ def public_phones(html, company):
             continue
         for phone in PHONE.finditer(match.group(1)):
             value = phone.group()
+            digits = re.sub(r"\D", "", value)
+            if re.fullmatch(r"(?:86)?1[3-9]\d{9}", digits):
+                continue  # Public page does not establish permission to expose a person's mobile.
             if value not in [p["phone"] for p in contacts]:
                 contacts.append({"phone": value, "excerpt": excerpt, "kind": "公司公开联系电话"})
     return contacts[:3]
@@ -92,6 +95,7 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
     review = {"kind": "internship", "company": company, "queryUrl": query_url(company),
               "companyUrl": "", "contacts": [], "state": "company_name_missing",
               "checkedAt": checked_at,
+              "authorizationNotice": "联系企业前应向候选人告知核对目的并取得合理授权；未经授权不向第三方发送候选人姓名或简历。可请求更正或删除材料。",
               "note": "公司页面及电话仅用于人工背调，不能证明本人实习；公开公司电话未必是人力资源或背调专线。",
               "checks": ["确认公司全称和实际实习主体", "联系公司转接人力资源或实习负责人",
                          "分别核对本人实习岗位、起止时间及职责"], "limitations": []}

@@ -245,6 +245,9 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         return None
 
     snippet = (got.get("snippet") or "").strip()
+    from .provenance import locate_quote
+    if locate_quote(snippet, original_page_text) is None:
+        return None
     # 模型该给数组的地方经常给单个字符串。必须**先收敛再判断**：
     # 否则下面 `[s for s in supports if ...]` 会逐字符迭代，supports 静默变成空列表——
     # 不报错，但证据全丢。identity_conflicts 更要保住：它是"同名一票否决"的唯一依据。
@@ -440,7 +443,8 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     ev.supports = teaching_supports(claim, ev)
     from .faculty_recall import book_contradicts
     ev.contradicts = book_contradicts(claim,ev)
-    return judge.score_evidence(ev)
+    from .provenance import bind_page
+    return judge.score_evidence(bind_page(ev, original_page_text))
 
 
 # ── 学校域动态发现 ────────────────────────────────────────────────────────
@@ -890,6 +894,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             if ev:
                 if hit.url in snippet_urls:
                     ev.extraction_method = "search_snippet"
+                    from .provenance import mark_unverified
+                    mark_unverified(ev)
                     if ev.source_tier == "A":
                         ev.source_tier = "B"
                 evidences.append(ev)
@@ -1357,8 +1363,23 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             # 产品底线是把未知项如实留着，不把没搜成的事伪装成搜过了。
             say(f"    ⚠️ 查询被内容审核误拦，改述重试仍失败，跳过：{q.text}")
             continue
-        except SearchUnavailable:
-            raise
+        except SearchUnavailable as exc:
+            msg = str(exc)
+            if "401" in msg or "403" in msg or "未授权" in msg or "鉴权" in msg:
+                say("    搜索供应商鉴权失败；保留已有证据，剩余范围未完成")
+                budget.exhausted = True
+            elif "402" in msg or "余额不足" in msg or "资源包" in msg:
+                say("    搜索供应商余额不足；保留已有证据，剩余范围未完成")
+                budget.exhausted = True
+            elif "429" in msg or "限流" in msg:
+                say("    搜索供应商限流；保留已有证据，剩余范围未完成")
+            elif "500" in msg or "502" in msg or "503" in msg or "504" in msg or "服务端" in msg:
+                say("    搜索供应商服务端故障；保留已有证据，剩余范围未完成")
+            elif "超时" in msg or "timeout" in msg.lower():
+                say("    搜索供应商超时；保留已有证据，剩余范围未完成")
+            else:
+                say("    搜索供应商暂不可用；保留已有证据，剩余范围未完成")
+            break
         except Exception as exc:
             raise SearchUnavailable(f"检索执行失败（{type(exc).__name__}），请稍后重试") from exc
         # 预算按**成功执行**的查询计：被审核拦下的那条没拿到任何结果，不该占名额。

@@ -1029,6 +1029,12 @@ const el = (tag, attrs = {}, ...kids) => {
     if (v === null || v === undefined || v === false) continue;
     if (k === 'class') n.className = v;
     else if (k === 'text') n.textContent = v;
+    else if (k === 'href') {
+      try {
+        const u = new URL(v, location.href);
+        if (['http:', 'https:'].includes(u.protocol) && !u.username && !u.password) n.setAttribute(k, u.href);
+      } catch {}
+    }
     else n.setAttribute(k, v);
   }
   for (const kid of kids.flat()) {
@@ -1074,7 +1080,8 @@ function renderOverview() {
   [['检索到公开来源', pct(REPORT.claims.filter(x=>x.evidence.length).length, total)],
    ['来源可关联到本人', pct(REPORT.claims.filter(x=>['ok','part','ask'].includes(x.status)).length, total)],
    ['要素被全部证明', pct(c.ok, total)],
-   ['要素级覆盖率', pct(proved, elements)],
+   ['要素级覆盖率', REPORT.coverage ? pct(REPORT.coverage.coveredElements, REPORT.coverage.selectedElements) : pct(proved, elements)],
+   ['本次检索状态', REPORT.claims.some(x => x.retrievalStatus && x.retrievalStatus !== 'complete') ? '存在未完成来源' : '已完成/未记录'],
    ['需人工复核', pct(human, total)]
   ].forEach(([k,v]) => met.appendChild(el('div', {class:'metric'}, el('span',{text:k}), el('span',{text:v}))));
   $('disc').textContent = REPORT.disclaimer + ' 覆盖率只反映公开信息的多少，不代表候选人的可信程度。';
@@ -1087,14 +1094,33 @@ function detailOf(c) {
     el('div', {class:'raw'}, c.rawText, el('span', {class:'loc', text:c.locator}))));
   if (c.elements.length) {
     const list = el('div', {class:'el'});
+    const proofs = Object.fromEntries((c.elementProofs || []).map(p => [p.element, p]));
     c.elements.forEach(e => {
-      const yes = c.proved.includes(e);
+      const proof = proofs[e];
+      const yes = proof ? proof.state === 'verified' : c.proved.includes(e);
+      const label = proof ? `${e} · ${proof.state}${proof.accepted_tier ? ' · ' + proof.accepted_tier + '级' : ''}` : e;
       list.appendChild(el('div', {class:'e ' + (yes ? 'yes' : 'no')},
-        el('span', {class:'mk', text: yes ? '✓' : '–'}), el('span', {text:e})));
+        el('span', {class:'mk', text: yes ? '✓' : '–'}), el('span', {text:label})));
+      if (proof?.decision_reasons?.length) list.appendChild(el('div', {class:'hint', text:proof.decision_reasons.join('；')}));
+      if (proof) {
+        const passport = el('details', {style:'overflow-wrap:anywhere'});
+        passport.appendChild(el('summary', {text:'展开此要素的实际支持材料'}));
+        const sources = (c.evidence || []).filter(ev => (proof.evidence_ids || []).includes(ev.evidenceId));
+        for (const ev of sources) {
+          passport.appendChild(el('div', {class:'ev'},
+            el('b', {text:`${ev.tier || '未定级'} · ${ev.title || '无标题'}`}),
+            el('div', {class:'q', text:ev.snippet || '无可定位引文'}),
+            el('div', {text:`${ev.publisher || '发布方未记录'} · ${ev.provenanceState || '旧版未记录'} · 抓取 ${ev.fetchedAt || '未记录'}`}),
+            el('div', {text:`身份依据：${(proof.identity_basis || []).join('；') || '待人工'}`}),
+            el('a', {href:ev.url, target:'_blank', rel:'noopener noreferrer', text:'打开来源'})));
+        }
+        if (!sources.length) passport.appendChild(el('p', {text:'没有合格证据链或旧版本未记录支持关系。'}));
+        list.appendChild(passport);
+      }
     });
     d.appendChild(el('div', {class:'dsec'},
-      el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
-      c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
+       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
+      el('div', {class:'hint', text:(c.elementProofs || []).length ? '各要素独立核对；最高来源等级不代表全部要素。未充分证明不等于没有发生。' : '旧版本未记录完整证据护照，保留报告当时结论。'})));
   }
   if (c.claimVerification) {
     const checks = el('div');
@@ -1133,7 +1159,11 @@ function detailOf(c) {
         el('span', {class:'t', text:ev.tier || '—', style:`background:${tint}`}),
         el('b', {text:ev.title || '（无标题）'})));
       card.appendChild(el('div', {class:'ev-m'}, `${ev.publisher || '（无发布主体）'}${ev.date ? ' · ' + ev.date : ''} · ${ev.url}`));
-      if (ev.snippet) card.appendChild(el('div', {class:'q', text:'“' + ev.snippet + '”'}));
+       if (ev.snippet) card.appendChild(el('div', {class:'q', text:'“' + ev.snippet + '”'}));
+       card.appendChild(el('div', {class:'hint', text:ev.provenanceState === 'page_text_verified'
+         ? `已回读原文并定位引文${ev.quoteStart != null ? `（字符 ${ev.quoteStart}–${ev.quoteEnd}）` : ''}`
+         : ev.provenanceState === 'structured_metadata_verified' ? '结构化登记字段，经专项适配器校验'
+         : `仅作线索：${ev.provenanceState || '旧版未记录来源溯源'}`}));
       const sig = [];
       if (ev.signals && ev.signals.length) sig.push(el('div', {}, el('b', {text:'身份信号 '}), ev.signals.join(' · ')));
       if (ev.conflicts && ev.conflicts.length) sig.push(el('div', {}, el('b', {text:'身份矛盾 '}), ev.conflicts.join(' · ')));
@@ -1155,7 +1185,11 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : '公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
+      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : c.retrievalStatus && c.retrievalStatus !== 'complete' ? '本次核验未完成或部分来源不可访问，不能据此认为没有公开记录。' : '公开检索暂未找到可关联到本人的记录，不等于经历不实，可请候选人提供材料。'})));
+  }
+  if (c.retrievalSummary && c.retrievalStatus !== 'complete') {
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'检索未完成'}),
+      el('div', {class:'hint', text:`状态：${c.retrievalStatus}。本次不能据此显示“没有公开记录”。`})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1167,17 +1201,76 @@ function detailOf(c) {
       el('div', {text:conflicts.join('；')}))));
   if (c.nextStep) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'下一步'}), el('div', {class:'next', text:c.nextStep})));
   if (c.question) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'可问的问题'}), el('div', {class:'raw', text:c.question})));
-  // 检索策略：点开才请求（9 条 × 一次请求没必要），数据来自策略引擎
   const psec = el('div', {class:'dsec'}, el('h4', {text:'检索策略'}));
   const pbtn = el('button', {class:'ghost', type:'button', text:'查看这条的检索计划'});
   const pout = el('div', {class:'planout'});
   pbtn.addEventListener('click', () => loadClaimPlan(c.id, pout, pbtn));
   psec.append(pbtn, pout);
   d.appendChild(psec);
+  if (REPORT.coverage && !c.manualReview) {
+    const rsec = el('div', {class:'dsec'}, el('h4', {text:'人工复核'}));
+    const rbtn = el('button', {class:'ghost', type:'button', text:'发起/录入复核'});
+    const rout = el('div', {class:'planout'});
+    rbtn.addEventListener('click', () => toggleReviewForm(c.id, rout, rbtn));
+    rsec.append(rbtn, rout);
+    d.appendChild(rsec);
+  }
   const close = el('button', {class:'ghost', type:'button', text:'收起 ▴'});
   close.dataset.close = '1';
   d.appendChild(el('div', {class:'dclose'}, close));
   return d;
+}
+
+function toggleReviewForm(claimId, container, btn) {
+  if (container.dataset.open === '1') {
+    container.innerHTML = '';
+    container.dataset.open = '';
+    btn.textContent = '发起/录入复核';
+    return;
+  }
+  container.dataset.open = '1';
+  btn.textContent = '收起复核表单';
+  const form = el('div', {class:'review-form'});
+  form.appendChild(el('label', {text:'操作类型'}));
+  const action = el('select');
+  [['open', '发起复核任务'], ['supplement', '录入补充材料'], ['decide', '录入复核决定']].forEach(([v, label]) => {
+    action.appendChild(el('option', {value:v, text:label}));
+  });
+  form.appendChild(action);
+  form.appendChild(el('label', {text:'材料索引（可选）'}));
+  form.appendChild(el('input', {type:'text', placeholder:'如：候选人补充说明、公开链接等'}));
+  form.appendChild(el('label', {text:'理由（必填）'}));
+  const reason = el('textarea', {rows:'3', placeholder:'请填写复核理由'});
+  form.appendChild(reason);
+  form.appendChild(el('label', {text:'复核结果（仅 decide 需要）'}));
+  const outcome = el('select');
+  [['pending', '待定'], ['supported', '已支持'], ['unresolved', '未解决'], ['corrected', '已更正']].forEach(([v, label]) => {
+    outcome.appendChild(el('option', {value:v, text:label}));
+  });
+  form.appendChild(outcome);
+  const submit = el('button', {class:'btn', type:'button', text:'提交复核'});
+  submit.addEventListener('click', async () => {
+    if (!reason.value.trim()) { alert('请填写复核理由'); return; }
+    submit.disabled = true;
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({claimId, action: action.value, source: '', reason: reason.value, outcome: outcome.value, expectedVersion: 0})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '提交失败');
+      alert('复核已提交，版本：' + data.version);
+      container.innerHTML = '';
+      container.dataset.open = '';
+      btn.textContent = '发起/录入复核';
+    } catch (err) {
+      alert('提交失败：' + err.message);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  form.appendChild(submit);
+  container.appendChild(form);
 }
 
 function renderManualReview(review) {
@@ -1206,6 +1299,7 @@ function renderManualReview(review) {
   }
   if (!(review.contacts || []).length) box.appendChild(el('p', {text:'未取得可核实出处的完整公开电话，请打开企查查入口确认。'}));
   box.appendChild(el('p', {class:'hint',text:review.note || ''}));
+  if (review.authorizationNotice) box.appendChild(el('p', {class:'hint',text:review.authorizationNotice}));
   (review.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
   const list = el('ol');
   (review.checks || []).forEach(check => list.appendChild(el('li', {text:check})));

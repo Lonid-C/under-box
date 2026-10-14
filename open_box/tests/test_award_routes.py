@@ -12,6 +12,7 @@ from app.schema import Claim
 from app.search import (CachedSearcher, FallbackSearcher, PageFetcher, SearchHit,
                         SearchUnavailable, ZhipuSearcher, _pdf_text)
 from app.strategy import build_plan
+from http_kit import PUBLIC_DNS
 
 
 def award(contest="全国高等院校英语能力大赛", year="2024", **entities):
@@ -180,6 +181,7 @@ class SearchConfirmationTests(unittest.TestCase):
         response=SimpleNamespace(content=blob,status_code=200,url="https://mcm.edu.cn/list.pdf",
                                  headers={},raise_for_status=lambda:None)
         with patch("app.search.robots_allows",return_value=True), \
+                patch("app.safe_http.DNS_RESOLVER",PUBLIC_DNS), \
                 patch("httpx.get",return_value=response),patch("app.search._pdf_text",return_value="张三 一等奖") as parse:
             self.assertEqual(PageFetcher().get(response.url),"张三 一等奖")
             parse.assert_called_once()
@@ -188,6 +190,7 @@ class SearchConfirmationTests(unittest.TestCase):
         import httpx
         f=PageFetcher()
         with patch("app.search.robots_allows",return_value=True), \
+                patch("app.safe_http.DNS_RESOLVER",PUBLIC_DNS), \
                 patch("httpx.get",side_effect=httpx.ConnectError("CERTIFICATE_VERIFY_FAILED: certificate has expired")) as request:
             self.assertIsNone(f.get("https://eaedu.org.cn/list"))
             self.assertIsNone(f.get("https://eaedu.org.cn/result"))

@@ -1,4 +1,4 @@
-import sys,json,threading,http.client,unittest
+import sys,json,time,threading,http.client,unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -25,7 +25,7 @@ class GithubContractTests(unittest.TestCase):
             def _authed(self):return True
             def _sse(self,target,args,kind=''):
                 called.append((target,args,kind));self._json({'ok':True})
-        with serve._PREPARED_LOCK:serve.PREPARED[token]={'owner':'a','prepared':SimpleNamespace(claims=[c])}
+        with serve._PREPARED_LOCK:serve.PREPARED[token]={'owner':'a','expires_at':time.time()+3600,'prepared':SimpleNamespace(claims=[c])}
         server=ThreadingHTTPServer(('127.0.0.1',0),H);threading.Thread(target=server.serve_forever,daemon=True).start()
         def post(uid,materials):
             conn=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=4)

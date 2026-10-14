@@ -67,7 +67,12 @@ def _office_text(data: bytes) -> str | None:
         return None
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
-            if sum(info.file_size for info in archive.infolist()) > 48 * 1024 * 1024:
+            members = archive.infolist()
+            if (len(members) > 1000 or sum(info.file_size for info in members) > 48 * 1024 * 1024
+                    or any(info.flag_bits & 1 or info.file_size > 16 * 1024 * 1024
+                           or len(info.filename.split("/")) > 12
+                           or info.file_size > max(1024 * 1024, info.compress_size * 100)
+                           for info in members)):
                 return None
             names = set(archive.namelist())
             if "word/document.xml" in names:
@@ -310,7 +315,7 @@ class NullSearcher:
     """没有配置搜索 key 时使用。返回空列表——查不到就是查不到，不编造。"""
 
     def search(self, query: str, site: str | None = None) -> list[SearchHit]:
-        return []
+        raise SearchUnavailable("未配置搜索供应商，查询未执行")
 
 
 class CachedSearcher:
@@ -721,8 +726,9 @@ def _load_robots(root: str) -> robotparser.RobotFileParser | None:
     """
     import httpx
     try:
-        r = httpx.get(root + "/robots.txt", headers={"User-Agent": UA},
-                      timeout=ROBOTS_TIMEOUT_SECONDS, follow_redirects=True,
+        from .safe_http import public_request
+        r = public_request("GET", root + "/robots.txt", headers={"User-Agent": UA},
+                      timeout=ROBOTS_TIMEOUT_SECONDS, max_bytes=512 * 1024,
                       verify=_verify_for_url(root))
     except Exception:
         return None
@@ -793,8 +799,12 @@ def github_hits(entities: dict, limit: int = 4) -> list[SearchHit]:
                     url=u.get("html_url", ""),
                     title=f"GitHub 仓库 · {u.get('full_name', '')}",
                     snippet=snippet, publisher="github.com", content=snippet))
+    except httpx.TimeoutException:
+        pass
+    except httpx.HTTPError:
+        pass
     except Exception:
-        return out
+        pass
     return out[:limit]
 
 
@@ -825,6 +835,12 @@ def crossref_hits(title: str, limit: int = 5) -> list[SearchHit]:
         )
         r.raise_for_status()
         items = ((r.json().get("message") or {}).get("items") or [])
+    except httpx.TimeoutException:
+        return []
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (429, 500, 502, 503, 504):
+            return []
+        return []
     except Exception:
         return []
 
@@ -935,6 +951,12 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
         )
         r.raise_for_status()
         items = r.json().get("results") or []
+    except httpx.TimeoutException:
+        return []
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (429, 500, 502, 503, 504):
+            return []
+        return []
     except Exception:
         return []
 
@@ -1096,6 +1118,10 @@ def institution_record(ror: str) -> dict:
             if len(_INSTITUTIONS) >= 128: _INSTITUTIONS.pop(next(iter(_INSTITUTIONS)))
             _INSTITUTIONS[ror] = (time.monotonic(), result)
         return result
+    except httpx.TimeoutException:
+        return {}
+    except httpx.HTTPStatusError:
+        return {}
     except Exception:
         return {}
 
@@ -1201,8 +1227,13 @@ class PageFetcher:
             timeout = httpx.Timeout(self.timeout, connect=self.connect_timeout)
             for attempt in range(self.PAGE_RETRIES + 1):
                 try:
-                    r = httpx.get(url, headers={"User-Agent": UA}, timeout=timeout,
-                                  follow_redirects=True, verify=_verify_for_url(url))
+                    from .safe_http import public_request, UnsafeURL
+                    def check_redirect(target):
+                        if not robots_allows(target):
+                            raise UnsafeURL("跳转目标 robots.txt 不允许访问")
+                        self._throttle(urlparse(target).hostname or "")
+                    r = public_request("GET", url, headers={"User-Agent": UA}, timeout=timeout,
+                                       redirect_check=check_redirect, verify=_verify_for_url(url))
                     status = getattr(r, "status_code", 200)
                     if isinstance(status, int) and 400 <= status < 500:
                         # 404/403 之类重试也不会变，直接记原因，别再等。
@@ -1321,9 +1352,10 @@ class PageFetcher:
         with self._host_lock(host):
             self._throttle(host)
             try:
-                response = httpx.post(url, data=data, headers={"User-Agent": UA},
+                from .safe_http import public_request
+                response = public_request("POST", url, data=data, headers={"User-Agent": UA},
                                       timeout=httpx.Timeout(self.timeout, connect=self.connect_timeout),
-                                      follow_redirects=True, verify=_verify_for_url(url))
+                                      max_redirects=0, max_bytes=2 * 1024 * 1024, verify=_verify_for_url(url))
                 response.raise_for_status()
                 payload = response.json()
                 if isinstance(payload, dict) and payload.get("code") in (0, 200):

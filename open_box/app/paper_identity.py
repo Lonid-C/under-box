@@ -153,7 +153,8 @@ def from_hit(claim, hit):
     lines = ["论文登记题名：" + hit.title, "DOI：" + doi, "刊物：" + hit.venue, "发表年份：" + hit.year]
     lines += ["公开登记来源：" + url for url in hit.registry_sources]
     lines += ["作者 " + str(r.get("position")) + "：" + r["name"] + "；单位：" + "、".join(r.get("institutions", [])) for r in hit.author_records]
-    return Evidence(url=hit.registry_sources[0], title=hit.title, publisher="Crossref / OpenAlex 公开登记",
+    from .provenance import bind_structured
+    return bind_structured(Evidence(url=hit.registry_sources[0], title=hit.title, publisher="Crossref / OpenAlex 公开登记",
                     source_tier="C", snippet="\n".join(lines), identity_signals=checked.signals,
                     identity_score=3, supports=supports_for(claim, record), paper_record=record,
-                    extraction_method="text", published_at=hit.year or None)
+                    extraction_method="text", published_at=hit.year or None))

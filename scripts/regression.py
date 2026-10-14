@@ -27,10 +27,11 @@ ROOT = Path(__file__).resolve().parents[1]
 # These exact assertions also failed in the complete pre-change deployment copy.
 # Do not add failures here merely to make a later change appear to pass.
 KNOWN = {
-    # c02/c11 honor rosters are fixed. The next assertion is c09: its same-name
-    # conflicting-school evidence already yielded none in the pre-fix snapshot.
-    "test_02_fixture_statuses_match_spec": (
-        "c09 规则重算得到 none，与存档 who 不一致", "assert recomputed.status == want_status,"),
+    # test_02 (c02/c11/c09 fixture recompute) was resolved on 2026-10-15 by the
+    # evidence-provenance contract: the fixture's pre-provenance material can no
+    # longer be recomputed to "ok", so the test now asserts fail-closed recompute
+    # plus unchanged stored display, and passes. Its KNOWN signature was removed
+    # accordingly (documented in REGRESSION.md); do not re-add without re-review.
     "test_03_same_name_different_school_is_who": (
         "", "assert judge.assess(claim, [ev]).needs_human is True"),
     "test_08_search_budget_stops_the_pipeline": ("", "assert exhausted2 is True"),

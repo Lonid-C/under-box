@@ -8,6 +8,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from dataclasses import asdict
+from collections import Counter
 from threading import Lock
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -80,6 +82,7 @@ class AgentRun:
         self._lock = Lock()
         self.status = "running"
         self._elapsed = None
+        self.counts = Counter()
 
     @contextmanager
     def bind(self):
@@ -91,6 +94,7 @@ class AgentRun:
 
     def add(self, event):
         with self._lock:
+            self.counts[(event.get("action", ""), event.get("state", ""))] += 1
             if len(self.events) < 80:
                 self.events.append(event)
             else:
@@ -100,14 +104,43 @@ class AgentRun:
         self.status = verified.status
         if self._elapsed is None:
             self._elapsed = self.budget.elapsed()
+        from .coverage import from_claim
+        stats = self.snapshot()
+        counts = stats["counts"]
+        searches = counts.get("search", {})
+        reads = counts.get("read", {})
+        successful = sum(searches.get(s, 0) + reads.get(s, 0) for s in ("returned", "empty"))
+        failed = sum(searches.get(s, 0) + reads.get(s, 0) for s in ("failed", "blocked"))
+        attempted = successful + failed
+        manual = verified.claim.category == "实习"
+        status = ("partial" if successful else "provider_error") if failed else (
+            "budget_exhausted" if self.budget.exhausted else "complete" if attempted else "not_attempted")
+        if manual:
+            status = "not_attempted"  # Company contact lookup is not internship fact retrieval.
+        verified.retrieval_status = status
+        verified.retrieval_summary = from_claim(verified, retrieval_status=status,
+            queries_planned=len(self.plan.queries),
+            queries_attempted=sum(searches.get(s, 0) for s in ("returned", "empty", "failed")),
+            query_successes=sum(searches.get(s, 0) for s in ("returned", "empty")),
+            pages_attempted=sum(reads.get(s, 0) for s in ("returned", "empty", "failed")), pages_read_success=reads.get("returned", 0),
+            page_failures=[e for e in stats["events"] if e.get("action") == "read" and e.get("state") in {"failed", "blocked"}],
+            unverified_lead_count=sum(e.provenance_state not in {"page_text_verified", "structured_metadata_verified"} for e in verified.evidence),
+            limitations=[{"code": e.get("error", "source_unavailable"), "message": e.get("reason", "部分来源未能完成访问")}
+                         for e in stats["events"] if e.get("state") in {"failed", "blocked"}])
         return {**self.agent.describe(), "reusedAnchors": self.claim.entities.get("verified_identity_anchors", []),
-                "sourceAccess": self.snapshot(), "handoffs": self.plan.handoffs}
+                 "sourceAccess": stats, "handoffs": self.plan.handoffs,
+                 "runtimePlan": {"strategy": {"id": self.plan.profile_id, "name": self.plan.profile_name},
+                    "budget": dict(self.plan.budget), "queries": [asdict(q) for q in self.plan.queries],
+                    "droppedByBudget": list(self.plan.dropped), "notes": list(self.plan.notes)}}
 
     def snapshot(self):
         with self._lock:
             events = [dict(e) for e in self.events]
+            counts = {}
+            for (action, state), n in self.counts.items():
+                counts.setdefault(action, {})[state] = n
         return {"claimId": self.claim.id, "agentId": self.agent.id, "status": self.status,
-                "events": events, "truncated": self.truncated,
+                 "events": events, "truncated": self.truncated, "counts": counts,
                 "budget": {"maxSearches": self.budget.max_searches, "searches": self.budget.searches,
                            "maxReads": self.budget.max_page_reads, "reads": self.budget.page_reads,
                            "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": self.budget.max_seconds},
@@ -119,12 +152,19 @@ def invoke_source(source_id, operation, *, reference="", action="search", catego
     run = _ACTIVE_RUN.get()
     category = category or (run.claim.category if run else None)
     if source is None or (category and category not in source.categories):
+        if run:
+            run.add({"sourceId": source_id, "sourceName": source.name if source else "未知数据源",
+                     "action": action, "state": "blocked", "attempted": False,
+                     "error": "SourceNotAllowed", "reason": "该类别未授权使用此数据源"})
         raise SourceNotAllowed("该类别未授权使用此数据源")
     if run and source_id not in run.agent.source_ids:
+        run.add({"sourceId": source_id, "sourceName": source.name, "action": action,
+                 "state": "blocked", "attempted": False, "error": "SourceNotAllowed",
+                 "reason": "当前专项核验未授权使用此数据源"})
         raise SourceNotAllowed("当前专项核验未授权使用此数据源")
     started = time.monotonic()
     event = {"sourceId": source_id, "sourceName": source.name, "action": action,
-             "reference": safe_reference(reference)}
+             "reference": safe_reference(reference), "attempted": True}
     try:
         result = operation()
         event["state"] = "returned" if result else "empty"
@@ -183,10 +223,12 @@ class SourceSearcher:
         return self._call(self.inner.search, query, site)
 
     def __getattr__(self, name):
-        value = getattr(self.inner, name)
-        if name in {"confirm_empty", "search_with_confirmation"} and callable(value):
+        if name not in {"confirm_empty", "search_with_confirmation"}:
+            raise AttributeError(name)
+        value = getattr(self.inner, name, None)
+        if callable(value):
             return lambda query, site=None, **kw: self._call(value, query, site, **kw)
-        return value
+        raise AttributeError(name)
 
 
 class SourceFetcher:
@@ -212,4 +254,9 @@ class SourceFetcher:
         return self._read(url, method, claim) if callable(method) else self.get(url)
 
     def __getattr__(self, name):
-        return getattr(self.inner, name)
+        if name not in {"failures", "resolved_urls", "post_public_json", "read_bnbu_profile_sections"}:
+            raise AttributeError(name)
+        value = getattr(self.inner, name)
+        if callable(value):
+            return lambda url, *a, **kw: self._read(url, value, *a, **kw)
+        return value

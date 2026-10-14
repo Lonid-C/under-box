@@ -7,6 +7,7 @@
   · 关联佐证：其他条目已读到的本校官方名单，补本科学历的「学校」要素。
 """
 from types import SimpleNamespace
+import socket
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +18,15 @@ from app.collect import Budget, _read_and_extract
 from app.schema import Claim, Evidence
 from app.search import PageFetcher, SearchHit, robots_allows
 
+# 出网预检的假 DNS：虚构 .example 域名解析到公开地址，测试不发真实网络请求。
+_PUBLIC_DNS = lambda host, port, type=None: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
+
+
+def _fake_dns(test):
+    patcher = patch("app.safe_http.DNS_RESOLVER", _PUBLIC_DNS)
+    patcher.start()
+    test.addCleanup(patcher.stop)
+
 
 def _resp(status=200, text="", ctype="text/plain"):
     return SimpleNamespace(status_code=status, text=text, content=text.encode(),
@@ -26,6 +36,7 @@ def _resp(status=200, text="", ctype="text/plain"):
 class RobotsTests(unittest.TestCase):
     def setUp(self):
         search._robots_cache.clear()
+        _fake_dns(self)
 
     def test_waf_403_on_robots_does_not_block_whole_site(self):
         with patch("httpx.get", return_value=_resp(403, "forbidden")):
@@ -56,6 +67,9 @@ class RobotsTests(unittest.TestCase):
 
 
 class FetchFailureTests(unittest.TestCase):
+    def setUp(self):
+        _fake_dns(self)
+
     def test_read_timeout_fails_fast_without_retry(self):
         calls = []
 
@@ -124,9 +138,10 @@ def _claim(cid, raw, school, elements, category="学历"):
 
 
 def _roster(url, snippet, supports, tier="A", signals=("学校一致", "学院一致")):
-    ev = Evidence(url=url, title="获得免试攻读2023年硕士学位研究生资格学生名单", publisher="本科生院",
-                  source_tier=tier, snippet=snippet, identity_signals=list(signals),
-                  supports=list(supports))
+    from app.provenance import bind_page
+    ev = bind_page(Evidence(url=url, title="获得免试攻读2023年硕士学位研究生资格学生名单", publisher="本科生院",
+                            source_tier=tier, snippet=snippet, identity_signals=list(signals),
+                            supports=list(supports)), snippet)
     return judge.score_evidence(ev)
 
 
@@ -289,6 +304,9 @@ class ArchiveLocatorTests(unittest.TestCase):
 
 
 class WechatAndDeadHostTests(unittest.TestCase):
+    def setUp(self):
+        _fake_dns(self)
+
     def test_robots_blocked_wechat_uses_search_snippet_only_when_name_present(self):
         claim = Claim(id="u", raw_text="2019-2023 哈尔滨工程大学", raw_locator="教育", category="学历",
                       date_label="2019-2023", elements=["学校=哈尔滨工程大学"], entities={"org": "哈尔滨工程大学"})

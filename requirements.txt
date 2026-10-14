@@ -6,6 +6,9 @@ beautifulsoup4
 lxml
 pymupdf
 python-docx
+# PDF 隐藏文字风险检测（tiny_font/低对比/画到页面外）依赖 pdfminer 布局分析；
+# 缺失时该保护会静默退化为不做检测，因此列为必需依赖。
+pdfminer.six
 truststore
 pypinyin>=0.51,<1
 xlrd>=2,<3

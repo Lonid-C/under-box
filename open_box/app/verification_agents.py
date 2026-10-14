@@ -111,6 +111,8 @@ class VerificationAgent:
                     plan.handoffs.append({"fromClaim": fact["claimId"], "toClaim": claim.id,
                                           "element": fact["element"], "urls": list(fact["urls"]),
                                           "use": "navigation_only", "query": query.text})
+                    plan.handoffs[-1].update(purpose="navigation_only", evidenceIds=fact.get("evidenceIds", []),
+                                             ruleVersion=fact.get("ruleVersion", "proof-v2"))
                 break  # At most one new query, within the unchanged task budget.
         plan.notes.append(self.name + "：" + self.instructions)
         return plan
@@ -361,22 +363,31 @@ class VerificationCoordinator:
 
     def record(self, verified):
         from .source_guard import evidence_excluded, claim_sources
+        from .provenance import usable_provenance
         allowed_fields = {"学校", "专业", "专业/方向", "单位", "公司", "机构", "任职单位",
                           "论文标题", "论文题目", "书名", "著作名称", "DOI", "ISBN"}
         for vc in verified:
+            # Replacing an upstream result revokes its previously propagated anchors.
+            self._facts = [f for f in self._facts if f["claimId"] != vc.claim.id]
             if vc.status not in {"ok", "part"} or vc.claim.category not in {"学历", "任职", "论文", "著作"}:
                 continue
-            for element in vc.proved:
+            for proof in vc.element_proofs:
+                if proof.state != "verified":
+                    continue
+                element = proof.element
                 if element.partition("=")[0].strip() not in allowed_fields:
                     continue
                 urls = list(dict.fromkeys(e.url for e in vc.evidence if
-                    element in e.supports and e.identity_score >= 2
+                    e.evidence_id in proof.evidence_ids and element in e.supports and e.identity_score >= 2
                     and not e.identity_conflicts and e.extraction_method == "text"
+                    and usable_provenance(e, vc.claim)
                     and not evidence_excluded(e, claim_sources(vc.claim))))
                 if not urls:
                     continue
                 fact = {"claimId": vc.claim.id, "category": vc.claim.category,
-                        "element": element, "stage": "", "urls": urls}
+                        "element": element, "stage": "", "urls": urls,
+                        "evidenceIds": list(proof.evidence_ids), "ruleVersion": vc.rule_version,
+                        "purpose": "navigation_only"}
                 if vc.claim.category == "学历":
                     from .academic import study_stage
                     fact["stage"] = study_stage(vc.claim)

@@ -146,6 +146,22 @@ class Evidence(BaseModel):
     extraction_method: Literal["text", "ocr", "search_snippet"] = "text"
     github_record: dict | None = None   # 只由受限公共 API 适配器填入；LLM 输出不接入
     paper_record: dict | None = None    # 原始论文登记字段；身份与要素由规则重算
+    evidence_id: str = ""
+    original_url: str = ""
+    resolved_url: str = ""
+    fetched_at: str = ""
+    source_content_sha256: str = ""
+    quote_verified: bool = False
+    quote_start: int | None = None
+    quote_end: int | None = None
+    provenance_state: Literal["legacy_unrecorded", "page_text_verified", "structured_metadata_verified",
+                              "ocr_unverified", "search_snippet_unverified", "candidate_submitted",
+                              "quote_rejected"] = "legacy_unrecorded"
+    source_kind: str = ""
+    origin_cluster_id: str = ""
+    validation_reasons: list[str] = Field(default_factory=list)
+
+
 
     @field_validator("identity_signals", "identity_conflicts", "supports", "contradicts",
                      mode="before")
@@ -162,6 +178,15 @@ class Evidence(BaseModel):
     @classmethod
     def _coerce_opt_strs(cls, v: Any) -> str | None:
         return as_str_or_none(v)
+
+
+class ElementProof(BaseModel):
+    element: str
+    state: Literal["verified", "partial", "unverified", "conflicted"] = "unverified"
+    evidence_ids: list[str] = Field(default_factory=list)
+    accepted_tier: Tier | None = None
+    identity_basis: list[str] = Field(default_factory=list)
+    decision_reasons: list[str] = Field(default_factory=list)
 
 
 class VerifiedClaim(BaseModel):
@@ -181,6 +206,12 @@ class VerifiedClaim(BaseModel):
     github_audit: dict | None = None
     manual_review: dict | None = None  # Company contacts for human review; not Evidence.
     verification_agent: dict | None = None
+    element_proofs: list[ElementProof] = Field(default_factory=list)
+    rule_version: str = "legacy"
+    decision_reasons: list[str] = Field(default_factory=list)
+    retrieval_status: Literal["complete", "partial", "provider_error", "blocked", "timeout",
+                              "budget_exhausted", "not_attempted", "canceled"] = "not_attempted"
+    retrieval_summary: dict | None = None
 
 
 class InputRisk(BaseModel):
@@ -208,6 +239,7 @@ class Report(BaseModel):
     # 显式按设置不核验的条目。如实列出，不让人以为漏看了。
     skipped_claims: list[Claim] = Field(default_factory=list)
     verification_workflow: dict | None = None
+    coverage: dict | None = None
     disclaimer: str = (
         "本报告仅汇总公开来源与候选人提交的材料，不构成录用决定的唯一依据；"
         "候选人可对任一条结论提交解释与更正。"

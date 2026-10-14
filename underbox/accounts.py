@@ -22,6 +22,7 @@ import json
 import os
 import signal
 import socket
+import secrets
 import subprocess
 import sys
 import threading
@@ -119,6 +120,7 @@ class Workers:
         self.accounts, self.script, self.port = accounts, script, port
         self.process: subprocess.Popen | None = None
         self.stopping = threading.Event()
+        self.internal_token = secrets.token_urlsafe(32)
 
     def _env_file(self) -> Path:
         with store.connect(self.accounts.path) as conn:
@@ -153,6 +155,7 @@ class Workers:
             # 工作进程只需要这两样：库在哪、以及"该记账"这个标记。
             UNDERBOX_DB=str(self.accounts.path),
             UNDERBOX_GATEWAY_WORKER="1",
+            UNDERBOX_INTERNAL_TOKEN=self.internal_token,
             OPEN_BOX_ROOT=str(self.script.parent.parent / "open_box"),
             PYTHONUNBUFFERED="1", MODE="live")
         env.pop("UNDERBOX_ACCOUNTS_FILE", None)
@@ -368,7 +371,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
             return True
 
         def _cookie_header(self, value: str, age: int) -> dict:
-            secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+            secure = "; Secure" if os.environ.get("UNDERBOX_SECURE_COOKIES") == "1" else ""
             return {"Set-Cookie": f"{COOKIE}={value}; Path=/; Max-Age={age}; "
                                   f"HttpOnly; SameSite=Strict{secure}"}
 
@@ -749,6 +752,8 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
             # 关键：告诉工作进程"这次是谁在用"。共享进程靠这个头把报告、画像、
             # 台账按用户分存，记账时也靠它认人（不能再依赖进程自己的环境变量）。
             headers["X-Underbox-User"] = user["id"]
+            if workers is not None:
+                headers["X-Underbox-Internal"] = workers.internal_token
             # 显示名只在 JSON 中返回；HTTP 头不能直接编码中文，工作进程也不需要它。
             conn = http.client.HTTPConnection("127.0.0.1", int(worker_port), timeout=1800)
             sent = False

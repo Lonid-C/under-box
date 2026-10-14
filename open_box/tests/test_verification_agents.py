@@ -159,9 +159,12 @@ class SpecialistTests(unittest.TestCase):
         self.assertEqual(employment_supports(c, ev), c.elements)
 
     def test_coordinator_shares_only_proved_elements_with_direct_attributed_sources(self):
+        from app.provenance import bind_page
+        from app.schema import ElementProof
         c = Claim(id="edu",category="学历",raw_text="合成大学本科",raw_locator="",date_label="",elements=["学校=合成大学","学位=学士"],entities={"org":"合成大学"})
-        ev = Evidence(url="https://school.example/roster",title="本人名单",publisher="",source_tier="A",snippet="合成张三 合成大学本科",identity_score=2,supports=[c.elements[0]])
-        vc = VerifiedClaim(claim=c,status="part",proved=[c.elements[0]],unproved=[c.elements[1]],evidence=[ev])
+        ev = bind_page(Evidence(url="https://school.example/roster",title="本人名单",publisher="",source_tier="A",snippet="合成张三 合成大学本科",identity_score=2,identity_signals=["学校一致"],supports=[c.elements[0]]),"合成张三 合成大学本科")
+        vc = VerifiedClaim(claim=c,status="part",proved=[c.elements[0]],unproved=[c.elements[1]],evidence=[ev],
+                           element_proofs=[ElementProof(element=c.elements[0],state="verified",evidence_ids=[ev.evidence_id],accepted_tier="A")])
         coordinator = VerificationCoordinator(); coordinator.record([vc])
         next_claim = coordinator.context_for(internship())
         anchors = next_claim.entities["verified_identity_anchors"]

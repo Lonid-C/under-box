@@ -156,10 +156,15 @@ class CollaborationTests(unittest.TestCase):
         self.assertEqual(report.claims[0].status,"none")
 
     def test_work_query_consumes_confirmed_publication_anchor_without_copying_proof(self):
+        from app.provenance import bind_page
+        from app.schema import ElementProof
         p=claim();p.elements=["论文标题=Synthetic study"]
-        ev=Evidence(url="https://publisher.example/study",title="论文原文",publisher="",source_tier="B",
-                    snippet="张三发表Synthetic study",identity_score=2,supports=p.elements)
-        vc=VerifiedClaim(claim=p,status="part",proved=p.elements,evidence=[ev])
+        body="张三发表Synthetic study"
+        ev=bind_page(Evidence(url="https://publisher.example/study",title="论文原文",publisher="",source_tier="B",
+                    snippet=body,identity_score=4,identity_signals=["学校一致","学院一致"],supports=p.elements),body)
+        vc=VerifiedClaim(claim=p,status="part",proved=p.elements,evidence=[ev],
+                         element_proofs=[ElementProof(element=p.elements[0],state="verified",
+                                                      evidence_ids=[ev.evidence_id],accepted_tier="B")])
         coordinator=VerificationCoordinator();coordinator.record([vc])
         w=claim("任职",ident="w",raw="张三在合成公司任工程师",company="合成公司",role="工程师")
         w.elements=["单位=合成公司","岗位=工程师"]
@@ -212,8 +217,10 @@ class CollaborationTests(unittest.TestCase):
         search=SimpleNamespace(search=lambda text,site=None: searched.append(text) or [])
         def collect(c,name,searcher,llm,**kw):
             if c.id=="b":
-                return [Evidence(url="https://publisher.example/book",title="原始书目",publisher="独立出版社",
-                                 source_tier="B",snippet=f"张三主编《{title}》",identity_signals=["具体经历一致"],supports=c.elements)],False
+                from app.provenance import bind_page
+                body=f"张三主编《{title}》"
+                return [bind_page(Evidence(url="https://publisher.example/book",title="原始书目",publisher="独立出版社",
+                                 source_tier="B",snippet=body,identity_signals=["具体经历一致"],supports=c.elements),body)],False
             self.assertIn(title,kw["queries"][0].text)
             searcher.search(kw["queries"][0].text)
             return [],False

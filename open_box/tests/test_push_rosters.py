@@ -11,6 +11,7 @@ from app.plan import Query
 from app.schema import Claim
 from app.search import PageFetcher, SearchHit, _office_text
 from app.strategy import ResumeProfile, build_plan
+from http_kit import PUBLIC_DNS
 
 
 def push_claim(receiver="中南大学", source="上海大学"):
@@ -258,6 +259,7 @@ class PushRosterTests(unittest.TestCase):
         url = "https://yz.csu.edu.cn/system/_content/download.jsp?id=2"
         fetcher = PageFetcher()
         with patch("app.search.robots_allows", return_value=True), \
+             patch("app.safe_http.DNS_RESOLVER", PUBLIC_DNS), \
              patch("httpx.get", return_value=response):
             self.assertIsNone(fetcher.get(url))
         self.assertIn("验证码", fetcher.failures[url])
@@ -279,6 +281,7 @@ class PushRosterTests(unittest.TestCase):
         response = SimpleNamespace(content=data, headers={"content-type": "application/octet-stream"},
                                    text="binary", raise_for_status=lambda: None)
         with patch("app.search.robots_allows", return_value=True), \
+             patch("app.safe_http.DNS_RESOLVER", PUBLIC_DNS), \
              patch("httpx.get", return_value=response):
             self.assertIn("张三 |  | 备选", PageFetcher().get("https://school.example.edu/download?id=1"))
 

@@ -395,6 +395,7 @@ def verify_prepared(
             f"状态更新为 {vc.status}")
 
     say("[6/6] 汇总报告")
+    from .coverage import report_coverage
     return Report(
         id=report_id,
         candidate_name=name or "（未标注姓名）",
@@ -408,6 +409,7 @@ def verify_prepared(
         claims=verified,
         skipped_claims=list(prepared.skipped),
         verification_workflow=coordinator.summary(verified),
+        coverage=report_coverage(verified, prepared.skipped),
     )
 
 

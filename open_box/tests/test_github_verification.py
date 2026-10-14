@@ -162,8 +162,10 @@ class ScopeBoundaryTests(unittest.TestCase):
             e=Evidence(url='https://company.example/a',title='团队',publisher='公司',source_tier='B',snippet=text,identity_signals=['任职单位一致'],supports=c.elements)
             self.assertIn('个人角色=主导',judge.assess(c,[e]).unproved)
     def test_plain_language_person_role_can_be_supported(self):
+        from app.provenance import bind_page
         c=claim(raw='主导 demo 项目',accounts=[]);c.entities['candidate_name']='张三'
-        e=Evidence(url='https://company.example/a',title='团队',publisher='公司',source_tier='B',snippet='张三主导 demo 项目。',identity_signals=['任职单位一致'],supports=c.elements)
+        body='张三主导 demo 项目。'
+        e=bind_page(Evidence(url='https://company.example/a',title='团队',publisher='公司',source_tier='B',snippet=body,identity_signals=['任职单位一致'],supports=c.elements),body)
         self.assertIn('个人角色=主导',judge.assess(c,[e]).proved)
     def test_incomplete_files_do_not_make_whole_pr_architecture_conflict(self):
         api=FakeAPI();base=api.handle

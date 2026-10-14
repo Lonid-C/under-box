@@ -59,11 +59,14 @@ def mk_claim(elements, cid="cX", cat="竞赛") -> Claim:
 
 
 def mk_ev(url="https://x.edu.example/tzgg/1.html", tier="A", signals=("学校一致", "学院一致"),
-          conflicts=(), supports=(), contradicts=(), origin=None) -> Evidence:
+          conflicts=(), supports=(), contradicts=(), origin=None, snippet="页面原文片段") -> Evidence:
+    """构造一条**已按现行溯源契约绑定**的证据（snippet 即本次回读正文）。"""
+    from app.provenance import bind_page
     ev = Evidence(url=url, title="获奖名单公示", publisher="某大学学生工作部", source_tier=tier,
-                  snippet="页面原文片段", accessed_at="2026-09-18T09:00:00+08:00",
+                  snippet=snippet, accessed_at="2026-09-18T09:00:00+08:00",
                   identity_signals=list(signals), identity_conflicts=list(conflicts),
                   supports=list(supports), contradicts=list(contradicts), origin_url=origin)
+    ev = bind_page(ev, snippet)
     return judge.score_evidence(ev)
 
 
@@ -168,7 +171,12 @@ def test_01_offline_demo_runs_and_is_interactive():
 # ══════════════════════════════════════════════════════════════════════
 
 def test_02_fixture_statuses_match_spec():
-    """fixture 的 11 条状态与第 9 节表格完全一致，且能由规则重新算出来。"""
+    """fixture 的 11 条**存档状态**与第 9 节表格一致（历史报告照实展示）。
+
+    存档材料早于证据溯源（provenance）契约：没有逐字定位、内容哈希与
+    证据 ID。新规则重算时必须失败保守——不得把缺原文门槛的旧材料重算成
+    「已证实」；stored 结论保持报告当时的决定，不被新规则悄悄改写。
+    """
     report = load_report()
     assert len(report.claims) == 11
 
@@ -177,11 +185,15 @@ def test_02_fixture_statuses_match_spec():
         assert vc.status == want_status, f"{vc.claim.id} 存档状态 {vc.status}，应为 {want_status}"
         assert vc.best_tier == want_tier, f"{vc.claim.id} 来源等级 {vc.best_tier}，应为 {want_tier}"
 
-        # 用规则重算一遍，确认 fixture 不是手写死的
+        # 新规则重算：旧材料缺溯源，不能重算出「已证实」；无证据条目保持 none
         recomputed = judge.assess(vc.claim, list(vc.evidence))
-        assert recomputed.status == want_status, \
-            f"{vc.claim.id} 规则重算得到 {recomputed.status}，与存档 {want_status} 不一致"
-        assert recomputed.best_tier == want_tier
+        if not vc.evidence:
+            assert recomputed.status == "none", f"{vc.claim.id} 无证据应为 none"
+            continue
+        assert recomputed.status != "ok", \
+            f"{vc.claim.id} 缺溯源字段的旧证据不得重算出已证实（得到 {recomputed.status}）"
+        assert all(p.state != "verified" for p in recomputed.element_proofs), \
+            f"{vc.claim.id} 旧证据不得产出已核实要素"
 
     assert report.counts() == EXPECTED_COUNTS, f"统计 {report.counts()} 应为 {EXPECTED_COUNTS}"
 
@@ -251,7 +263,8 @@ def test_05_partial_support_stays_part():
 # ══════════════════════════════════════════════════════════════════════
 
 def test_06_reposts_count_once():
-    """3 条 origin_url 相同的证据去重后按 1 条计，不因数量多而升级状态。"""
+    """转载关系必须可验证：模型填的 origin_url 不用于合并来源，也不因数量升级；
+    同一 URL 仍去重；规则确认的转引簇（origin_cluster_id）才按一簇计。"""
     claim = mk_claim(["奖项=某奖", "授予单位=某大学", "获奖时间=2024"])
     origin = "https://xsc.some.edu.example/tzgg/1.html"
     reposts = [
@@ -259,7 +272,9 @@ def test_06_reposts_count_once():
               signals=["学校一致"], supports=["奖项=某奖"], origin=origin)
         for i in range(1, 4)
     ]
-    assert len(judge.dedupe_by_origin(reposts)) == 1, "同一 origin_url 的转载应去重为 1 条"
+    assert len(judge.dedupe_by_origin(reposts)) == 3, "未经验证的 origin_url 不应合并来源"
+    same = mk_ev(url=reposts[0].url, tier="D", signals=["学校一致"], supports=["奖项=某奖"])
+    assert len(judge.dedupe_by_origin([reposts[0], same])) == 1, "同一 URL 仍应去重为 1 条"
 
     one = judge.decide(claim, reposts[:1])
     three = judge.decide(claim, reposts)
@@ -271,9 +286,10 @@ def test_06_reposts_count_once():
             for i in range(1, 4)]
     assert judge.decide(claim, full) == "part", "D 级来源即使覆盖全部要素也不能升到 ok"
 
-    # 原件与转载同时在场时，去重保留等级更高的原件
+    # 规则确认的同一转引簇按一簇计；原件与转载同时在场时保留等级更高的原件
+    clustered = [e.model_copy(update={"origin_cluster_id": origin}) for e in reposts]
     official = mk_ev(url=origin, tier="A", signals=["学校一致", "学院一致"], supports=claim.elements)
-    kept = judge.dedupe_by_origin([*reposts, official])
+    kept = judge.dedupe_by_origin([*clustered, official])
     assert len(kept) == 1 and kept[0].source_tier == "A"
 
 
@@ -437,12 +453,17 @@ def test_12_identity_thresholds():
 
 
 def test_13_elements_are_proved_separately():
-    """证明了"任职组织"不等于证明了"职务"——整个产品的核心。"""
+    """证明了"任职组织"不等于证明了"职务"——整个产品的核心。
+
+    矛盾同样要过原文门槛：摘录里必须真的写着另一个职务值（并含同一时间范围），
+    空泛的"与原文矛盾"不再制造 ask 观感。
+    """
     claim = mk_claim(["任职组织=校学生会科技部", "职务=部长", "起止时间=2024.03—2025.03"],
                      cat="学生工作")
     ev = mk_ev(tier="B", signals=["学校一致", "学院一致"],
+               snippet="某大学科技部 副部长 任期自2024年3月起",
                supports=["任职组织=校学生会科技部", "起止时间=2024.03—2025.03"],
-               contradicts=["职务=部长：公告中列为副部长"])
+               contradicts=["职务=副部长"])
     vc = judge.assess(claim, [ev])
     assert vc.status == "ask"
     assert "任职组织=校学生会科技部" in vc.proved
@@ -772,8 +793,13 @@ def test_20_zhipu_search_request_shape():
         srv.client().search("某赛事 获奖名单")
         assert "search_domain_filter" not in srv.requests[0]["body"]
 
-    # 没有 key 一律返回空，不编造
-    assert NullSearcher().search("任何查询") == []
+    # 没有 key：明确报"未配置、未执行"，不把没查成伪装成空结果
+    try:
+        NullSearcher().search("任何查询")
+    except SearchUnavailable as exc:
+        assert "未配置" in str(exc)
+    else:
+        raise AssertionError("未配置搜索供应商时必须明确不可用，不能返回空结果")
 
 
 def test_21_candidate_provided_links_are_first_class():
@@ -810,7 +836,8 @@ def test_21_candidate_provided_links_are_first_class():
     ev = evidences[0]
     assert "候选人自提供该链接" in ev.identity_signals, "自提供链接的身份信号应由规则补上"
     assert ev.identity_signals.count("候选人自提供该链接") == 1, "不应重复添加"
-    assert ev.identity_score == 2 + 2, "学校一致(2) + 候选人自提供该链接(2)"
+    # 自提供链接是检索线索，不是身份锚点：不计身份分；身份仍靠内容锚点（学校一致=2）
+    assert ev.identity_score == 2, "学校一致(2)；自提供链接不加分"
     assert ev.source_tier == "B", "认证主体为学校的公众号文章应为 B 级"
 
 
@@ -989,23 +1016,25 @@ def test_28_search_balance_error_is_not_reported_as_zero_results():
             raise AssertionError("余额不足应抛出 SearchUnavailable")
 
 
-def test_29_search_unavailable_is_not_swallowed_as_none():
-    """检索不可用（余额/网络/鉴权）必须上抛，不能被吞成 0 结果、伪装成「未找到」。"""
+def test_29_search_unavailable_is_marked_incomplete_not_disguised_as_none():
+    """检索不可用（余额/网络/鉴权）必须标记「未完成」并保留已有证据：
+    既不能伪装成正常零结果，也不丢弃前面已取到的材料。"""
     claim = mk_claim(["赛事=某赛事", "奖项=一等奖"])
 
     class DownSearcher:
         def search(self, query, site=None):
             raise SearchUnavailable("智谱搜索不可用：余额不足或无可用资源包")
 
-    try:
-        collect_for_claim(
-            claim, "某候选人", DownSearcher(), StubLLM([]),
-            queries=[Query("某赛事 获奖名单", weight=100)],
-            budget=Budget(max_searches=2, max_page_reads=2))
-    except SearchUnavailable as exc:
-        assert "余额不足" in str(exc)
-    else:
-        raise AssertionError("检索不可用应抛出 SearchUnavailable，而不是返回空证据当成「未找到」")
+    logs = []
+    evidences, exhausted = collect_for_claim(
+        claim, "某候选人", DownSearcher(), StubLLM([]),
+        queries=[Query("某赛事 获奖名单", weight=100)],
+        budget=Budget(max_searches=2, max_page_reads=2), progress=logs.append)
+    assert evidences == [], "供应商故障时不得编造证据"
+    assert exhausted is True, "供应商故障必须标记为未完成，不能伪装成正常查完的零结果"
+    assert any("余额不足" in line for line in logs), "失败原因必须如实写进日志"
+    vc = judge.assess(claim, evidences, search_exhausted=exhausted)
+    assert vc.search_exhausted is True, "报告必须保留检索未完成状态供界面区分"
 
 
 # ══════════════════════════════════════════════════════════════════════

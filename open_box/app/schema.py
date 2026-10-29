@@ -180,6 +180,7 @@ class VerifiedClaim(BaseModel):
     claim_verification: dict | None = None
     github_audit: dict | None = None
     manual_review: dict | None = None  # Company contacts for human review; not Evidence.
+    education_review: dict | None = None  # Official program/contact navigation; never candidate evidence.
     verification_agent: dict | None = None
 
 

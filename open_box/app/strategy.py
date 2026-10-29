@@ -631,12 +631,16 @@ def build_plan(
     if claim.category == "实习":
         from .internship import company_name
         company = company_name(claim)
-        return Plan([Query(text='"' + company.replace('"', '') + '"', site="qcc.com",
-                           kind="company_contact", round=1,
-                           purpose="仅定位对应公司公开电话和企查查页面，供人工背调，不证明本人实习")]
-                    if company else [], "internship_manual", "实习人工背调",
-                    notes=["不检索候选人姓名；不把公司存在或电话列入本人经历证据。"],
-                    budget={"searches": 1 if company else 0, "reads": 2 if company else 0, "seconds": 30})
+        text = '"' + company.replace('"', '') + '"'
+        queries = [Query(text=text, site=site, kind="company_contact", round=1,
+                         purpose="定位企业详情与公开资料，供人工核验，不证明本人实习")
+                   for site in ("qcc.com", "tianyancha.com")] if company else []
+        if company:
+            queries.append(Query(text=company + " 公司简介 主营业务 经营范围",
+                kind="company_contact", round=2, purpose="补充公开企业介绍；摘要与原文分别标注"))
+        return Plan(queries, "internship_manual", "企业资料与实习人工背调",
+                    notes=["不检索候选人姓名；不把公司资料或联系方式列入本人经历证据。"],
+                    budget={"searches": 3 if company else 0, "reads": 4 if company else 0, "seconds": 45})
     links = github_trigger(claim)
     if links:
         return Plan([Query(text=p["url"], kind="github", round=1, purpose="只读取本条主动提供的公开仓库/PR/commit，不猜账号，不搜索其他仓库", expect_tier="B") for p in links],

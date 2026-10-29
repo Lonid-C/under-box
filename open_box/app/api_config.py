@@ -27,3 +27,21 @@ def bind_search_credentials(credentials: SearchCredentials | None):
         yield
     finally:
         _SEARCH.reset(token)
+
+
+# Institutional background/QA uses the basic index. This preference is scoped to
+# the call and never changes another candidate's evidence-search configuration.
+_BACKGROUND = ContextVar("underbox_background_search", default=False)
+
+
+def is_background_search():
+    return _BACKGROUND.get()
+
+
+@contextmanager
+def background_search():
+    token = _BACKGROUND.set(True)
+    try:
+        yield
+    finally:
+        _BACKGROUND.reset(token)

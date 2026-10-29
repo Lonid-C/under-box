@@ -45,6 +45,8 @@ SOURCES = {s.id: s for s in (
     DataSource("competition_records", "赛事主办方正式赛果与名单", ("竞赛",), "searcher + PageFetcher / roster attachments"),
     DataSource("github_records", "本项目 GitHub 公开贡献记录", ("项目", "开源项目"), "github_audit.audit_claim / GitHubClient", "provided_project_only"),
     DataSource("qcc_contacts", "企查查公司公开联系方式", ("实习",), "internship.build_manual_review", "manual_review_only"),
+    DataSource("tyc_profiles", "天眼查企业公开资料", ("实习",), "internship.build_manual_review", "manual_review_only"),
+    DataSource("company_profiles", "企业公开介绍与业务资料", ("实习",), "internship.build_manual_review", "manual_review_only"),
 )}
 
 
@@ -147,7 +149,10 @@ def source_for_query(claim, query=None, site=None):
     kind = getattr(query, "kind", "web")
     source = getattr(query, "source", "")
     if claim.category == "实习":
-        return "qcc_contacts"
+        host = str(site or getattr(query, "site", "") or "")
+        if "tianyancha.com" in host:
+            return "tyc_profiles"
+        return "qcc_contacts" if "qcc.com" in host else "company_profiles"
     if kind == "crossref":
         return "paper_metadata"
     if kind == "github":
@@ -194,7 +199,7 @@ class SourceFetcher:
         self.inner, self.run = inner, run
 
     def _read(self, url, method, *args, **kwargs):
-        source = source_for_query(self.run.claim)
+        source = source_for_query(self.run.claim, site=url)
         if self.run.claim.category in {"学历", "校内荣誉", "奖学金", "学生工作"}:
             source = "school_records"
         def unavailable():

@@ -31,7 +31,7 @@ def query_url(company):
 def firm_url(url):
     try:
         parsed = urlparse(url)
-        return (parsed.scheme == "https" and parsed.hostname in {"qcc.com", "www.qcc.com", "m.qcc.com"}
+        return (parsed.scheme == "https" and parsed.hostname in {"qcc.com", "www.qcc.com", "m.qcc.com", "m-harmony.qcc.com"}
                 and not parsed.username and not parsed.password and parsed.port in (None, 443)
                 and re.fullmatch(r"/firm/[a-zA-Z0-9_-]+\.html", parsed.path) is not None)
     except ValueError:
@@ -86,59 +86,120 @@ def public_phones(html, company):
     return contacts[:3]
 
 
+
+COMPANY_FIELDS = {
+    "introduction": ("公司简介", "企业简介", "简介", "公司介绍"),
+    "businessScope": ("经营范围",),
+    "size": ("公司规模", "企业规模", "人员规模", "员工人数", "参保人数"),
+    "mainBusiness": ("主营业务", "主要业务", "主营产品", "业务范围"),
+    "legalRepresentative": ("法定代表人", "法人代表"),
+    "contactPerson": ("联系人", "联系人员"),
+}
+
+
+def registry_url(url):
+    if firm_url(url):
+        return "企查查"
+    try:
+        parsed = urlparse(url)
+        if (parsed.scheme == "https" and parsed.hostname in
+                {"tianyancha.com", "www.tianyancha.com", "m.tianyancha.com"}
+                and not parsed.username and not parsed.password and parsed.port in (None, 443)
+                and re.fullmatch(r"/company/[a-zA-Z0-9_-]+(?:/sifa)?/?", parsed.path)):
+            return "天眼查"
+    except ValueError:
+        pass
+    return ""
+
+
 def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: None):
+    from .public_context import (now, public_url, visible_text, labeled_fields, source_field,
+                                 public_contacts, search_safely, read_safely)
     company = company_name(claim)
-    checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    checked_at = now()
     review = {"kind": "internship", "company": company, "queryUrl": query_url(company),
-              "companyUrl": "", "contacts": [], "state": "company_name_missing",
-              "checkedAt": checked_at,
-              "note": "公司页面及电话仅用于人工背调，不能证明本人实习；公开公司电话未必是人力资源或背调专线。",
-              "checks": ["确认公司全称和实际实习主体", "联系公司转接人力资源或实习负责人",
+              "tianyanchaQueryUrl": "https://www.tianyancha.com/search?key=" + quote(company, safe="") if company else "",
+              "companyUrl": "", "registryLinks": [], "contacts": [], "profile": {},
+              "state": "company_name_missing", "checkedAt": checked_at,
+              "note": "企业资料及公开办公联系方式仅供人工背调，不能证明候选人的任职/实习。企业规模、参保人数与注册资本是不同指标；法定代表人未必是人力资源或背调联系人。",
+              "checks": ["确认公司全称和实际实习主体（品牌名不等同于具体法人）",
+                         "联系公开办公渠道转接人力资源或实习负责人",
                          "分别核对本人实习岗位、起止时间及职责"], "limitations": []}
     if company:
         review["state"] = "link_only"
-        hits = []
-        if budget.can_search():
-            budget.note_search()
-            progress("按公司名称定位企查查页面（不检索候选人姓名）")
-            try:
-                hits = searcher.search('"' + company.replace('"', '') + '"', site="qcc.com")
-            except Exception:
-                review["limitations"].append("公司检索暂不可用，保留企查查查询入口供手动打开。")
+        def candidates():
+            # Consume hits between searches so slow search calls cannot starve page reads.
+            for site in ("qcc.com", "tianyancha.com"):
+                progress("定位" + company + "的" + ("企查查" if site == "qcc.com" else "天眼查") + "资料")
+                yield from search_safely(searcher, '"' + company.replace('"', '') + '"', site,
+                                        budget, review["limitations"])
+            yield from search_safely(searcher, company + " 公司简介 主营业务 经营范围", None,
+                                    budget, review["limitations"])
         seen = set()
-        reads = 0
-        for hit in hits:
-            if not firm_url(hit.url) or hit.url in seen:
+        for hit in candidates():
+            if not public_url(hit.url) or hit.url in seen:
                 continue
             seen.add(hit.url)
-            # Search results mentioning the company only in a related-party
-            # paragraph must not spend the page-read budget.
-            subject = re.split(r"\s*[-_|｜]\s*", hit.title)[0]
-            if _compact(subject) != _compact(company):
+            title_subject = re.split(r"\s*[-_|｜]\s*", hit.title)[0]
+            exact_subject = _compact(title_subject) == _compact(company)
+            registry = registry_url(hit.url)
+            if registry:
+                suffix = _compact(title_subject).removeprefix(_compact(company))
+                exact_subject = exact_subject or (
+                    _compact(title_subject).startswith(_compact(company)) and
+                    suffix in {"工商信息", "企业信息", "公司简介", "联系方式", "法律诉讼"})
+            # Never resolve a brand, subsidiary or related-company mention into a legal entity.
+            if not exact_subject:
                 continue
-            if reads >= 2 or not budget.can_read():
-                break
-            budget.note_read()
-            reads += 1
-            try:
-                html = fetcher.get(hit.url)
-            except Exception:
-                html = None
-            resolved = getattr(fetcher, "resolved_urls", {}).get(hit.url, hit.url)
-            if not html or not firm_url(resolved) or not _page_company(html, company):
-                continue
-            review["companyUrl"] = resolved
-            review["state"] = "company_page_found"
-            review["contacts"] = [{**p, "sourceUrl": resolved, "accessedAt": checked_at}
-                                  for p in public_phones(html, company)]
-            if review["contacts"]:
-                review["state"] = "contact_found"
-                break
+            if registry:
+                review["registryLinks"].append({"title": registry + "企业详情（搜索命中，主体待回读）",
+                                                "url": hit.url, "verifiedSubject": False})
+            html, resolved = read_safely(fetcher, hit.url, budget)
+            method = "text"
+            if not html or not _page_company(html, company) or (registry and registry_url(resolved) != registry):
+                # Search snippets remain visible as lower-confidence leads, with their provenance.
+                text = (hit.snippet or "")[:3000]
+                if _compact(company) not in _compact(text):
+                    continue
+                resolved, method = hit.url, "search_snippet"
+            else:
+                text = re.split(r"相关推荐|相关企业|推荐企业|你可能感兴趣", visible_text(html))[0]
+                if registry:
+                    review["companyUrl"] = review["companyUrl"] or resolved
+                    review["state"] = "company_page_found"
+                    review["registryLinks"][-1].update(title=registry + "企业详情", url=resolved, verifiedSubject=True)
+                # Contacts are only extracted from a subject-confirmed page, never a snippet.
+                review["contacts"].extend(public_contacts(text, resolved, kind="公司公开办公联系方式",
+                                                          allow_mobile=True))
+            text = re.split(r"相关推荐|相关企业|推荐企业|你可能感兴趣", text)[0]
+            fields = labeled_fields(text, COMPANY_FIELDS, resolved, hit.title, method)
+            if "introduction" not in fields:
+                for line in text.splitlines():
+                    if (35 <= len(line) <= 800 and _compact(company) in _compact(line)
+                            and re.search(r"成立|专注|致力|是一家|主要从事", line)):
+                        fields["introduction"] = source_field("公司介绍（原文节选）", line[:500], line[:600],
+                                                               resolved, hit.title, method)
+                        break
+            for key, field in fields.items():
+                previous = review["profile"].get(key)
+                if not previous or previous["extractionMethod"] == "search_snippet" and method == "text":
+                    review["profile"][key] = field
+        seen_contacts = set()
+        review["contacts"] = [c for c in review["contacts"] if not (
+            (c["type"], c["value"]) in seen_contacts or seen_contacts.add((c["type"], c["value"])))][:6]
+        if review["contacts"]:
+            review["state"] = "contact_found"
+        if not review["companyUrl"]:
+            review["limitations"].append("未取得主体已回读的企业详情页；企查查/天眼查查询入口供人工选择。登录、验证码、robots 或访问限制时不绕过。")
         if not review["contacts"]:
-            review["limitations"].append("未取得可与该公司主体对应的完整公开电话；可打开企查查查询入口确认。登录、验证码或访问限制时不推测号码。")
+            review["limitations"].append("未取得与该企业主体对应的公开办公电话或邮箱；不推测联系人或号码。")
+        if any(f["extractionMethod"] == "search_snippet" for f in review["profile"].values()):
+            review["limitations"].append("部分企业资料仅为搜索摘要，尚未回读原文，请打开来源核对最新登记信息。")
+        review["missingFields"] = [aliases[0] for key, aliases in COMPANY_FIELDS.items()
+                                    if key not in review["profile"]]
     else:
-        review["limitations"].append("输入未明确实习公司名称，请补充公司全称后查询。")
+        review["limitations"].append("输入未明确公司名称，请补充公司全称后查询。")
     return VerifiedClaim(claim=claim, status="none", evidence=[], proved=[], unproved=list(claim.elements),
                          needs_human=True, search_exhausted=budget.exhausted, manual_review=review,
-                         next_step="打开对应公司的企查查页面，确认公司主体后联系公开电话转接实习负责人，人工核对岗位和时间。",
+                         next_step="打开企业资料和公开联系渠道，确认公司主体后转接实习负责人，人工核对岗位和时间。",
                          question="能否提供实习公司的完整名称及可核对岗位、时间的材料？")

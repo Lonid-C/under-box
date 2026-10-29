@@ -455,7 +455,10 @@ class ZhipuSearcher:
             # 裸查询必须换引擎：search_std/search_pro 的裸结果没有 link（见 __init__）
             # 书目 PDF 是有意换索引的最后一条查询，避免不同关键词一直返回同批商店页。
             catalog = 'filetype:pdf' in query.lower() and bool(re.search(r'书目|馆藏|出版社',query))
-            return self._call(query, None, self.engine_open_alternate if catalog else self.engine_open)
+            from .api_config import is_background_search
+            engine = "search_std" if is_background_search() else (
+                self.engine_open_alternate if catalog else self.engine_open)
+            return self._call(query, None, engine)
 
         # 官方仅为 std/pro/sogou 声明域过滤支持；夸克配置不能使官网限定失效。
         engine = self.engine if self.engine != "search_pro_quark" else "search_pro"

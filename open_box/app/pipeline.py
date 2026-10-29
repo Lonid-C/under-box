@@ -292,9 +292,9 @@ def verify_prepared(
             )
         if claim.category == "实习":
             task = coordinator.start_task(claim, plan, budget)
-            vc = specialist.collect(task, claim, name, claim_searcher, llm,
+            vc = specialist.collect(task, claim, name, searcher, llm,
                                     collector=collect_for_claim, manual_collector=build_manual_review,
-                                    budget=budget, fetcher=claim_fetcher, progress=csay)
+                                    budget=budget, fetcher=fetcher, progress=csay)
             vc.verification_agent = task.finish(vc)
             if workers > 1:
                 nonlocal done
@@ -393,6 +393,26 @@ def verify_prepared(
         vc.question = generate_question(vc, llm)
         say(f"    关联佐证：{vc.claim.id} 学历 借用同份简历其他条目的官方名单，"
             f"状态更新为 {vc.status}")
+
+    # Institutional navigation has its own small budget; evidence exhaustion must not
+    # hide the fallback. Explicit budget factories still control this auxiliary work.
+    pending = [v for v in verified if v.claim.category == "学历" and v.status != "ok"]
+    if pending:
+        from .education_review import build_education_review
+        say("[6/6] 补充未完全核实学历的学校/专业官网与公开办公联系渠道")
+        def add_education_context(vc):
+            context_budget = budget_factory() if explicit_budget else Budget(
+                max_searches=3, max_page_reads=4, max_seconds=45)
+            try:
+                vc.education_review = build_education_review(
+                    vc.claim, searcher, fetcher, context_budget, school_domains, say)
+            except Exception:
+                vc.education_review = {"kind": "education", "school": "", "field": "",
+                    "links": [], "contacts": [], "profile": {},
+                    "note": "机构资料仅作人工核验入口，不证明本人学历。",
+                    "limitations": ["本次官网辅助资料暂不可用，可请候选人提供院系官网或学籍管理部门公开联系页。"]}
+        with ThreadPoolExecutor(max_workers=min(3, len(pending))) as pool:
+            list(pool.map(add_education_context, pending))
 
     say("[6/6] 汇总报告")
     return Report(

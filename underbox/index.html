@@ -583,6 +583,13 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
 @keyframes slideIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
 #claims li{animation:fadeUp .42s var(--ease) both}
 
+.institution-context .ev,.web-sources{overflow-wrap:anywhere}
+.chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}
+.chat-web span{font-size:10px;color:var(--ink-3)}
+.chat-web input{accent-color:var(--pink)}
+.web-sources:empty{display:none}
+.web-sources{font-size:12px;line-height:1.6;border-top:1px solid var(--ink-3);margin-top:8px;padding-top:7px}
+.web-sources>div{margin-bottom:7px}
 /* ══ 问答（chatbot）══════════════════════════════════ */
 body[data-stage="hero"] .chat-dock,
 body[data-stage="hero"] .chat{display:none}          /* 落地页不出现，出了报告才需要问 */
@@ -960,12 +967,13 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       </div>
     </div>
     <div class="chat-foot">
+      <label class="chat-web"><input id="chatWeb" type="checkbox"> 联网搜索 <span>附来源 · 不改变报告判定</span></label>
       <div class="in">
         <textarea id="chatIn" rows="1" placeholder="就这份报告问点什么…" aria-label="输入问题"></textarea>
         <button class="send" id="chatStop" type="button" hidden title="停止生成">停止</button>
         <button class="send" id="chatSend" type="button" disabled>发送</button>
       </div>
-      <div class="note" id="chatNote">回答由 DeepSeek 流式生成，只依据本页的核验结果；结论以本页证据为准。</div>
+      <div class="note" id="chatNote">回答依据本页报告；开启联网可补充公开资料并查看来源，核验结论以报告为准。</div>
     </div>
   </section>
 
@@ -1075,7 +1083,9 @@ function detailOf(c) {
       c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
   }
   if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
-    el('h4', {text:'实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
+    el('h4', {text:'企业资料与实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
+  if (c.educationReview) d.appendChild(el('div', {class:'dsec'},
+    el('h4', {text:'院校专业官网与人工核验入口'}), renderEducationReview(c.educationReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
     const scope = el('div');
     c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
@@ -1151,36 +1161,90 @@ function detailOf(c) {
   return d;
 }
 
+function contextLink(url, label) {
+  try {
+    const u = new URL(url);
+    if (['https:', 'http:'].includes(u.protocol) && !u.username && !u.password)
+      return el('a', {href:u.href, target:'_blank', rel:'noopener noreferrer', text:label, style:'overflow-wrap:anywhere'});
+  } catch {}
+  return null;
+}
+
+function renderContextDetails(review, expected = []) {
+  const box = el('div', {class:'institution-context'});
+  const profile = review.profile || {};
+  for (const [key, label] of expected) {
+    const field = profile[key];
+    if (!field) {
+      box.appendChild(el('div', {class:'hint',text:label + '：未取得可引用资料'}));
+      continue;
+    }
+    const card = el('div', {class:'ev'});
+    card.appendChild(el('b', {text:field.label || label}));
+    card.appendChild(el('div', {class:'q',text:field.value}));
+    const link = contextLink(field.sourceUrl, '查看资料出处');
+    if (link) card.appendChild(link);
+    card.appendChild(el('div', {class:'hint',text:
+      (field.extractionMethod === 'search_snippet' ? '搜索摘要 · 尚未回读原文' : '页面原文节选')
+      + ' · 读取：' + (field.accessedAt || review.checkedAt || '未记录')}));
+    box.appendChild(card);
+  }
+  for (const contact of review.contacts || []) {
+    const card = el('div', {class:'ev'});
+    card.appendChild(el('b', {text:(contact.kind || '公开办公联系渠道') + '：'
+      + (contact.value || contact.phone || contact.email || '')}));
+    card.appendChild(el('div', {class:'q',text:'原文：' + (contact.excerpt || '')}));
+    const source = contextLink(contact.sourceUrl, '查看联系信息出处');
+    if (source) card.appendChild(source);
+    card.appendChild(el('div', {class:'hint',text:'读取：' + (contact.accessedAt || '未记录')}));
+    box.appendChild(card);
+  }
+  if (!(review.contacts || []).length) box.appendChild(el('p', {class:'hint',
+    text:'本次未取得可引用的公开办公电话或邮箱，可打开官网或企业查询入口人工确认。'}));
+  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
+  [...new Set(review.limitations || [])].forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
+  if ((review.checks || []).length) {
+    const list = el('ol');
+    review.checks.forEach(check => list.appendChild(el('li', {text:check})));
+    box.appendChild(list);
+  }
+  return box;
+}
+
 function renderManualReview(review) {
   const box = el('div', {class:'manual-review'});
   box.appendChild(el('p', {text:'实习公司：' + (review.company || '待补充公司全称')}));
-  const qccLink = (url, label) => {
-    try {
-      const u = new URL(url);
-      if (u.protocol === 'https:' && ['www.qcc.com','qcc.com','m.qcc.com'].includes(u.hostname)
-          && !u.username && !u.password && (!u.port || u.port === '443')) {
-        return el('a', {href:u.href,target:'_blank',rel:'noopener noreferrer',text:label,style:'overflow-wrap:anywhere'});
-      }
-    } catch {}
-    return null;
-  };
-  const link = qccLink(review.companyUrl || review.queryUrl, review.companyUrl ? '打开对应公司企查查页面' : '到企查查确认公司主体');
-  if (link) box.appendChild(el('p', {}, link));
-  for (const contact of review.contacts || []) {
-    const card = el('div', {class:'ev'});
-    card.appendChild(el('b', {text:'公司公开联系电话：' + contact.phone}));
-    card.appendChild(el('div', {class:'q',text:'原文：' + contact.excerpt}));
-    const source = qccLink(contact.sourceUrl, '查看电话出处');
-    if (source) card.appendChild(el('div', {}, source));
-    card.appendChild(el('div', {class:'hint',text:'读取时间：' + contact.accessedAt}));
-    box.appendChild(card);
+  const links = [...(review.registryLinks || [])];
+  if (review.companyUrl && !links.some(l => l.url === review.companyUrl))
+    links.unshift({url:review.companyUrl,title:'打开企业详情页'});
+  links.push({url:review.queryUrl,title:'企查查 · 按公司名称查询'},
+    {url:review.tianyanchaQueryUrl,title:'天眼查 · 按公司名称查询'});
+  const seen = new Set();
+  for (const item of links) {
+    if (!item.url || seen.has(item.url)) continue;
+    seen.add(item.url);
+    const link = contextLink(item.url, item.title);
+    if (link) box.appendChild(el('p', {}, link));
   }
-  if (!(review.contacts || []).length) box.appendChild(el('p', {text:'未取得可核实出处的完整公开电话，请打开企查查入口确认。'}));
-  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
-  (review.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
-  const list = el('ol');
-  (review.checks || []).forEach(check => list.appendChild(el('li', {text:check})));
-  box.appendChild(list);
+  box.appendChild(renderContextDetails(review, [
+    ['introduction','公司介绍'],['businessScope','经营范围'],['size','公司规模'],
+    ['mainBusiness','主营业务'],['legalRepresentative','法定代表人'],['contactPerson','公开业务联系人']]));
+  return box;
+}
+
+function renderEducationReview(review) {
+  const box = el('div', {class:'education-review'});
+  box.appendChild(el('p', {text:[review.school, review.field].filter(Boolean).join(' · ') || '待补充学校与专业'}));
+  for (const item of review.links || []) {
+    const link = contextLink(item.url, item.title);
+    if (link) box.appendChild(el('p', {}, link,
+      item.scope ? el('span', {class:'hint',text:' · ' + item.scope}) : null));
+  }
+  if (!(review.links || []).length && review.queryUrl) {
+    const link = contextLink(review.queryUrl, '检索学校/专业官网（需人工确认）');
+    if (link) box.appendChild(el('p', {}, link));
+  }
+  box.appendChild(renderContextDetails(review, [['introduction','对应专业介绍'],['contactPerson','公开办公联系人']]));
   return box;
 }
 
@@ -1509,39 +1573,37 @@ function initIntake() {
 /** 三条引导问题——从本次报告的实际结论里挑最值得追问的三处，不是泛泛的范例。 */
 function buildLeads() {
   if (!REPORT) return [];
-  const byId = id => REPORT.claims.find(c => c.id === id);
-  const n = c => Number(c.id.replace(/\D/g, '')) || c.id;   // c05 → 5，别写成「第 05 条」
-  const out = [];
-
-  const ask = byId('c05') || REPORT.claims.find(c => c.status === 'ask');
-  if (ask) out.push({
-    q: `第 ${n(ask)} 条判了「待澄清」，为什么不是「未找到」？`,
-    why: `公告只证明了${ask.proved.join('、') || '部分要素'}；`
-       + `${ask.unproved.join('、') || '其余要素'}在公开来源里找不到——证明一条不等于证明全部。`,
-  });
-
-  const missing = REPORT.claims.filter(c => c.status === 'none');
-  if (missing.length) out.push({
-    q: `这 ${missing.length} 条「未找到公开记录」的，帮我列一份补证清单`,
-    why: missing.map(c => `${c.category}（${c.date}）`).join('、')
-       + '——公开查不到不等于不实，该请本人补材料。',
-  });
-
-  const who = REPORT.claims.find(c => c.status === 'who');
-  if (who) out.push({
-    q: `第 ${n(who)} 条同名但学校专业都不符，我该怎么跟候选人确认？`,
-    why: ((who.evidence[0] || {}).conflicts || []).join('；')
-       + '——同名不等于同一人，宁可转人工也不认错人。',
-  });
-
-  return out.slice(0, 3);
+  const claims = REPORT.claims || [], out = [];
+  const add = (q, why, web = false) => out.push({q, why, web});
+  const company = claims.find(c => c.manualReview?.company);
+  if (company) add('请汇总 ' + company.id + ' 实习公司的主营业务、经营范围和规模，并列出资料来源',
+    '查看企业资料与公开业务联系渠道；机构资料不能证明本人实习。');
+  const school = claims.find(c => c.educationReview);
+  if (school) add('请列出 ' + school.id + ' 对应学校专业的官网、公开办公联系方式和后续补证步骤',
+    '学历未完全核实时，使用对应院系或教务渠道继续人工核验。');
+  const ask = claims.find(c => c.status === 'ask');
+  if (ask) add(ask.id + ' 为什么需要澄清？请逐项说明已证明和未证明的内容',
+    '核对真实差异，保留原文与出处，避免把信息缺失当成矛盾。');
+  const missing = claims.filter(c => ['none','part','who'].includes(c.status));
+  if (missing.length) add('请按条目列出这份报告仍需候选人补充的材料和建议提问',
+    '用本次核验结果生成补证清单，未找到公开记录不等于不实。');
+  const who = claims.find(c => c.status === 'who');
+  if (who) add(who.id + ' 的身份为什么未确认？需要哪些信息才能排除同名？',
+    '只说明已有身份线索与缺口，不预设学校专业存在矛盾。');
+  add('请概括这份报告，并指出最需要人工核对的条目和原始出处',
+    '从实际报告出发说明结论、来源与限制。');
+  const webTarget = company?.manualReview?.company || [school?.educationReview?.school, school?.educationReview?.field].filter(Boolean).join(' ');
+  add(webTarget ? '请联网查询 ' + webTarget + ' 的官网、公开介绍和办公联系方式，并列出来源'
+    : '请联网查找本报告涉及机构的官方核验入口，并列出可引用的链接',
+    '本次真实联网搜索；补充背景与报告原结论分别说明。', true);
+  return out.slice(0, 4).concat(out.length > 4 ? [out[out.length - 1]] : []);
 }
 
 function renderLeads() {
   const leadList = $('leadList'); if (!leadList) return;
   leadList.innerHTML = '';
   buildLeads().forEach((s, i) => {
-    leadList.appendChild(el('button', { class: 'sug', type: 'button', 'data-q': s.q },
+    leadList.appendChild(el('button', { class: 'sug', type: 'button', 'data-q': s.q, 'data-web':String(s.web || false) },
       el('b', {}, el('span', { class: 'n', text: String(i + 1) }), s.q),
       el('span', { text: s.why })));
   });
@@ -1668,13 +1730,13 @@ Usage.done = Usage.blank();
 const Chat = {
   ctrl: null,
   /** 返回完整回答文本；onDelta(已累计文本) 逐段回调。 */
-  async askStream(question, onDelta, onDone) {
+  async askStream(question, onDelta, onDone, onSearch) {
     const epoch = QUERY_EPOCH;
     this.ctrl = new AbortController();
     const res = await fetch('/api/ask/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, webSearch:$('chatWeb').checked }),
       signal: this.ctrl.signal,
     });
     // 错误发生在建连阶段时，服务端回的是 JSON 而不是事件流
@@ -1697,6 +1759,7 @@ const Chat = {
         const ev = JSON.parse(line.slice(6));
         if (epoch !== QUERY_EPOCH) throw new DOMException('查询已退出', 'AbortError');
         if (ev.error) throw new Error(ev.error);
+        if (ev.search) onSearch?.(ev.search);
         if (ev.delta) { full += ev.delta; onDelta(full); }
         if (ev.done) { seconds = ev.seconds; finished = true; }
         if (ev.usage) { Usage.live(ev.usage); }
@@ -1714,6 +1777,13 @@ function initChat() {
   const dock = $('chatDock'), panel = $('chat'), body = $('chatBody');
   const input = $('chatIn'), send = $('chatSend'), stop = $('chatStop');
   let busy = false;
+  const updateWebNote = () => {
+    $('chatNote').textContent = $('chatWeb').checked
+      ? '将检索问题中的公开信息，并附来源；搜索摘要需核对原文，补充资料不改变报告判定。'
+      : '依据本页核验报告回答；可开启联网搜索补充公开资料。';
+  };
+  $('chatWeb').addEventListener('change', updateWebNote);
+  updateWebNote();
 
   /* 没有报告就没有材料——问答在核验完成前是关着的 */
   const setChatReady = ready => {
@@ -1727,7 +1797,10 @@ function initChat() {
   const leadList = $('leadList');
   leadList.addEventListener('click', e => {
     const b = e.target.closest('.sug');
-    if (b) send_(b.dataset.q);        // 用 data-q，别去剥渲染出来的文本
+    if (b) {
+      if (b.dataset.web === 'true') { $('chatWeb').checked = true; updateWebNote(); }
+      send_(b.dataset.q);
+    }        // 用 data-q，别去剥渲染出来的文本
   });
 
   const scrollChat = () => { body.scrollTop = body.scrollHeight; };
@@ -1755,15 +1828,35 @@ function initChat() {
 
     body.appendChild(bubble('me', q));
     const bub = el('div', { class: 'bub streaming' });
-    body.appendChild(el('div', { class: 'msg ai' },
-      el('div', { class: 'who' }, 'UNDERBOX'), bub));
+    const answer = el('div', { class: 'msg ai' },
+      el('div', { class: 'who' }, 'UNDERBOX'), bub);
+    const sources = el('div', {class:'web-sources'});
+    answer.appendChild(sources);
+    body.appendChild(answer);
     scrollChat();
 
     let acc = '';
     try {
       const full = await Chat.askStream(q,
         t => { acc = t; bub.textContent = t; scrollChat(); },
-        secs => { if (secs) bub.dataset.secs = secs; });
+        secs => { if (secs) bub.dataset.secs = secs; },
+        result => {
+          sources.replaceChildren();
+          if (result.status === 'searching') {
+            bub.textContent = '正在联网检索公开资料…';
+            return;
+          }
+          if (!acc) bub.textContent = '正在结合报告与检索资料生成回答…';
+          if (result.query) sources.appendChild(el('div', {class:'hint',text:'本次检索：' + result.query}));
+          for (const source of result.sources || []) {
+            const link = contextLink(source.url, '[' + source.id + '] ' + source.title);
+            if (link) sources.appendChild(el('div', {}, link,
+              el('div', {class:'hint',text:(source.extractionMethod === 'text' ? '已回读页面' : '仅搜索摘要')
+                + ' · ' + source.accessedAt})));
+          }
+          (result.limitations || []).forEach(note => sources.appendChild(el('div', {class:'hint',text:note})));
+          scrollChat();
+        });
       if (epoch !== QUERY_EPOCH) return;
       bub.classList.remove('streaming');
       bub.textContent = acc || '（模型没有返回内容）';
@@ -1883,6 +1976,7 @@ function initChat() {
     body.querySelectorAll('.msg').forEach(message => message.remove());
     leadList.replaceChildren();
     input.value = ''; input.style.height = '44px';
+    $('chatWeb').checked = false; updateWebNote();
     busy = false; send.disabled = true; stop.hidden = true;
     setOpen(false); setChatReady(false); setChatStatus('需先核验一份简历');
     $('chatSt').classList.remove('on');

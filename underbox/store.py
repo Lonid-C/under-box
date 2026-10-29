@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sqlite3
@@ -100,6 +101,14 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL
 );
 
+-- Optional per-account search key. Unbound users retain the original shared API.
+-- Secrets stay in this protected database and are never returned by account APIs.
+CREATE TABLE IF NOT EXISTS user_search_keys (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  api_key TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- 访问流水：看板的"访问量"来自这里。只记路径与状态，不记正文
 CREATE TABLE IF NOT EXISTS access_log (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,9 +121,21 @@ CREATE TABLE IF NOT EXISTS access_log (
 );
 CREATE INDEX IF NOT EXISTS idx_access_at   ON access_log(at);
 CREATE INDEX IF NOT EXISTS idx_access_user ON access_log(user_id, at);
+
+-- 只保留每位用户最近 10 次成功核验的报告正文；会话结束与服务重启均不删除。
+CREATE TABLE IF NOT EXISTS report_history (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  report_no   TEXT NOT NULL,
+  candidate   TEXT NOT NULL,
+  claims      INTEGER NOT NULL,
+  report_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_report_history_user ON report_history(user_id, id DESC);
 """
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "3"
 
 
 def now() -> str:
@@ -169,6 +190,39 @@ def _migrate(conn: sqlite3.Connection) -> None:
                      ("last_login_at", "TEXT")):
         if col not in have:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+
+
+def save_report(conn: sqlite3.Connection, user_id: str, report: dict) -> int:
+    """保存成功核验，原子裁剪为该账户最新 10 份。"""
+    payload = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
+    cursor = conn.execute(
+        "INSERT INTO report_history(user_id,created_at,report_no,candidate,claims,report_json) "
+        "VALUES(?,?,?,?,?,?)",
+        (user_id, now(), str(report.get("reportNo") or ""),
+         str(report.get("candidate") or ""), len(report.get("claims") or []), payload),
+    )
+    conn.execute(
+        "DELETE FROM report_history WHERE user_id=? AND id NOT IN "
+        "(SELECT id FROM report_history WHERE user_id=? ORDER BY id DESC LIMIT 10)",
+        (user_id, user_id),
+    )
+    return int(cursor.lastrowid)
+
+
+def list_reports(conn: sqlite3.Connection, user_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT id,created_at,report_no,candidate,claims FROM report_history "
+        "WHERE user_id=? ORDER BY id DESC LIMIT 10", (user_id,),
+    ).fetchall()
+    return [{"id": row["id"], "createdAt": row["created_at"],
+             "reportNo": row["report_no"], "candidateName": row["candidate"],
+             "claims": row["claims"]} for row in rows]
+
+
+def get_report(conn: sqlite3.Connection, user_id: str, report_id: int) -> dict | None:
+    row = conn.execute("SELECT report_json FROM report_history WHERE id=? AND user_id=?",
+                       (report_id, user_id)).fetchone()
+    return json.loads(row["report_json"]) if row else None
 
 
 # ── 口令 ──────────────────────────────────────────────────────────────────
@@ -448,6 +502,21 @@ def settings_env(conn) -> dict[str, str]:
         if env and value:
             out[env] = value
     return out
+
+
+def set_user_search_key(conn, user_id: str, api_key: str) -> None:
+    from app.api_config import SearchCredentials
+    SearchCredentials(api_key)  # validate without including the secret in errors
+    if get_user(conn, user_id) is None:
+        raise ValueError("账号不存在")
+    conn.execute("INSERT INTO user_search_keys(user_id,api_key,updated_at) VALUES(?,?,?) "
+                 "ON CONFLICT(user_id) DO UPDATE SET api_key=excluded.api_key,updated_at=excluded.updated_at",
+                 (user_id, api_key, now()))
+
+
+def user_search_key(conn, user_id: str) -> str | None:
+    row = conn.execute("SELECT api_key FROM user_search_keys WHERE user_id=?", (user_id,)).fetchone()
+    return row["api_key"] if row is not None else None
 
 
 # ── 访问统计 ──────────────────────────────────────────────────────────────

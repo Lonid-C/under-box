@@ -702,6 +702,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   .top-nav{display:none}
   .top-right .badge,.top-right .ghost{white-space:nowrap}
   .row{grid-template-columns:14px 96px minmax(0,1fr) 20px}
+  .row .dt,.row .ct,.row .tr{display:none}
 }
 @media(max-width:600px){
   body[data-stage="gate"] main.grid{padding:0 16px}
@@ -1073,6 +1074,8 @@ function detailOf(c) {
       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
       c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
   }
+  if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
+    el('h4', {text:'实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
     const scope = el('div');
     c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
@@ -1123,7 +1126,7 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:'公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
+      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : '公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1148,6 +1151,40 @@ function detailOf(c) {
   return d;
 }
 
+function renderManualReview(review) {
+  const box = el('div', {class:'manual-review'});
+  box.appendChild(el('p', {text:'实习公司：' + (review.company || '待补充公司全称')}));
+  const qccLink = (url, label) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'https:' && ['www.qcc.com','qcc.com','m.qcc.com'].includes(u.hostname)
+          && !u.username && !u.password && (!u.port || u.port === '443')) {
+        return el('a', {href:u.href,target:'_blank',rel:'noopener noreferrer',text:label,style:'overflow-wrap:anywhere'});
+      }
+    } catch {}
+    return null;
+  };
+  const link = qccLink(review.companyUrl || review.queryUrl, review.companyUrl ? '打开对应公司企查查页面' : '到企查查确认公司主体');
+  if (link) box.appendChild(el('p', {}, link));
+  for (const contact of review.contacts || []) {
+    const card = el('div', {class:'ev'});
+    card.appendChild(el('b', {text:'公司公开联系电话：' + contact.phone}));
+    card.appendChild(el('div', {class:'q',text:'原文：' + contact.excerpt}));
+    const source = qccLink(contact.sourceUrl, '查看电话出处');
+    if (source) card.appendChild(el('div', {}, source));
+    card.appendChild(el('div', {class:'hint',text:'读取时间：' + contact.accessedAt}));
+    box.appendChild(card);
+  }
+  if (!(review.contacts || []).length) box.appendChild(el('p', {text:'未取得可核实出处的完整公开电话，请打开企查查入口确认。'}));
+  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
+  (review.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
+  const list = el('ol');
+  (review.checks || []).forEach(check => list.appendChild(el('li', {text:check})));
+  box.appendChild(list);
+  return box;
+}
+
+
 function renderClaims() {
   if (!REPORT) return;
   const ul = $('claims'); ul.innerHTML = '';
@@ -1155,7 +1192,7 @@ function renderClaims() {
     const st = STATUS[c.status];
     const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':c.status},
       el('span', {class:'dot', style:`background:${st.dot}`}),
-      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:st.label}),
+      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:c.manualReview?.kind === 'internship' ? '待人工背调' : st.label}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
       el('span', {class:'tx'}, summaryOf(c.rawText), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
@@ -2407,6 +2444,7 @@ const BLOCKS = [
   { name: '荣誉与奖学金', cats: ['校内荣誉', '奖学金'], why: '名称、授予单位、年份' },
   { name: '项目经历',     cats: ['项目', '开源项目'],   why: '项目名、角色、仓库' },
   { name: '任职经历',     cats: ['任职'],             why: '单位、职务、时间' },
+  { name: '实习背调',     cats: ['实习'],             why: '公司企查查入口、公开电话；岗位与时间待人工核对' },
   { name: '学生工作',     cats: ['学生工作'],          why: '组织、职务' },
 ];
 /** 按设置不核验的条目（默认实习）：写清楚没核、为什么没核，列出原文摘要。 */
@@ -2415,7 +2453,7 @@ function renderSkipped(box, items) {
   if (!items || !items.length) { box.hidden = true; return; }
   const kinds = [...new Set(items.map(c => c.category === '实习' ? '实习经历' : c.category))].join('、');
   box.append(el('b', { text: `${kinds} ${items.length} 条不核验` }),
-    '（按设置跳过，不去检索；实习一般没有公开记录）：',
+    '（按设置跳过，不去检索）：',
     items.map(c => summaryOf(c.rawText)).join('；'));
   box.hidden = false;
 }
@@ -2459,7 +2497,7 @@ function renderPick() {
       const row = el('label', { class: 'pk' + (input.checked ? ' on' : ''), for: id },
         input, boxEl,
         el('span', { class: 'tx' }, summaryOf(c.rawText),
-          keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null),
+          c.category === '实习' ? el('small', {text:'提供企查查公司链接和公开电话，岗位与时间待人工背调'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
         el('span', { class: 'meta' }, el('span', { text: c.date || '' }), pgBtn));
       input.addEventListener('change', () => {
         input.checked ? PICK.selected.add(c.id) : PICK.selected.delete(c.id);

@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from pathlib import Path
+from .academic import study_stage, AWARD_CATEGORIES
 
 from .competitions import (catalog_query_specs, competition_for_claim,
                            competition_resolution_note,
@@ -116,6 +118,7 @@ class Plan:
     # 这个计划自己的预算。**执行层必须照它走**——档案说 8 次检索，
     # 而 collect 的默认预算还是 6 的话，多出来的两条查询永远不会被执行，策略就成了装饰。
     budget: dict = field(default_factory=dict)         # {searches, reads, seconds}
+    handoffs: list[dict] = field(default_factory=list) # Provenance for cross-agent navigation, not evidence.
 
 
 # ── 档案加载 ─────────────────────────────────────────────────────────────
@@ -348,6 +351,7 @@ def _context(claim, candidate_name: str, terms: list[str],
     if re.fullmatch(r"成员|队员|队长|负责人|参与者|个人|member|participant|leader", team, re.I):
         team = ""
     return {
+        "study_stage": study_stage(claim),
         "name": nvar[0] if nvar else "",
         "name2": nvar[1] if len(nvar) > 1 else "",
         "period": period,
@@ -532,6 +536,7 @@ def add_admission_source_hints(claims: list) -> list:
     找到多个可能的前一所学校时不猜。
     """
     from .plan import claim_school
+    from .academic import study_stage
 
     def year(value: str | None) -> str:
         match = re.search(r"(?:19|20)\d{2}", value or "")
@@ -563,7 +568,8 @@ def add_admission_source_hints(claims: list) -> list:
         sources = [
             (school, other) for other in claims
             if other is not claim and other.category == "学历"
-            and (school := claim_school(other)) and school != receiver
+            and (school := claim_school(other))
+            and (school != receiver or study_stage(other) == "本科")
             and end_year(other) == intake
             and start_year(other) and start_year(other) < intake
             and not any(x in _claim_search_blob(other) for x in ("夏令营", "优秀营员"))
@@ -571,6 +577,8 @@ def add_admission_source_hints(claims: list) -> list:
         source_schools = {school for school, _ in sources}
         if len(source_schools) == 1:
             hints = {"source_school_hint": next(iter(source_schools))}
+            if all(study_stage(other) == "本科" for _, other in sources):
+                hints["source_study_stage_hint"] = "本科"
             fields = {
                 value.strip() for _, other in sources
                 if isinstance(value := ((other.entities or {}).get("dept") or
@@ -584,6 +592,25 @@ def add_admission_source_hints(claims: list) -> list:
             }))
         else:
             result.append(claim)
+    return result
+
+
+def github_trigger(claim) -> list[dict]:
+    """两条件硬门禁：实际项目陈述 + 本条明确关联的 GitHub 项目链接。"""
+    from .github_audit import links_in, parse_link
+    if claim.category not in {"项目", "开源项目"}:
+        return []
+    without_urls = re.sub(r"https?://\S+", "", claim.raw_text or "").strip()
+    if re.search(r"^(?:熟悉|了解|掌握|会使用|使用)\s*GitHub", without_urls, re.I) and not re.search(r"项目|贡献|开发|提交|修复|PR|commit", without_urls, re.I):
+        return []
+    ent = claim.entities or {}
+    raw = ent.get("github_bound_urls", []) if ent.get("github_input_checked") else [p["url"] for p in links_in(claim.raw_text)]
+    if not isinstance(raw, list): return []
+    result=[];seen=set()
+    for url in raw:
+        link=parse_link(url)
+        if link and link["kind"] != "account" and link["url"] not in seen:
+            seen.add(link["url"]);result.append(link)
     return result
 
 
@@ -601,12 +628,40 @@ def build_plan(
     `resume_categories` 是**整份简历**出现过的类别集合（流水线里拆分完就都有了）。
     档案匹配要用它，不能只看当前这一条的类别——见 `_matches` 里的说明。
     """
+    if claim.category == "实习":
+        from .internship import company_name
+        company = company_name(claim)
+        return Plan([Query(text='"' + company.replace('"', '') + '"', site="qcc.com",
+                           kind="company_contact", round=1,
+                           purpose="仅定位对应公司公开电话和企查查页面，供人工背调，不证明本人实习")]
+                    if company else [], "internship_manual", "实习人工背调",
+                    notes=["不检索候选人姓名；不把公司存在或电话列入本人经历证据。"],
+                    budget={"searches": 1 if company else 0, "reads": 2 if company else 0, "seconds": 30})
+    links = github_trigger(claim)
+    if links:
+        return Plan([Query(text=p["url"], kind="github", round=1, purpose="只读取本条主动提供的公开仓库/PR/commit，不猜账号，不搜索其他仓库", expect_tier="B") for p in links],
+                    "github_contribution", "关联 GitHub 贡献核验",
+                    notes=["先确认候选人主动提供的账号归属；数量、仓库存在、本人参与与主导/核心/自研分别证明。"],
+                    budget={"searches": 0, "reads": 20, "seconds": 75})
     doc = doc or load_strategies()
     prof = profile or ResumeProfile()
 
     cat = (doc["categories"].get(claim.category) or {})
     never = bool(cat.get("never_search"))
     exception = _search_exception(cat, claim) if never else False
+    # 教师/研究人员主页通常只列出学校、学位或单位，不写起止年份。当前策略
+    # 对普通学历采取保守的零检索；这里仅对明确识别为研究人员、且条目没有任何
+    # 明示年份的学历/任职，增加按年代分组的公开网页检索。年份只是召回线索，
+    # 不构成该人的毕业或任职年份证据。
+    claim_blob = _claim_search_blob(claim)
+    has_explicit_year = bool(re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d)", " ".join([
+        claim_blob, claim.date_label or "", claim.date_start or "", claim.date_end or "",
+    ])))
+    year_expansion = (
+        prof.identity == "researcher"
+        and claim.category in {"学历", "任职"}
+        and not has_explicit_year
+    )
     # never_search 类别：默认零检索；命中 search_if_terms 例外则放开全部表单；
     # 都不命中时，只放行标了 always 的**合规轻探针**（如学历的公众号「学校+姓名」粗检）。
     only_always = never and not exception
@@ -645,6 +700,9 @@ def build_plan(
             if only_always and not f.get("always"):
                 continue
             if _usable(f.get("tpl", ""), ctx)[0]:
+                if claim.category == "学历" and ctx.get("study_stage") and f.get("tpl") == '"{name}"':
+                    f = {**f, "tpl": '"{name}" {study_stage}',
+                         "purpose": "按本人目标学段查学校就读线索；同校其他学位阶段不能替代本条"}
                 forms.append((f, f"school:{claim.category}"))
                 break
     if ctx.get("contest"):
@@ -682,6 +740,7 @@ def build_plan(
     skipped: list[tuple[str, list[str]]] = []
     for form, source in forms:
         tpl = form.get("tpl", "")
+        if "{repo}" in tpl or "{github}" in tpl: continue  # 没有项目关联链接不搜索贡献者或其他仓库。
         when_terms = form.get("when_terms") or []
         if when_terms and not any(term in _claim_search_blob(claim) for term in when_terms):
             continue
@@ -725,6 +784,8 @@ def build_plan(
                 skipped.append((tpl, [str(form.get("site")) + " 域名"]))
                 continue
             kind = form.get("kind") or "web"
+            if kind == "github" or site in {"github.com", "api.github.com"}:
+                continue  # 未命中硬门禁不启动 GitHub 调查，也不把 repo 字段当授权。
             # GitHub 检索只对真正的仓库路径（user/repo）有意义。简历里常见"只有项目名没有
             # 仓库"，那种情况该走 web 的 {project} 查询——把中文项目名塞给 GitHub 搜索
             # 只会得到 0 结果，还白花一次检索。
@@ -748,6 +809,78 @@ def build_plan(
                 variant=bool(variant_index),
             ))
 
+    # 精确学段查询可能漏掉附件未被索引的公示；实名校内入口和明确毕业年
+    # 只用于召回，正文仍须通过学校、学段及年份约束。推免保留名单优先顺序。
+    if claim.category == "学历" and ctx.get("school") and ctx.get("name") and not roster_first:
+        site = _resolve_site("school", claim, ctx)
+        probes = [(f'"{ctx["name"]}"', 108, "实名校内入口")]
+        end = (claim.date_end or "")[:4]
+        if end.isdigit(): probes.insert(0, (f'"{ctx["name"]}" {end} 毕业', 110, "原文明示毕业年"))
+        for text, weight, purpose in probes:
+            key = (text, site, "web")
+            if key not in seen:
+                seen.add(key)
+                queries.append(Query(text=text, site=site, round=2, weight=weight,
+                                     source="education_navigation", purpose=purpose + "；不得据检索词推断就读或年份"))
+
+    # 教师主页经常省略入学方式；仍可从推免、导师学生列表、硕博连读记录
+    # 发现学历线索。只增加查询渠道，不给原陈述补“保研”或猜测年份。
+    education_routes = prof.identity == "researcher" and claim.category == "学历"
+    if education_routes and ctx.get("school") and ctx.get("name"):
+        school_site = _resolve_site("school", claim, ctx)
+        route_terms = {"本科": ("教育经历", "本科", "推免资格"),
+                       "硕士": ("推免", "硕士", "教育经历"),
+                       "博士": ("直博" if "直博" in claim.raw_text else "硕博连读", "博士", "教育经历")}
+        for term, weight in zip(route_terms.get(study_stage(claim), ("教育经历",)), (119, 118, 117)):
+            text = f'"{ctx["name"]}" {term}'
+            key = (text, school_site, "web")
+            if key not in seen:
+                seen.add(key)
+                queries.append(Query(text=text, site=school_site, round=2, weight=weight,
+                                     source=f"education_route:{term}",
+                                     purpose="教师学历：查推免接收、导师培养记录及个人履历；仅证明原文明确对应的要素"))
+
+    if year_expansion:
+        # 分成五个时间窗而不是逐年发 40 多次请求；保持姓名和学校/单位锚点，
+        # 同时覆盖届别名单常用的“毕业生/学位/硕士/本科”等表述。
+        org = ctx.get("school") if claim.category == "学历" else (ctx.get("company") or ctx.get("org"))
+        if org:
+            if claim.category == "学历":
+                blob = _claim_search_blob(claim).lower()
+                if any(x in blob for x in ("博士", "ph.d", "phd", "doctor")):
+                    clue = '博士 OR PhD OR 硕博连读 OR 直博 OR 毕业名单'
+                elif any(x in blob for x in ("硕士", "研究生", "master", "m.s.", "mba")):
+                    clue = '硕士 OR 研究生 OR master OR "优秀毕业研究生" OR "推荐名单" OR "届"'
+                elif any(x in blob for x in ("本科", "学士", "bachelor", "undergraduate")):
+                    clue = '本科 OR 学士 OR bachelor OR 推免 OR 保研 OR "优秀毕业生" OR "届"'
+                else:
+                    clue = '学历 OR 学位 OR 毕业生 OR 优秀毕业生 OR 推荐名单 OR "届"'
+                purpose = "教师学历缺少年份，按年代查学校公开届别名单/学历线索；年份命中仅作候选线索"
+            else:
+                clue = '任职 OR 任命 OR 教师 OR 教授 OR 简历 OR 经历'
+                purpose = "教师任职缺少起始年份，按年代查单位公开履历/任职线索；年份命中仅作候选线索"
+            current_year = date.today().year
+            windows = []
+            upper = current_year
+            while upper >= 1980:
+                lower = max(1980, upper - 9)
+                windows.append((lower, upper))
+                upper = lower - 1
+            for index, (lower, upper) in enumerate(windows):
+                years = " OR ".join(str(y) for y in range(upper, lower - 1, -1))
+                text = f'"{ctx["name"]}" "{org}" ({years}) ({clue})'
+                key = (text, None, "web")
+                if key in seen:
+                    continue
+                seen.add(key)
+                queries.append(Query(
+                    text=text, site=None, kind="web",
+                    element=(claim.elements[0] if claim.elements else None),
+                    purpose=f"{purpose}（{lower}–{upper}）",
+                    round=2, weight=105 - index,
+                    source=f"history_year:{claim.category}:{lower}-{upper}",
+                ))
+
     if competition:
         preset = [Query(**spec) for spec in catalog_query_specs(competition, claim, candidate_name)]
         if preset:
@@ -757,6 +890,21 @@ def build_plan(
             queries = preset + [q for q in queries if not q.source.startswith("organizer:")
                                 and not (q.site in domains and q.source.startswith("category:"))]
 
+    from .faculty_recall import queries_for
+    for q in queries_for(claim,candidate_name,prof):
+        key=(q.text,q.site,q.kind)
+        if key not in seen:
+            seen.add(key);queries.append(q)
+
+    if claim.category in AWARD_CATEGORIES:
+        # 获奖检索独立于就读/录取渠道；每个查询须包含奖项或评奖目的词。
+        queries = [q for q in queries if re.search(r"奖|荣誉|表彰|优秀|三好|标兵|先进|获评|award|scholarship", q.text, re.I)]
+        scope = study_stage(claim)
+        if scope:
+            for q in queries:
+                if q.kind == "web" and scope not in q.text:
+                    q.text += " " + scope
+
     # 预算：档案说了算，但被硬天花板夹住；collect 的默认值只作兜底
     pb = head.get("budget") or {}
     budget = {
@@ -764,9 +912,11 @@ def build_plan(
         "reads": int(pb.get("reads") or MAX_PAGE_READS),
         "seconds": float(pb.get("seconds") or MAX_SECONDS),
     }
+    if claim.category=='著作':
+        budget={'searches':4,'reads':6,'seconds':70}
     # 例外检索（推免/考研等）比普通学历多两个环节（推荐方 + 接收方），给类别自己的
     # 预算下限；仍被下面的硬天花板夹住，写错也放大不了多少。
-    eb = cat.get("exception_budget") if exception else None
+    eb = cat.get("exception_budget") if (exception or year_expansion) else None
     if isinstance(eb, dict):
         budget["searches"] = max(budget["searches"], int(eb.get("searches") or 0))
         budget["reads"] = max(budget["reads"], int(eb.get("reads") or 0))
@@ -780,6 +930,12 @@ def build_plan(
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
     regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))
     def priority(q: Query) -> int:
+        if q.source.startswith('faculty_fact:'):
+            return 0
+        if q.source.startswith("education_route:"):
+            return 1
+        if q.source.startswith('history_year:'):
+            return 1
         if (regional_contest or competition and competition.get("school_search_first")) and q.source.startswith("school:"):
             return 0
         if competition and q.source.startswith("organizer:竞赛:catalog:"):
@@ -809,6 +965,11 @@ def build_plan(
     resolution_note = competition_resolution_note(claim)
     if resolution_note:
         plan.notes.append(resolution_note)
+
+    if year_expansion:
+        plan.notes.append("该教师经历未写明年份，检索按年代分组扩展至1980年；检索年份仅用于发现候选公开页面，必须由来源内容单独核实具体毕业/任职时间。")
+    if education_routes:
+        plan.notes.append("按本科、硕士或博士阶段分别检索；推荐资格、拟录取、在读和学位授予分别核对，不能从同校其他学段或入学名单推断本条学位。")
 
     if skipped:
         fields: list[str] = []

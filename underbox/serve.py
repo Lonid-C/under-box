@@ -102,6 +102,12 @@ def render_material(rep) -> str:
             out.append(f"  已证明：{'；'.join(v.proved)}")
         if v.unproved:
             out.append(f"  尚未证明：{'；'.join(v.unproved)}")
+        if v.manual_review:
+            review = v.manual_review
+            out.append("  实习仅提供人工背调入口，尚未核实本人经历：" + (review.get("companyUrl") or review.get("queryUrl") or "待补充公司全称"))
+            for phone in review.get("contacts", []):
+                out.append("  公司公开电话：" + phone["phone"] + "；出处：" + phone["sourceUrl"])
+            out.append("  " + review.get("note", ""))
         for note in getattr(v, "source_notes", []):
             out.append(f"  官网名单范围：{note}")
         for e in v.evidence:
@@ -197,10 +203,11 @@ def to_presentation(rep) -> dict:
         "generatedAt": rep.generated_at,
         "mode": rep.mode,
         "sourceFile": rep.source_file,
+        "verificationWorkflow": getattr(rep, "verification_workflow", None),
         "searchConfigured": _search_configured(),
         "risks": [{"kind": r.kind, "locator": r.locator, "detail": r.detail, "excerpt": r.excerpt}
                   for r in rep.input_risks],
-        # 拆出来但按设置不核验的（默认实习经历）：如实列出，导出时写明没核
+        # 显式按设置不核验的条目；实习默认进入人工背调入口。
         "skipped": [claim_brief(c) for c in getattr(rep, "skipped_claims", None) or []],
         "claims": [{
             "id": v.claim.id,
@@ -219,6 +226,10 @@ def to_presentation(rep) -> dict:
             "searchExhausted": v.search_exhausted,
             "sourceNotes": getattr(v, "source_notes", []),
             "competitionLookup": getattr(v, "competition_lookup", None),
+            "claimVerification": getattr(v, "claim_verification", None),
+            "githubAudit": getattr(v, "github_audit", None),
+            "manualReview": getattr(v, "manual_review", None),
+            "verificationAgent": getattr(v, "verification_agent", None),
             "evidence": [{
                 "tier": e.source_tier,
                 "title": e.title,
@@ -309,8 +320,10 @@ def _remember_prepared(entry: dict) -> str:
 
 
 def claim_brief(c) -> dict:
+    from app.github_audit import material_eligible
     return {"id": c.id, "category": c.category, "date": c.date_label, "rawText": c.raw_text,
-            "locator": c.raw_locator, "elements": c.elements}
+            "locator": c.raw_locator, "elements": c.elements,
+            "githubMaterialEligible": material_eligible(c)}
 
 
 def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
@@ -404,7 +417,7 @@ def run_split_url_job(url: str, events: queue.Queue, holder: dict) -> None:
         events.put({"log": f"已读取正文 {len(snap.blocks)} 段"
                            + (f"；发现 {hidden} 处隐藏文字，已剔除" if hidden else "")})
         llm = build_llm()
-        events.put({"log": "判断这是不是个人主页（防止拿来查无关的人）…"})
+        events.put({"log": "检查主页来源与正文（教育域名和职业资料白名单直接通过类型检查）…"})
         verdict = ensure_personal_homepage(doc, llm, title=snap.title)
         events.put({"log": f"已确认：{verdict['page_type']}"
                            + (f"（{verdict['person']}）" if verdict.get("person") else "")
@@ -441,7 +454,7 @@ def run_split_url_job(url: str, events: queue.Queue, holder: dict) -> None:
         events.put(None)
 
 
-def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, holder: dict) -> None:
+def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, holder: dict, *, materials=None) -> None:
     """线程目标：只核验勾选的陈述（各条同时开始检索）。"""
     from app.pipeline import verify_prepared         # noqa: PLC0415
 
@@ -455,6 +468,10 @@ def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, ho
         if entry is None:
             raise LookupError("这份简历的拆分结果已过期，请重新上传")
         prepared = entry["prepared"]
+        if materials:
+            from dataclasses import replace
+            from app.github_audit import supplement_claims
+            prepared = replace(prepared, claims=supplement_claims(prepared.claims, materials))
         rep = verify_prepared(prepared, claim_ids=claim_ids, progress=say)
         holder["oby"] = rep
         holder["profile"] = prepared.profile
@@ -546,6 +563,34 @@ def report_to_markdown(rep: dict) -> str:
         competition = c.get("competitionLookup") or {}
         if competition.get("official_urls"):
             L.append(f"- 赛事官网：{'；'.join(competition['official_urls'])}")
+        if c.get("claimVerification"):
+            for check in c["claimVerification"].get("checks", []):
+                L.append(f"- 主张核对：{check['element']} · {check['state']} · {'；'.join(check['urls'])}")
+        if c.get("githubAudit"):
+            audit = c['githubAudit']
+            L.append("### GitHub 贡献核验（本条关联范围）")
+            L.append('- 范围：' + '；'.join(audit.get('scope', [])))
+            L.append('- 归属依据：' + audit.get('identityBasis', ''))
+            for record in audit.get('records', []):
+                L.append('- 公开记录：' + record['url'])
+                for f in record.get('files', []):
+                    L.append(f"  - {f['path']} · {f['type']} · +{f['additions']}/-{f['deletions']}（上下文，不评价能力）")
+                    if f.get('patch'):
+                        L.append('    - diff 原文摘录（部分，完整内容见对应记录 URL）：')
+                        L.extend('        '+line for line in f['patch'][:1200].splitlines())
+            for note in audit.get('warnings', []) + audit.get('limitations', []): L.append('- ' + note)
+            if audit.get('truncated'): L.append('- 本次范围被分页或预算截断，未检查记录保持未知。')
+        if c.get("manualReview"):
+            review = c["manualReview"]
+            L.append("### 实习人工背调（尚未核实本人经历）")
+            L.append("- 公司：" + review.get("company", ""))
+            L.append("- 企查查入口：" + (review.get("companyUrl") or review.get("queryUrl") or "待补充公司全称"))
+            for phone in review.get("contacts", []):
+                L.append("- 公司公开电话：" + phone["phone"] + "｜来源：" + phone["sourceUrl"] + "｜读取：" + phone["accessedAt"])
+                L.append("  - 原文：" + phone["excerpt"])
+            L.append("- " + review.get("note", ""))
+            for note in review.get("limitations", []): L.append("- " + note)
+            for check in review.get("checks", []): L.append("- 人工核对：" + check)
         for e in c.get("evidence", []):
             L.append(f"- 证据（{e.get('tier') or '未定级'}）：{e.get('title', '')}"
                      f"｜{e.get('publisher', '')}｜{e.get('url', '')}")
@@ -556,9 +601,21 @@ def report_to_markdown(rep: dict) -> str:
         if c.get("question"):
             L.append(f"- 可问的问题：{c['question']}")
         L.append("")
+    workflow = rep.get("verificationWorkflow") or {}
+    if workflow.get("tasks"):
+        L.append("## 核验分工与协作")
+        for task in workflow["tasks"]:
+            L.append("- " + str(task["claimId"]) + "：" + task["agent"]["name"])
+            sources = list(dict.fromkeys(e["sourceName"] for e in task.get("sourceAccess", {}).get("events", [])))
+            if sources: L.append("  - 实际调用来源：" + "；".join(sources))
+        for handoff in workflow.get("handoffs", []):
+            L.append("- 定位线索：" + handoff["fromClaim"] + " → " + handoff["toClaim"] + "，" + handoff["element"])
+            L.append("  - 原出处：" + "；".join(handoff["urls"]))
+        L.append(workflow.get("note", ""))
+        L.append("")
     if rep.get("skipped"):
         L.append("## 未核验的条目")
-        L.append("以下条目按设置不进入核验（实习经历通常没有公开记录），报告对它们不下任何结论。")
+        L.append("以下条目按设置不进入核验，报告对它们不下任何结论。")
         for c in rep["skipped"]:
             L.append(f"- {c.get('category', '')}：{c.get('rawText', '')}")
         L.append("")
@@ -589,7 +646,19 @@ _STATES: dict[str, dict] = {}
 
 def user_state(user_id: str) -> dict:
     with _STATE_LOCK:
-        return _STATES.setdefault(user_id, {"presentation": None, "oby": None, "profile": None})
+        return _STATES.setdefault(user_id, {"presentation": None, "oby": None,
+                                            "profile": None, "generation": 0})
+
+
+def account_search_credentials(user_id: str):
+    from app.api_config import SearchCredentials
+    db = os.environ.get("UNDERBOX_DB")
+    if not db or user_id == "local" or not os.environ.get("UNDERBOX_GATEWAY_WORKER"):
+        return None
+    import store
+    with store.connect(db) as conn:
+        key = store.user_search_key(conn, user_id)
+    return SearchCredentials(key) if key is not None else None
 
 
 def record_gateway_usage(kind: str, ev: dict, user_id: str) -> None:
@@ -618,6 +687,13 @@ def record_gateway_usage(kind: str, ev: dict, user_id: str) -> None:
             if kind == "verify" and ok:
                 store.consume_quota(conn, user_id)
             conn.commit()
+            if kind == "verify" and ok:
+                try:
+                    store.save_report(conn, user_id, report)
+                    conn.commit()
+                except Exception as exc:                  # noqa: BLE001
+                    conn.rollback()
+                    print(f"[history] 保存报告失败：{exc}", file=sys.stderr, flush=True)
     except Exception as exc:                              # noqa: BLE001
         print(f"[usage] 记账失败（不影响核验结果）：{exc}", file=sys.stderr, flush=True)
 
@@ -728,7 +804,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "缺少 token：先上传简历拆分条目"}, 400)
             if not ids:
                 return self._json({"error": "没有勾选要核验的条目"}, 400)
-            return self._sse(run_verify_selected_job, (token, ids), kind="verify")
+            with _PREPARED_LOCK:
+                entry = PREPARED.get(token)
+            if entry is None or entry.get('owner', 'local') != self.uid():
+                return self._json({'error':'拆分结果已过期或不属于当前账户，请重新上传'}, 404)
+            materials = payload.get('githubMaterials') or {}
+            try:
+                from app.github_audit import supplement_claims
+                supplement_claims(entry['prepared'].claims, materials)
+            except ValueError as exc:
+                return self._json({'error':str(exc)}, 400)
+            from functools import partial
+            return self._sse(partial(run_verify_selected_job, materials=materials), (token, ids), kind="verify")
         data = self.rfile.read(int(self.headers.get("Content-Length") or 0) or 0)
         if not data:
             return self._json({"error": "没有收到文件"}, 400)
@@ -757,26 +844,35 @@ class Handler(BaseHTTPRequestHandler):
         kind 供网关模式记账用：verify 完成后消耗一次配额，split / 其余只记用量不扣。
         """
         from app.usage import METER                       # noqa: PLC0415
+        from app.api_config import bind_search_credentials
+        try:
+            credentials = account_search_credentials(self.uid())
+        except Exception:
+            return self._json({"error": "账户搜索 API 配置暂不可用，请联系管理员"}, 503)
         events: queue.Queue = queue.Queue()
         holder: dict = {}
-        # 用量：每次供应商调用记账后，把「本任务自开始以来」的累计推给页面
-        base = METER.mark()
-        unsubscribe = METER.subscribe(lambda: events.put({"usage": METER.since(base)}))
-        threading.Thread(target=target, args=(*args, events, holder), daemon=True).start()
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        # SSE 没有 Content-Length，也不做 chunked 编码——客户端只能靠连接关闭判断结束
-        self.send_header("Connection", "close")
-        self.close_connection = True
-        self.end_headers()
+        generation = self._st()["generation"]
+        scope = METER.open_scope(owners=2)  # HTTP 流与后台任务各持有一次引用。
+        base = METER.mark(scope)
+        unsubscribe = METER.subscribe(lambda: events.put({"usage": METER.since(base)}), scope)
+        def run_task():
+            # Bind inside the background thread; nested UsageExecutor pools copy
+            # this context, isolating credentials even when accounts run together.
+            with bind_search_credentials(credentials):
+                METER.run_in_scope(scope, target, *args, events, holder)
+        threading.Thread(target=run_task, daemon=True).start()
 
         def push(ev: dict) -> None:
             self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
             self.wfile.flush()
 
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.close_connection = True
+            self.end_headers()
             while True:
                 try:
                     ev = events.get(timeout=300)     # 阶段内可能长时间无新行，放宽到 5 分钟
@@ -786,20 +882,28 @@ class Handler(BaseHTTPRequestHandler):
                 if ev is None:
                     break
                 if ev.get("done"):
+                    if kind == "split" and ev.get("split", {}).get("token"):
+                        with _PREPARED_LOCK:
+                            entry = PREPARED.get(ev["split"]["token"])
+                            if entry is not None: entry['owner'] = self.uid()
                     ev["usage"] = METER.since(base)
                     record_gateway_usage(kind, ev, self.uid())   # 写流水；核验成功再扣一次配额
                 push(ev)
                 if ev.get("done"):
-                    if "report" in ev:               # 存到**该用户**名下（实例随请求销毁）
-                        st = self._st()
-                        st["presentation"] = ev["report"]
-                        st["oby"] = holder.get("oby")
-                        st["profile"] = holder.get("profile")
+                    if "report" in ev:
+                        # 退出与旧任务完成可能并发，代数判断与写入必须在同一把锁内。
+                        with _STATE_LOCK:
+                            st = _STATES.get(self.uid())
+                            if st and generation == st["generation"]:
+                                st["presentation"] = ev["report"]
+                                st["oby"] = holder.get("oby")
+                                st["profile"] = holder.get("profile")
                     break
         except (BrokenPipeError, ConnectionResetError):
             pass                                     # 用户关了页面 / 中断了连接
         finally:
             unsubscribe()
+            METER.release_scope(scope)
 
     def do_GET(self):                          # noqa: N802
         path = self.path.split("?", 1)[0]
@@ -825,10 +929,37 @@ class Handler(BaseHTTPRequestHandler):
             if self._st()["presentation"] is None:
                 return self._json({"error": "还没有核验任何简历"}, 404)
             return self._json({"report": self._st()["presentation"]})
+        if path == "/api/history":
+            return self._history_list()
+        match = re.fullmatch(r"/api/history/(\d+)(/export)?", path)
+        if match:
+            report = self._history_report(int(match.group(1)))
+            if report is None:
+                return self._json({"error": "历史报告不存在或已超过保留的 10 次"}, 404)
+            if match.group(2):
+                fmt = (self.path.split("?", 1)[1] if "?" in self.path else "").lower()
+                return self.do_GET_export("md" if "md" in fmt else "json", report)
+            return self._json({"report": report})
         if path == "/api/export":
             fmt = (self.path.split("?", 1)[1] if "?" in self.path else "").lower()
             return self.do_GET_export("md" if "md" in fmt else "json")
         return self._asset(path.lstrip("/"))
+
+    def _history_list(self) -> None:
+        db = os.environ.get("UNDERBOX_DB")
+        if not db:
+            return self._json({"items": []})
+        import store                                     # noqa: PLC0415
+        with store.connect(db) as conn:
+            return self._json({"items": store.list_reports(conn, self.uid())})
+
+    def _history_report(self, report_id: int) -> dict | None:
+        db = os.environ.get("UNDERBOX_DB")
+        if not db:
+            return None
+        import store                                     # noqa: PLC0415
+        with store.connect(db) as conn:
+            return store.get_report(conn, self.uid(), report_id)
 
     def do_POST(self):                         # noqa: N802
         path = self.path.split("?", 1)[0]
@@ -838,6 +969,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._logout()
         if self._deny_api(path):
             return
+        if path == "/api/query/reset":
+            with _STATE_LOCK:
+                st = _STATES.setdefault(self.uid(), {"presentation": None, "oby": None,
+                                                      "profile": None, "generation": 0})
+                st.update(presentation=None, oby=None, profile=None,
+                          generation=st["generation"] + 1)
+            return self._json({"ok": True})
         if path == "/api/verify/stream":
             return self._verify_stream()
         if path == "/api/split/stream":
@@ -884,25 +1022,30 @@ class Handler(BaseHTTPRequestHandler):
         started = time.monotonic()
         acc: list[str] = []
         from app.usage import METER                       # noqa: PLC0415
-        base = METER.mark()
+        scope = METER.open_scope()
+        base = METER.mark(scope)
         try:
-            for ev in stream_answer(material, question):
-                if "error" in ev:
+            with METER.bind(scope):
+                for ev in stream_answer(material, question):
+                    if "error" in ev:
+                        self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
+                        self.wfile.flush()
+                        return
+                    acc.append(ev["delta"])
                     self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
                     self.wfile.flush()
-                    return
-                acc.append(ev["delta"])
-                self.wfile.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8"))
-                self.wfile.flush()
             self.wfile.write(f"data: {json.dumps({'done': True, 'seconds': round(time.monotonic() - started, 1), 'usage': METER.since(base)}, ensure_ascii=False)}\n\n".encode("utf-8"))
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             # 客户端中断（用户点了停止 / 关了页面）——正常收尾，不算错误
             pass
+        finally:
+            METER.release_scope(scope)
 
     def _plan(self) -> None:
         """某条陈述的检索计划：策略引擎实际会发哪些查询、为什么。"""
         from app.plan import plan_with_notes               # noqa: PLC0415
+        from app.verification_agents import agent_for
         payload = self._read_json()
         cid = payload.get("claimId") or ""
         rep = self._st()["oby"]
@@ -915,6 +1058,8 @@ class Handler(BaseHTTPRequestHandler):
         plan = plan_with_notes(vc.claim, rep.candidate_name, self._st()["profile"], cats)
         return self._json({
             "claimId": cid,
+            "verificationAgent": vc.verification_agent or agent_for(vc.claim).describe(),
+            "handoffs": plan.handoffs,
             "strategy": {"id": plan.profile_id, "name": plan.profile_name},
             "budget": plan.budget,
             "queries": [{"text": q.text, "site": q.site, "kind": q.kind,
@@ -924,8 +1069,8 @@ class Handler(BaseHTTPRequestHandler):
             "notes": plan.notes,
         })
 
-    def do_GET_export(self, fmt: str) -> None:      # noqa: N802
-        rep = self._st()["presentation"]
+    def do_GET_export(self, fmt: str, rep: dict | None = None) -> None:      # noqa: N802
+        rep = rep if rep is not None else self._st()["presentation"]
         if rep is None:
             return self._json({"error": "还没有核验任何简历"}, 409)
         no = re.sub(r"[^\w.-]", "", rep.get("reportNo") or "report") or "report"

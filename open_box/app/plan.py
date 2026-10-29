@@ -88,6 +88,16 @@ def school_domain(name: str | None) -> str | None:
     return record.get("domain") if record else None
 
 
+def school_aliases(name: str | None) -> list[str]:
+    """同一学校的已知全称和无歧义别名，用于核对证据中的机构。"""
+    record = _school_record(name)
+    values = [name or ""]
+    if record:
+        values += [record["name"], *(record.get("aliases") or [])]
+    return list(dict.fromkeys(value.strip() for value in values
+                             if value.strip() and value.strip() not in _AMBIGUOUS_ALIASES))
+
+
 def claim_school(claim: Claim) -> str:
     """只用本条陈述明确给出的学校，不把赛事主办方或其他经历的学校移植过来。"""
     entities = claim.entities or {}
@@ -125,7 +135,9 @@ def plan_with_notes(claim: Claim, candidate_name: str,
     排查"为什么这条没搜到"时用这个，而不是读代码猜。"""
     if isinstance(profile, dict):
         profile = ResumeProfile.from_dict(profile)
-    return build_plan(claim, candidate_name, profile, resume_categories=resume_categories)
+    from .verification_agents import agent_for
+    return agent_for(claim).refine_plan(claim, candidate_name,
+        build_plan(claim, candidate_name, profile, resume_categories=resume_categories))
 
 
 def provided_urls(claim: Claim) -> list[str]:

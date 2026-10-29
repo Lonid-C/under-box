@@ -1,0 +1,11 @@
+# Web 服务及官网名单读取所需依赖。
+pydantic>=2,<3
+httpx
+pypdf
+beautifulsoup4
+lxml
+pymupdf
+python-docx
+truststore
+pypinyin>=0.51,<1
+xlrd>=2,<3

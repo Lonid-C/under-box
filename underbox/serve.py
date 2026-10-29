@@ -797,6 +797,8 @@ class Handler(BaseHTTPRequestHandler):
                  "css": "text/css; charset=utf-8", "js": "application/javascript; charset=utf-8",
                  # .pdf 要给对类型：查看器的 iframe 降级路径靠它才能内嵌渲染而不是下载
                  "pdf": "application/pdf",
+                 "png": "image/png", "jpg": "image/jpeg", "svg": "image/svg+xml",
+                 "woff2": "font/woff2",
                  }.get(p.suffix.lstrip("."), "application/octet-stream")
         self._send(p.read_bytes(), ctype)
 

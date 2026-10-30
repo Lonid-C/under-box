@@ -163,9 +163,9 @@
     if(restored && inputTitle)inputTitle.textContent='输入材料';
     else if(inputTitle?.textContent==='输入材料')inputTitle.textContent=byId('intake').dataset.mode==='url'?'粘贴个人主页':'上传简历';
 
-    if(heading) heading.textContent=report ? (report.candidate || '候选人') + '的核验报告' : picking ? '确认本次核验范围' : '从一份简历，开始了解';
-    if(sub) sub.textContent=report ? (report.position && !report.position.includes('未标注') ? report.position + ' · ' : '') + report.claims.length + ' 条陈述 · 每一项结论，都可以回到出处'
-      : picking ? '选择你关心的经历，系统将逐条查找公开来源。' : '先拆分经历，由你确认范围，再逐条检索公开证据。';
+    if(heading) heading.textContent=report ? (report.candidate || '候选人') + '的核验报告' : picking ? '确认本次核验范围' : '上传简历，开始核验';
+    if(sub) sub.textContent=report ? (report.position && !report.position.includes('未标注') ? report.position + ' · ' : '') + report.claims.length + ' 条陈述'
+      : picking ? '选择需要核验的条目。' : '选择需要核验的条目，查看检索结果。';
     byId('navExport')?.setAttribute('aria-disabled',String(!report));
     const steps=[...document.querySelectorAll('.ub-flow-step')];
     const current=report ? 3 : picking ? 1 : !byId('pending')?.hidden ? 2 : 0;
@@ -181,7 +181,7 @@
     if(stage !== 'gate' && !tour) maybeTour();
     if(report && report.reportNo !== lastReport){
       lastReport=report.reportNo;
-      byId('bocyLauncherNote').textContent='报告已就绪，问问 boxy';
+      byId('bocyLauncherNote').textContent='报告已生成';
     }
     if(!report && byId('bocyLauncherNote'))byId('bocyLauncherNote').textContent='你的核验小助手';
   }
@@ -205,17 +205,17 @@
     closeDrawers(); activeDialog?.close(null);tour?.close(false);
     const hasReport=typeof REPORT !== 'undefined' && !!REPORT;
     const steps=hasReport?[
-      ['header.site','欢迎使用 UnderBOX 核验台','这里汇总当前候选人的核验结果。UnderBOX 核对陈述与证据，判断仍由你掌握。'],
-      ['#intake','原始材料，随时对照','左侧保留输入材料。展开条目时，可以把简历原文与公开来源放在一起看。'],
-      ['#claims','每一段经历，都能展开','点击一条陈述，查看已证明的要素、尚缺的信息，以及企业和院校的补充资料。'],
-      ['#navTier','回到每一个出处','来源抽屉帮助你了解证据层级。也可以通过右上角导出报告，保留后续核对清单。'],
-      ['#chatToggle','认识 boxy，有问题，问问boxy','点这个小盒子，就能就报告提问。打开联网搜索，还可以查看带出处的公开补充资料。']
+      ['header.site','欢迎使用 UnderBOX 核验台','这里显示候选人的核验结果。'],
+      ['#intake','查看原始材料','左侧显示输入材料，展开条目可查看原文和来源。'],
+      ['#claims','查看条目详情','点击条目可查看证据、待补充信息和机构资料。'],
+      ['#navTier','查看来源','查看来源分级，或从右上角导出报告。'],
+      ['#chatToggle','有问题，问问boxy','可以就报告提问，也可以开启联网搜索。']
     ]:[
-      ['#welcomeIntro','把经历核验，整理得更清楚','从公开证据出发，逐条了解简历中的陈述。没找到记录的地方，会如实保留未知。'],
-      ['#intake','先放入你的材料','上传简历，或者切换到个人主页。系统会先解析与拆分，再让你确认需要核验的范围。'],
-      ['#heroJourney','按顺序，一步一步来','上传材料 → 选择条目 → 查看报告。你可以在核验过程中查看真实进度，完成后回到原始出处。'],
-      ['#chatToggle','你好，我是 boxy','我会在这里等你。报告完成后，你可以问我证据缺口、企业信息，或者下一步如何补证。'],
-      ['#helpHero','需要时，随时回来','首次引导只出现一次。之后点击“使用指南”，就能重新查看；现在开始一份核验吧。']
+      ['#welcomeIntro','开始核验','上传简历后，选择需要核验的条目。'],
+      ['#intake','上传简历或填写主页','选择简历文件，也可以切换到个人主页。'],
+      ['#heroJourney','查看核验流程','上传材料、选择条目后，系统会检索并生成报告。'],
+      ['#chatToggle','你好，我是 boxy','报告生成后，可以在这里提问。'],
+      ['#helpHero','重新查看引导','点击“使用指南”可以再次查看引导。']
     ];
     const previous=document.activeElement;
     const blocker=create('div',{class:'ub-tour-blocker'});
@@ -366,7 +366,7 @@
     answerReady(node){
       const button=create('button',{class:'ub-copy-answer',type:'button','data-copy-answer':'','data-tooltip':'复制这条回答','aria-label':'复制回答'},icon('copy'),create('span',{text:'复制'}));
       node.append(button);
-      if(!byId('chat').classList.contains('open'))toast('boxy 已整理好回答，点小盒子查看。','success');
+      if(!byId('chat').classList.contains('open'))toast('boxy 已回答。','success');
     }
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

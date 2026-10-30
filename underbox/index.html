@@ -775,7 +775,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </section>
 
 <div class="ub-workspace-heading" id="workspaceHeading">
-  <div><div class="ub-eyebrow">YOUR VERIFICATION WORKSPACE</div><h1 id="workspaceTitle">从一份简历，开始了解</h1><p id="workspaceSubtitle">先拆分经历，由你确认范围，再逐条检索公开证据。</p></div>
+  <div><div class="ub-eyebrow">YOUR VERIFICATION WORKSPACE</div><h1 id="workspaceTitle">上传简历，开始核验</h1><p id="workspaceSubtitle">选择需要核验的条目，查看检索结果。</p></div>
   <nav class="ub-flow" aria-label="当前核验步骤">
     <span class="ub-flow-step current"><b>1</b>输入材料</span><i aria-hidden="true"></i><span class="ub-flow-step"><b>2</b>确认范围</span><i aria-hidden="true"></i><span class="ub-flow-step"><b>3</b>检索证据</span><i aria-hidden="true"></i><span class="ub-flow-step"><b>4</b>查看报告</span>
   </nav>
@@ -824,7 +824,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       <div class="card-b">
         <div class="ub-restored-source" id="restoredSource" hidden>
           <span class="ub-restored-icon" aria-hidden="true">▤</span><h3>已恢复这份报告</h3>
-          <p>本页已恢复核验结果。<br>简历原文与出处保留在各条目中。</p>
+          <p>可在各条目中查看简历原文和出处。</p>
           <button class="ghost" id="newFromSource" type="button">开始新的核验</button>
         </div>
         <div class="drop" id="drop" tabindex="0" role="button" aria-label="把简历拖到这里，或点击选择文件">
@@ -836,7 +836,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
           <b>把简历扔进来</b>
           <span class="s" id="hint">拖拽文件到这里，或点击选择 · PDF / DOCX / TXT / MD</span>
         </div>
-        <p class="ub-upload-note"><span aria-hidden="true">⌁</span>材料仅用于当前账户核验；公开查不到的经历，会如实标注。</p>
+        <p class="ub-upload-note"><span aria-hidden="true">⌁</span>上传后选择需要核验的条目。</p>
         <input type="file" id="file" accept=".pdf,.docx,.md,.txt" hidden>
 
         <div class="fileline" id="fileline">
@@ -873,11 +873,11 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
             <input type="url" id="url" placeholder="https://www.xxx.edu.cn/info/…/….htm" autocomplete="off" spellcheck="false" aria-label="个人主页网址">
             <button class="btn" id="urlGo" type="submit">读取主页</button>
           </div>
-          <p class="tip" id="urlTip">请提供本人或所在单位公开发布的个人主页。系统会先确认内容，再拆分经历；需要登录的页面、新闻名单或含敏感个人信息的页面无法读取。</p>
+          <p class="tip" id="urlTip">请输入本人或所在单位发布的公开个人主页。</p>
         </form>
         <div class="steps" id="steps">
           <div class="step" data-s="0"><span class="b"></span><span class="t">解析并检测输入风险</span></div>
-          <div class="step" data-s="1"><span class="b"></span><span class="t">画像归纳并拆成可独立证伪的陈述</span></div>
+          <div class="step" data-s="1"><span class="b"></span><span class="t">拆分简历条目</span></div>
           <div class="step" data-s="2"><span class="b"></span><span class="t">勾选要核验的条目</span></div>
           <div class="step" data-s="3"><span class="b"></span><span class="t">按策略检索并取证</span></div>
           <div class="step" data-s="4"><span class="b"></span><span class="t">逐条判定（身份 · 分级 · 状态）</span></div>
@@ -905,7 +905,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       <span class="count" id="shown">—</span><button class="ghost" id="processButton" type="button" title="查看核验阶段和实际检索日志">核验过程</button>
       <button class="ghost repick" id="repick" type="button" hidden>重新选择条目</button>
     </div>
-    <div class="pending" id="emptyFirst">把简历拖进左边的窗口，这里会先把它分成几块，让你勾选要核验的条目。</div>
+    <div class="pending" id="emptyFirst">上传简历后，选择需要核验的条目。</div>
     <div class="pick-wait" id="pickWait" hidden>正在把简历拆成一条条陈述<span class="dots"></span></div>
     <section class="pick" id="pick" hidden aria-labelledby="pickTitle">
       <div class="pick-h">
@@ -926,7 +926,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </main>
 
 <p class="hero-foot">
-  仅用于当前账户核验 · 只读<b>公开来源</b> · 每条结论都带出处 · <b>不给候选人打分</b>，不做排名与录用建议
+  公开资料核验 · 查看<b>公开来源</b> · 逐条查看证据和出处
 </p>
 
 <div class="status-dock anim up" data-enter="520" id="statusDock" hidden>
@@ -987,13 +987,13 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       </div>
     </div>
     <div class="chat-foot">
-      <label class="chat-web"><input id="chatWeb" type="checkbox"> 联网搜索 <span>附来源 · 不改变报告判定</span></label>
+      <label class="chat-web"><input id="chatWeb" type="checkbox"> 联网搜索 <span>附来源</span></label>
       <div class="in">
         <textarea id="chatIn" rows="1" placeholder="问问 boxy，这份报告还缺什么？" aria-label="输入问题"></textarea>
         <button class="send" id="chatStop" type="button" hidden title="停止生成">停止</button>
         <button class="send" id="chatSend" type="button" disabled>发送</button>
       </div>
-      <div class="note" id="chatNote">回答依据本页报告；开启联网可补充公开资料并查看来源，核验结论以报告为准。</div>
+      <div class="note" id="chatNote">根据报告回答，也可开启联网搜索。</div>
     </div>
   </section>
 
@@ -1004,7 +1004,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="/ui.js?v=20261030-boxy1"></script>
+<script src="/ui.js?v=20261030-copy1"></script>
 <script>
 let REPORT = null;
 let QUERY_EPOCH = 0;
@@ -1057,7 +1057,7 @@ function renderRisks() {
     ? `${rs.length} 处 · ${Object.entries(kinds).map(([k,v])=>`${NM[k]||k} ${v}`).join(' · ')} · 已从送入模型的内容中剔除`
     : '未检测到输入风险';
   const body = $('risk-body'); body.innerHTML = '';
-  if (!rs.length) { body.appendChild(el('div', {text:'简历中未发现隐藏文字或提示词注入。'})); return; }
+  if (!rs.length) { body.appendChild(el('div', {text:'未发现隐藏文字或提示词注入。'})); return; }
   body.appendChild(el('div', {class:'k', text:'以下内容已从送入模型的正文中移除，命中的整行以占位符替代：'}));
   rs.forEach(r => body.appendChild(el('div', {style:'margin-top:8px'},
     el('code', {text:r.excerpt}), el('div', {class:'k', style:'margin-top:4px', text:`${r.locator} · ${r.detail}`}))));
@@ -1085,7 +1085,7 @@ function renderOverview() {
    ['要素级覆盖率', pct(proved, elements)],
    ['需人工复核', pct(human, total)]
   ].forEach(([k,v]) => met.appendChild(el('div', {class:'metric'}, el('span',{text:k}), el('span',{text:v}))));
-  $('disc').textContent = REPORT.disclaimer + ' 覆盖率只反映公开信息的多少，不代表候选人的可信程度。';
+  $('disc').textContent = REPORT.disclaimer + ' 覆盖率按公开资料统计。';
   $('rno').textContent = REPORT.reportNo;
 }
 
@@ -1102,10 +1102,10 @@ function detailOf(c) {
     });
     d.appendChild(el('div', {class:'dsec'},
       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
-      c.unproved.length ? el('div', {class:'hint', text:'证明了一条不等于证明了全部：上面带 – 的要素在公开来源里找不到对应材料，不等于它没发生。'}) : null));
+      c.unproved.length ? el('div', {class:'hint', text:'标记为 – 的要素尚未找到对应的公开资料。'}) : null));
   }
   if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
-    el('h4', {text:'企业资料与实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
+    el('h4', {text:'企业资料 · 实习经历待人工核实'}), renderManualReview(c.manualReview)));
   if (c.educationReview) d.appendChild(el('div', {class:'dsec'},
     el('h4', {text:'院校专业官网与人工核验入口'}), renderEducationReview(c.educationReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
@@ -1141,7 +1141,7 @@ function detailOf(c) {
       if (ev.signals && ev.signals.length) sig.push(el('div', {}, el('b', {text:'身份信号 '}), ev.signals.join(' · ')));
       if (ev.conflicts && ev.conflicts.length) sig.push(el('div', {}, el('b', {text:'身份矛盾 '}), ev.conflicts.join(' · ')));
       sig.push(el('div', {}, el('b', {text:'来源等级 '}), TIER_NAME[ev.tier] || ev.tier || '—'));
-      if (ev.isRepost) sig.push(el('div', {}, el('b', {text:'转载 '}), '此文为转载，不构成多重证明'));
+      if (ev.isRepost) sig.push(el('div', {}, el('b', {text:'转载 '}), '转载内容按同一来源计入'));
       card.appendChild(el('div', {class:'sig'}, sig));
       box.appendChild(card);
     });
@@ -1158,15 +1158,15 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : '公开检索未找到可关联到本人的记录。这不指向任何问题——公网痕迹少不等于经历不实，可请候选人自行提供材料。'})));
+      el('div', {class:'empty', text:c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : '未找到与本人关联的公开记录，可请候选人补充材料。'})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
-    el('div', {class:'diff'}, el('span', {class:'cap', text:'差异不等于造假：可能是后续接任、口径不同，或材料未公开。'}),
+    el('div', {class:'diff'}, el('span', {class:'cap', text:'以下信息与简历描述有差异，请核对。'}),
       el('div', {text:diffs.join('；')}))));
   const conflicts = c.evidence.flatMap(e => e.conflicts || []);
-  if (conflicts.length && c.status === 'who') d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'为什么不计入本人'}),
-    el('div', {class:'diff'}, el('span', {class:'cap', text:'同名不等于同一人。只要页面的学校、学院等与候选人不符，这条记录就不算在他头上——宁可标“身份未确认”转人工，也不认错人。'}),
+  if (conflicts.length && c.status === 'who') d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'身份信息待核对'}),
+    el('div', {class:'diff'}, el('span', {class:'cap', text:'以下记录的身份信息与简历不一致，请人工核对。'}),
       el('div', {text:conflicts.join('；')}))));
   if (c.nextStep) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'下一步'}), el('div', {class:'next', text:c.nextStep})));
   if (c.question) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'可问的问题'}), el('div', {class:'raw', text:c.question})));
@@ -1221,13 +1221,27 @@ function renderContextDetails(review, expected = []) {
     card.appendChild(el('div', {class:'hint',text:'读取：' + (contact.accessedAt || '未记录')}));
     box.appendChild(card);
   }
-  if (!(review.contacts || []).length) box.appendChild(el('p', {class:'hint',
-    text:'本次未取得可引用的公开办公电话或邮箱，可打开官网或企业查询入口人工确认。'}));
-  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
-  [...new Set(review.limitations || [])].forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
+  const limitations = [...new Set(review.limitations || [])];
+  if (!(review.contacts || []).length && !limitations.some(note => note.includes('公开办公电话或邮箱')))
+    box.appendChild(el('p', {class:'hint',text:'未找到公开办公电话或邮箱，可通过官网或企业查询入口核对。'}));
+  if (review.note) {
+    const note = review.kind === 'internship' ? '企业资料供人工核验；参保人数与注册资本为不同指标。'
+      : review.kind === 'education' ? '可通过公开办公渠道联系院校核实。' : review.note;
+    box.appendChild(el('p', {class:'hint',text:note}));
+  }
+  const conciseLimitations = {
+    '未取得主体已回读的企业详情页；企查查/天眼查查询入口供人工选择。登录、验证码、robots 或访问限制时不绕过。':'未能读取企业详情页，可通过企查查或天眼查查询。',
+    '未取得与该企业主体对应的公开办公电话或邮箱；不推测联系人或号码。':'未找到该企业公开的办公电话或邮箱。',
+    '部分企业资料仅为搜索摘要，尚未回读原文，请打开来源核对最新登记信息。':'部分资料来自搜索摘要，请打开来源核对。',
+    '本条未明确学校，不能推测院校或联系人。':'请补充学校名称。',
+    '未能可靠定位学校官方域名，查询入口仅供人工选择，不猜官网网址或联系方式。':'未能确认学校官网，请人工核对查询结果。',
+    '未取得已回读官网中的公开办公电话或邮箱；请从官网联系页人工确认，不推测负责人姓名和号码。':'未找到官网公开的办公电话或邮箱，可查看官网联系页。',
+    '未定位到可确认的对应专业介绍页；学校/学院入口不等同于专业已核实。':'未找到对应专业介绍页，请核对学校或学院入口。'
+  };
+  limitations.forEach(note => box.appendChild(el('p', {class:'hint',text:conciseLimitations[note] || note})));
   if ((review.checks || []).length) {
     const list = el('ol');
-    review.checks.forEach(check => list.appendChild(el('li', {text:check})));
+    review.checks.forEach(check => list.appendChild(el('li', {text:check === '确认公司全称和实际实习主体（品牌名不等同于具体法人）' ? '确认公司全称及品牌对应的实习主体' : check})));
     box.appendChild(list);
   }
   return box;
@@ -1413,7 +1427,7 @@ function runSteps() {
 let started = false;
 let pendingUrl = null;           // 个人主页模式下用户贴的网址
 const HINT_DEFAULT = '拖拽文件到这里，或点击选择 · PDF / DOCX / TXT / MD';
-const URL_TIP = '请提供本人或所在单位公开发布的个人主页。系统会先确认内容，再拆分经历；需要登录的页面、新闻名单或含敏感个人信息的页面无法读取。';
+const URL_TIP = '请输入本人或所在单位发布的公开个人主页。';
 
 function reject(name) {
   const ext = (name.split('.').pop() || '').toLowerCase();
@@ -1583,7 +1597,7 @@ function initIntake() {
       $('pending').style.color = '';
       $('claims').innerHTML = ''; $('claims').hidden = true; $('pending').hidden = true;
       $('toolbar').hidden = true;
-      setFirstEmpty('把简历拖进左边的窗口，这里会先把它分成几块，让你勾选要核验的条目。');
+      setFirstEmpty('上传简历后，选择需要核验的条目。');
       activeStatus = null; applyFilter();
       scrollTo({ top: 0, behavior: 'smooth' });
     }, 500);
@@ -1600,30 +1614,30 @@ function initIntake() {
 
 /** 三条引导问题——从本次报告的实际结论里挑最值得追问的三处，不是泛泛的范例。 */
 function buildLeads() {
-  if (!REPORT) return [{q:'第一次使用，应该从哪里开始？',why:'跟着 boxy，了解上传、选择条目和查看报告的完整流程。',local:'tour'}];
+  if (!REPORT) return [{q:'第一次使用，应该从哪里开始？',why:'了解上传、选择条目和查看报告的步骤。',local:'tour'}];
   const claims = REPORT.claims || [], out = [];
   const add = (q, why, web = false) => out.push({q, why, web});
   const company = claims.find(c => c.manualReview?.company);
   if (company) add('请汇总 ' + company.id + ' 实习公司的主营业务、经营范围和规模，并列出资料来源',
-    '查看企业资料与公开业务联系渠道；机构资料不能证明本人实习。');
+    '查看企业资料和公开联系方式。');
   const school = claims.find(c => c.educationReview);
   if (school) add('请列出 ' + school.id + ' 对应学校专业的官网、公开办公联系方式和后续补证步骤',
-    '学历未完全核实时，使用对应院系或教务渠道继续人工核验。');
+    '查找院系或教务部门的核验入口。');
   const ask = claims.find(c => c.status === 'ask');
   if (ask) add(ask.id + ' 为什么需要澄清？请逐项说明已证明和未证明的内容',
-    '核对真实差异，保留原文与出处，避免把信息缺失当成矛盾。');
+    '查看差异、原文和出处。');
   const missing = claims.filter(c => ['none','part','who'].includes(c.status));
   if (missing.length) add('请按条目列出这份报告仍需候选人补充的材料和建议提问',
-    '用本次核验结果生成补证清单，未找到公开记录不等于不实。');
+    '整理待补充的材料。');
   const who = claims.find(c => c.status === 'who');
   if (who) add(who.id + ' 的身份为什么未确认？需要哪些信息才能排除同名？',
-    '只说明已有身份线索与缺口，不预设学校专业存在矛盾。');
+    '查看现有身份线索和待确认的信息。');
   add('请概括这份报告，并指出最需要人工核对的条目和原始出处',
-    '从实际报告出发说明结论、来源与限制。');
+    '查看结论和来源。');
   const webTarget = company?.manualReview?.company || [school?.educationReview?.school, school?.educationReview?.field].filter(Boolean).join(' ');
   add(webTarget ? '请联网查询 ' + webTarget + ' 的官网、公开介绍和办公联系方式，并列出来源'
     : '请联网查找本报告涉及机构的官方核验入口，并列出可引用的链接',
-    '本次真实联网搜索；补充背景与报告原结论分别说明。', true);
+    '联网查找相关机构的公开资料。', true);
   return out.slice(0, 4).concat(out.length > 4 ? [out[out.length - 1]] : []);
 }
 
@@ -1641,12 +1655,12 @@ function renderLeads() {
 function toggleTierPanel() {
   const p = $('tierPanel');
   if (!p || p.hidden === false) { p.hidden = true; return; }
-  if (!REPORT) { UnderboxUI.toast('报告完成后，可以在这里查看来源与依据。'); return; }
+  if (!REPORT) { UnderboxUI.toast('生成报告后可查看来源。'); return; }
   p.innerHTML = '';
   const close = el('button', { class: 'close', type: 'button', 'aria-label':'关闭来源抽屉', text: '✕' });
   close.addEventListener('click', () => p.hidden = true);
   p.append(close, el('h3', { text: '来源分级' }),
-    el('div', { class: 'sub', text: '等级只说明「这个来源有多权威」，不说明候选人可信与否。点一条可跳到对应的核验结果。' }));
+    el('div', { class: 'sub', text: '按来源类型分级，点击条目查看核验结果。' }));
   const groups = {};
   REPORT.claims.forEach(c => { const k = c.tier || '—'; (groups[k] = groups[k] || []).push(c); });
   for (const t of ['A', 'B', 'C', 'D', '—']) {
@@ -1807,8 +1821,8 @@ function initChat() {
   let busy = false, activePainter = null;
   const updateWebNote = () => {
     $('chatNote').textContent = $('chatWeb').checked
-      ? '将检索问题中的公开信息，并附来源；搜索摘要需核对原文，补充资料不改变报告判定。'
-      : '依据本页核验报告回答；可开启联网搜索补充公开资料。';
+      ? '联网资料会附上来源，不会改动报告结论。'
+      : '根据报告回答，也可开启联网搜索。';
   };
   $('chatWeb').addEventListener('change', updateWebNote);
   updateWebNote();
@@ -1872,8 +1886,8 @@ function initChat() {
     const sources = el('div', {class:'web-sources'});
     answer.appendChild(sources);body.appendChild(answer);
     const painter = new InkStream(bub, scrollChat);
-    painter.status('boxy 正在梳理报告中的线索…'); scrollChat();
-    $('chatStTxt').textContent = '正在整理线索';
+    painter.status('boxy 正在查阅报告…'); scrollChat();
+    $('chatStTxt').textContent = '正在查阅报告';
     activePainter = painter;
     let acc = '';
     try {
@@ -1898,7 +1912,7 @@ function initChat() {
       if (epoch !== QUERY_EPOCH) return;
       if (!acc) painter.status('本次没有收到回答，可以稍后再试。');
       UnderboxUI.answerReady(answer);
-      $('chatAnnouncement').textContent = 'boxy 的回答已生成，可以查看回答及来源。';
+      $('chatAnnouncement').textContent = 'boxy 已回答。';
     } catch (err) {
       painter.cancel();
       if (epoch !== QUERY_EPOCH) return;
@@ -2343,7 +2357,7 @@ function applyReport(report, {restored = false} = {}) {
    每一行日志都是流水线里真实发生的（后端把 run_pipeline 的进度原样推过来），
    不是前端自己编的动画。 */
 const StatusDock = {
-  stages: ['解析并检测输入风险', '画像归纳并拆成可独立证伪的陈述', '勾选要核验的条目', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
+  stages: ['解析并检测输入风险', '拆分简历条目', '勾选要核验的条目', '按策略检索并取证', '逐条判定（身份 · 分级 · 状态）'],
   started: 0, timer: null, keepOpen: false,
   el: id => document.getElementById(id),
   reset() {
@@ -2813,9 +2827,9 @@ async function runSplit(src) {
       return;
     }
     PICK.lead = `${PICK.fileType === 'web' ? '个人主页' : '简历'}拆成了 ${PICK.claims.length} 条陈述，已按类别分好。`
-      + '没勾选的条目不会去检索；勾选的会同时开始核验。'
+      + '勾选要核验的条目。'
       + (PICK.fileType === 'pdf' ? '点页码可以在左边原件里对照。' : '')
-      + (PICK.fileType === 'web' ? '点「定位」可以在左边网页里找到原文。主页本身不算证据——自述不能自证。' : '');
+      + (PICK.fileType === 'web' ? '点「定位」可在左侧网页中查看原文；主页内容作为检索线索。' : '');
     $('pickLead').textContent = PICK.lead;
     renderPick();
     renderSkipped($('pickSkipped'), PICK.skipped);

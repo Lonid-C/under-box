@@ -161,7 +161,7 @@ def build_prompt(material: str, question: str, web_context: dict | None = None) 
                   json.dumps(web_context, ensure_ascii=False) +
                   "\n没有检索到的内容明确说未取得，不得声称已经核实本人。\n")
     return (
-        "回答这份报告相关问题，措辞中性、尽量简洁，列出可操作的下一步。\n"
+        "直接回答问题，语言简洁自然。必要时列出下一步，不要反复解释规则或免责声明。\n"
         "只依据下面材料回答。没有联网资料时直接说明材料缺失，不要假称搜索过网络。\n"
         "=== 报告材料 ===\n" + material + "\n=== 材料结束 ===\n" + online +
         "\n用户的问题：" + question

@@ -723,7 +723,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
 </style>
-<link rel="stylesheet" href="/ui.css?v=20261030-original">
+<link rel="stylesheet" href="/ui.css?v=20261030-boxy1">
 </head>
 <body data-stage="gate">
 <!-- 云层：登录前盖住整页（深色主题）。鼠标移出登录卡先透一线光，
@@ -948,8 +948,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </section>
 
 <div class="chat-dock anim up" data-enter="640">
-  <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false" aria-controls="chat" aria-label="打开 Bocy 智能问答" data-tooltip="Bocy 智能问答 · ⌘ / Ctrl + J">
-    <span class="bocy-caption"><b>你好，我是 Bocy</b><small id="bocyLauncherNote">你的核验小助手</small></span>
+  <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false" aria-controls="chat" aria-label="打开 boxy 智能问答" data-tooltip="boxy 智能问答 · ⌘ / Ctrl + J">
+    <span class="bocy-caption"><b>你好，我是 boxy</b><small id="bocyLauncherNote">你的核验小助手</small></span>
     <span class="bocy-shell"><img class="bocy-image" src="/assets/bocy.png" alt="" width="96" height="96"><i class="bocy-busy"></i></span>
   </button>
 </div>
@@ -975,10 +975,10 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 <section class="chat" id="chat" aria-label="就这份报告提问">
     <div class="chat-h" id="chatHead" title="拖动可以移动面板；双击回到右下角">
       <span class="grip" aria-hidden="true">⣿</span>
-      <span class="ub-chat-avatar"><img src="/assets/bocy.png" width="40" height="40" alt=""></span><span class="ub-chat-name">Bocy<small>你的报告搭子</small></span>
+      <span class="ub-chat-avatar"><img src="/assets/bocy.png" width="40" height="40" alt=""></span><span class="ub-chat-name">boxy<small>有问题，问问boxy</small></span>
       <span class="st" id="chatSt"><i></i><span id="chatStTxt">连接中…</span></span>
       <button id="chatSuggestions" type="button" aria-label="展开建议问题" title="展开或收起建议问题">?</button>
-      <button id="chatClose" type="button" aria-label="收起 Bocy 问答" title="收起问答，Bocy 会继续等你">−</button>
+      <button id="chatClose" type="button" aria-label="收起 boxy 问答" title="收起问答，boxy 会继续等你">−</button>
     </div>
     <div class="chat-body" id="chatBody" tabindex="0">
       <div class="lead">
@@ -989,7 +989,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="chat-foot">
       <label class="chat-web"><input id="chatWeb" type="checkbox"> 联网搜索 <span>附来源 · 不改变报告判定</span></label>
       <div class="in">
-        <textarea id="chatIn" rows="1" placeholder="问问 Bocy，这份报告还缺什么？" aria-label="输入问题"></textarea>
+        <textarea id="chatIn" rows="1" placeholder="问问 boxy，这份报告还缺什么？" aria-label="输入问题"></textarea>
         <button class="send" id="chatStop" type="button" hidden title="停止生成">停止</button>
         <button class="send" id="chatSend" type="button" disabled>发送</button>
       </div>
@@ -1004,7 +1004,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="/ui.js?v=20261030-original"></script>
+<script src="/ui.js?v=20261030-boxy1"></script>
 <script>
 let REPORT = null;
 let QUERY_EPOCH = 0;
@@ -1600,7 +1600,7 @@ function initIntake() {
 
 /** 三条引导问题——从本次报告的实际结论里挑最值得追问的三处，不是泛泛的范例。 */
 function buildLeads() {
-  if (!REPORT) return [{q:'第一次使用，应该从哪里开始？',why:'跟着 Bocy，了解上传、选择条目和查看报告的完整流程。',local:'tour'}];
+  if (!REPORT) return [{q:'第一次使用，应该从哪里开始？',why:'跟着 boxy，了解上传、选择条目和查看报告的完整流程。',local:'tour'}];
   const claims = REPORT.claims || [], out = [];
   const add = (q, why, web = false) => out.push({q, why, web});
   const company = claims.find(c => c.manualReview?.company);
@@ -1819,7 +1819,7 @@ function initChat() {
     $('chatToggle').dataset.ready = String(ready);
     input.disabled = !ready;
     $('chatWeb').disabled = !ready;
-    input.placeholder = ready ? '问问 Bocy，这份报告还缺什么？' : '完成核验后，就能结合报告提问';
+    input.placeholder = ready ? '问问 boxy，这份报告还缺什么？' : '完成核验后，就能结合报告提问';
     if (!ready) renderLeads();
   };
   setChatReady(false);
@@ -1859,7 +1859,7 @@ function initChat() {
     const epoch = QUERY_EPOCH;
     const q = (question ?? input.value).trim();
     if (!q || busy) return;
-    if (!REPORT) { UnderboxUI.toast('先完成一次核验，Bocy 就能结合报告回答。'); return; }
+    if (!REPORT) { UnderboxUI.toast('先完成一次核验，boxy 就能结合报告回答。'); return; }
     if (q.length > 2000) { UnderboxUI.toast('问题请保持在 2000 字以内。','error'); return; }
     busy = true; followAnswer = true; latest.hidden = true; $('chatWeb').disabled = true;
     document.body.dataset.bocyBusy = 'true';
@@ -1868,11 +1868,11 @@ function initChat() {
     body.querySelector('.lead')?.classList.add('answered');
     body.appendChild(bubble('me', q));
     const bub = el('div', {class:'bub streaming', 'aria-live':'off'});
-    const answer = el('div', {class:'msg ai'},el('div', {class:'who'}, 'Bocy'),bub);
+    const answer = el('div', {class:'msg ai'},el('div', {class:'who'}, 'boxy'),bub);
     const sources = el('div', {class:'web-sources'});
     answer.appendChild(sources);body.appendChild(answer);
     const painter = new InkStream(bub, scrollChat);
-    painter.status('Bocy 正在梳理报告中的线索…'); scrollChat();
+    painter.status('boxy 正在梳理报告中的线索…'); scrollChat();
     $('chatStTxt').textContent = '正在整理线索';
     activePainter = painter;
     let acc = '';
@@ -1898,7 +1898,7 @@ function initChat() {
       if (epoch !== QUERY_EPOCH) return;
       if (!acc) painter.status('本次没有收到回答，可以稍后再试。');
       UnderboxUI.answerReady(answer);
-      $('chatAnnouncement').textContent = 'Bocy 的回答已生成，可以查看回答及来源。';
+      $('chatAnnouncement').textContent = 'boxy 的回答已生成，可以查看回答及来源。';
     } catch (err) {
       painter.cancel();
       if (epoch !== QUERY_EPOCH) return;

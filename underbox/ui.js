@@ -181,7 +181,7 @@
     if(stage !== 'gate' && !tour) maybeTour();
     if(report && report.reportNo !== lastReport){
       lastReport=report.reportNo;
-      byId('bocyLauncherNote').textContent='报告已就绪，问问 Bocy';
+      byId('bocyLauncherNote').textContent='报告已就绪，问问 boxy';
     }
     if(!report && byId('bocyLauncherNote'))byId('bocyLauncherNote').textContent='你的核验小助手';
   }
@@ -209,12 +209,12 @@
       ['#intake','原始材料，随时对照','左侧保留输入材料。展开条目时，可以把简历原文与公开来源放在一起看。'],
       ['#claims','每一段经历，都能展开','点击一条陈述，查看已证明的要素、尚缺的信息，以及企业和院校的补充资料。'],
       ['#navTier','回到每一个出处','来源抽屉帮助你了解证据层级。也可以通过右上角导出报告，保留后续核对清单。'],
-      ['#chatToggle','认识 Bocy，你的报告搭子','点这个小盒子，就能就报告提问。打开联网搜索，还可以查看带出处的公开补充资料。']
+      ['#chatToggle','认识 boxy，有问题，问问boxy','点这个小盒子，就能就报告提问。打开联网搜索，还可以查看带出处的公开补充资料。']
     ]:[
       ['#welcomeIntro','把经历核验，整理得更清楚','从公开证据出发，逐条了解简历中的陈述。没找到记录的地方，会如实保留未知。'],
       ['#intake','先放入你的材料','上传简历，或者切换到个人主页。系统会先解析与拆分，再让你确认需要核验的范围。'],
       ['#heroJourney','按顺序，一步一步来','上传材料 → 选择条目 → 查看报告。你可以在核验过程中查看真实进度，完成后回到原始出处。'],
-      ['#chatToggle','你好，我是 Bocy','我会在这里等你。报告完成后，你可以问我证据缺口、企业信息，或者下一步如何补证。'],
+      ['#chatToggle','你好，我是 boxy','我会在这里等你。报告完成后，你可以问我证据缺口、企业信息，或者下一步如何补证。'],
       ['#helpHero','需要时，随时回来','首次引导只出现一次。之后点击“使用指南”，就能重新查看；现在开始一份核验吧。']
     ];
     const previous=document.activeElement;
@@ -366,7 +366,7 @@
     answerReady(node){
       const button=create('button',{class:'ub-copy-answer',type:'button','data-copy-answer':'','data-tooltip':'复制这条回答','aria-label':'复制回答'},icon('copy'),create('span',{text:'复制'}));
       node.append(button);
-      if(!byId('chat').classList.contains('open'))toast('Bocy 已整理好回答，点小盒子查看。','success');
+      if(!byId('chat').classList.contains('open'))toast('boxy 已整理好回答，点小盒子查看。','success');
     }
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();

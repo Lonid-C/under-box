@@ -1,5 +1,5 @@
 /* Original UnderBOX palette, grid, typography and hard-shadow cards remain in index.html.
-   This stylesheet adds the retained Tour, feedback, drawers, Bocy and ink streaming. */
+   This stylesheet adds the retained Tour, feedback, drawers, boxy and ink streaming. */
 [hidden]{display:none!important}
 html{scrollbar-gutter:stable;scroll-padding-top:24px}
 button,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -180,7 +180,7 @@ details.card:not([open])>.card-h{border-bottom:0}
  .top-nav{display:flex!important}
  .chat-dock .bocy-caption{position:absolute;right:14px;bottom:-2px;padding:1px 7px;border-radius:var(--rad);z-index:2;box-shadow:var(--shadow-sm)}
  .chat-dock .bocy-caption b{font-size:0;line-height:16px}
- .chat-dock .bocy-caption b::after{content:"Bocy";font-size:9px;line-height:16px;color:var(--ink-2)}
+ .chat-dock .bocy-caption b::after{content:"boxy";font-size:9px;line-height:16px;color:var(--ink-2)}
  .chat-dock .bocy-caption small{display:none}
  .chat-dock .chat-toggle{min-width:72px}
  .chat-dock .bocy-shell{margin:0}

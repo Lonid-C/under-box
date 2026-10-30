@@ -28,7 +28,7 @@
     span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (icons[name] || icons.info) + '</svg>';
     return span;
   };
-  let toastRoot, tooltip, initialized = false, activeDialog = null, tour = null, tooltipTimer, lastReport = '';
+  let toastRoot, tooltip, initialized = false, activeDialog = null, tour = null, tooltipTimer, lastReport = '', boxyDrag = null;
   const timers = new WeakMap();
 
   function toast(message, type = 'info') {
@@ -178,6 +178,7 @@
     if(backdrop){backdrop.hidden=!open;backdrop._panel=open;}
     document.body.classList.toggle('ub-drawer-open',!!open);
     if(open){open.setAttribute('role','dialog');open.setAttribute('aria-modal','true');}
+    if(stage !== 'gate') requestAnimationFrame(() => boxyDrag?.refresh());
     if(stage !== 'gate' && !tour) maybeTour();
     if(report && report.reportNo !== lastReport){
       lastReport=report.reportNo;
@@ -343,12 +344,14 @@
         const panel=byId('ubDrawerBackdrop')._panel;if(panel)trap(e,panel);
       }
     });
+    const launcher=byId('chatToggle');
+    if (launcher && window.BoxyDrag) boxyDrag=window.BoxyDrag.mount(launcher, launcher.closest('.chat-dock'), window);
     const smallScreen=matchMedia('(max-width:700px)');
     const foldSummaries=()=>document.querySelectorAll('details.side-extra').forEach(node=>node.open=!smallScreen.matches);
     foldSummaries();smallScreen.addEventListener('change',foldSummaries);
     const observer=new MutationObserver(sync);
     observer.observe(document.body,{attributes:true,attributeFilter:['data-stage','data-picking','data-noreport']});
-    for(const id of ['tierPanel','risk-panel','adSheet','pending','pick']){
+    for(const id of ['tierPanel','risk-panel','adSheet','pending','pick','chat']){
       const node=byId(id);if(node)observer.observe(node,{attributes:true,attributeFilter:['hidden','class']});
     }
     byId('chat')?.addEventListener('transitionend',sync);

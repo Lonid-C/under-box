@@ -244,3 +244,9 @@ body[data-stage="hero"] .chat{border:2px solid var(--ink);box-shadow:var(--shado
  html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
  .ink-fragment{opacity:1;filter:none}.bocy-image{transform:none!important}
 }
+
+/* The launcher remains a button: tap to open, drag to move. */
+.chat-toggle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.chat-toggle.is-dragging{cursor:grabbing}
+.bocy-image{-webkit-user-drag:none;pointer-events:none}
+.chat-toggle,.chat-toggle:hover,.chat-toggle:active{box-shadow:none!important}

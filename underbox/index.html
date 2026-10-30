@@ -723,7 +723,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
 </style>
-<link rel="stylesheet" href="/ui.css?v=20261030-boxy1">
+<link rel="stylesheet" href="/ui.css?v=20261030-drag1">
 </head>
 <body data-stage="gate">
 <!-- 云层：登录前盖住整页（深色主题）。鼠标移出登录卡先透一线光，
@@ -948,7 +948,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 </section>
 
 <div class="chat-dock anim up" data-enter="640">
-  <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false" aria-controls="chat" aria-label="打开 boxy 智能问答" data-tooltip="boxy 智能问答 · ⌘ / Ctrl + J">
+  <button class="chat-toggle" id="chatToggle" type="button" aria-expanded="false" aria-controls="chat" aria-label="打开 boxy 智能问答" data-tooltip="拖动 boxy · 点击打开问答 · ⌘ / Ctrl + J">
     <span class="bocy-caption"><b>你好，我是 boxy</b><small id="bocyLauncherNote">你的核验小助手</small></span>
     <span class="bocy-shell"><img class="bocy-image" src="/assets/bocy.png" alt="" width="96" height="96"><i class="bocy-busy"></i></span>
   </button>
@@ -1004,7 +1004,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="/ui.js?v=20261030-copy1"></script>
+<script src="/boxy-drag.js?v=20261030-drag1"></script>
+<script src="/ui.js?v=20261030-drag1"></script>
 <script>
 let REPORT = null;
 let QUERY_EPOCH = 0;

@@ -205,7 +205,7 @@
     closeDrawers(); activeDialog?.close(null);tour?.close(false);
     const hasReport=typeof REPORT !== 'undefined' && !!REPORT;
     const steps=hasReport?[
-      ['#workspaceHeading','欢迎来到新的核验工作台','这里汇总当前候选人的核验结果。UnderBOX 核对陈述与证据，判断仍由你掌握。'],
+      ['header.site','欢迎使用 UnderBOX 核验台','这里汇总当前候选人的核验结果。UnderBOX 核对陈述与证据，判断仍由你掌握。'],
       ['#intake','原始材料，随时对照','左侧保留输入材料。展开条目时，可以把简历原文与公开来源放在一起看。'],
       ['#claims','每一段经历，都能展开','点击一条陈述，查看已证明的要素、尚缺的信息，以及企业和院校的补充资料。'],
       ['#navTier','回到每一个出处','来源抽屉帮助你了解证据层级。也可以通过右上角导出报告，保留后续核对清单。'],

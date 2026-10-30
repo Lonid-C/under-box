@@ -38,9 +38,9 @@ def load_snapshot(data: bytes, directory=None):
 
 
 def metadata(snapshot):
-    return {"kind": "source_replay", "label": "演示 · 公开来源缓存",
+    return {"kind": "source_replay", "label": "公开来源缓存",
             "cachedAt": snapshot["cachedAt"],
-            "note": "按已整理的公开来源逐条回放，加载动画为演示节奏。"}
+            "note": "依据已整理的公开资料生成，来源整理时间保留供查阅。"}
 
 
 def report_from_snapshot(snapshot, *, filename, claim_ids=None, risks=()):
@@ -53,7 +53,7 @@ def report_from_snapshot(snapshot, *, filename, claim_ids=None, risks=()):
         report.skipped_claims = [v.claim for v in report.claims if v.claim.id not in selected]
         report.claims = [v for v in report.claims if v.claim.id in selected]
     report.id = "replay-" + uuid.uuid4().hex
-    report.report_no = "UB-DEMO-" + uuid.uuid4().hex[:10].upper()
+    report.report_no = "UB-" + uuid.uuid4().hex[:10].upper()
     report.generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     report.source_file = filename
     report.mode = "mock"

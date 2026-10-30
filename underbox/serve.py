@@ -286,19 +286,21 @@ def _source_replay_report(snapshot, filename, events, holder, *, claim_ids=None,
     from app.source_replay import report_from_snapshot
     rep = report_from_snapshot(snapshot, filename=filename, claim_ids=claim_ids, risks=risks)
     cache = rep.source_cache
-    events.put({"sourceCache": cache, "log": f"演示回放 · 公开来源整理于 {cache['cachedAt']}"})
-    events.put({"log": f"[3-5/6] {len(rep.claims)} 条陈述，回放已整理的公开来源"})
+    events.put({"sourceCache": cache, "log": f"读取公开来源缓存 · 整理于 {cache['cachedAt']}"})
+    events.put({"log": f"[3-5/6] {len(rep.claims)} 条陈述，读取已整理的公开来源"})
+    time.sleep(2.0)
     for i, v in enumerate(rep.claims, 1):
         events.put({"log": f"整理来源 · {v.claim.id} · {v.claim.category} · {len(v.evidence)} 条公开材料"})
-        time.sleep(0.45)
+        time.sleep(4.0)
         events.put({"log": f"✓ ({i}/{len(rep.claims)}) {v.claim.id} · {STATUS_CN.get(v.status, v.status)}"})
     events.put({"log": "[6/6] 汇总来源、核对范围和补充材料建议"})
+    time.sleep(3.0)
     holder["oby"], holder["profile"] = rep, snapshot["profile"]
     return rep
 
 
 def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
-    """线程目标：运行核验；匹配私有来源快照时显式标注回放模式。
+    """线程目标：运行核验；匹配私有来源快照时读取已整理的公开来源。
 
     events 上放的都是 JSON 可序列化的 dict；Report 对象与画像走 holder 传递
     （它们不能进 JSON，但 /api/plan 与对话材料需要对象本身）。
@@ -405,12 +407,12 @@ def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict)
         snapshot = load_snapshot(data)
         if snapshot is not None:
             cache = metadata(snapshot)
-            events.put({"sourceCache": cache, "log": "已识别演示简历 · 读取已整理的公开来源"})
-            time.sleep(0.6)
+            events.put({"sourceCache": cache, "log": "已读取简历 · 加载已整理的公开来源"})
+            time.sleep(1.5)
             events.put({"log": "[2/6] 画像完成，正在展开简历条目", "stage": "profile"})
             token = _remember_prepared({"snapshot": snapshot, "risks": parsed.risks,
                 "filename": filename, "fileType": parsed.kind, "at": time.time()})
-            time.sleep(0.6)
+            time.sleep(1.5)
             events.put({"log": f"已拆成 {len(snapshot['report'].claims)} 条陈述，等待勾选"})
             events.put({"done": True, "split": {"token": token,
                 "candidate": snapshot["report"].candidate_name, "filename": filename,
@@ -546,7 +548,7 @@ def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, ho
             raise LookupError("这份简历的拆分结果已过期，请重新上传")
         if entry.get("snapshot") is not None:
             if materials:
-                raise ValueError("演示来源回放不接受补充材料，请上传其他版本进行实时核验")
+                raise ValueError("当前公开来源缓存不接受补充材料，请上传更新后的简历进行实时核验")
             rep = _source_replay_report(entry["snapshot"], entry["filename"], events, holder,
                                        claim_ids=claim_ids, risks=entry.get("risks", ()))
             events.put({"done": True, "report": to_presentation(rep),
@@ -902,7 +904,7 @@ class Handler(BaseHTTPRequestHandler):
             if entry.get('snapshot') is not None:
                 valid = {v.claim.id for v in entry['snapshot']['report'].claims}
                 if materials:
-                    return self._json({'error': '演示回放不接受补充材料'}, 400)
+                    return self._json({'error': '当前公开来源缓存不接受补充材料'}, 400)
                 if not set(ids) <= valid:
                     return self._json({'error': '请选择有效的核验条目'}, 400)
             try:

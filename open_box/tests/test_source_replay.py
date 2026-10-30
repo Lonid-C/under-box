@@ -75,11 +75,31 @@ class ReplayTests(unittest.TestCase):
             self.assertFalse(done.get("failed"));self.assertEqual(len(done["report"]["claims"]),1)
             self.assertEqual(done["report"]["claims"][0]["status"],"none")
             self.assertIn("公开来源缓存",serve.report_to_markdown(done["report"]))
-            self.assertIn("演示",serve.render_material(holder["oby"]))
+            self.assertIn("公开来源缓存",serve.render_material(holder["oby"]))
+            self.assertNotIn("演示",serve.render_material(holder["oby"]))
             q=queue.Queue();serve.run_verify_job(self.data,"x.pdf",q,holder)
             done=next(e for e in list(q.queue) if e and e.get("done"))
             self.assertEqual(len(done["report"]["claims"]),2)
             with serve._PREPARED_LOCK: serve.PREPARED.pop(token,None)
+
+    def test_paced_source_events_preserve_provenance_and_findings(self):
+        snap=self.snapshot();q=queue.Queue();holder={}
+        with patch("serve.time.sleep") as pause:
+            rep=serve._source_replay_report(snap,"input.pdf",q,holder)
+        events=list(q.queue)
+        self.assertEqual([v.status for v in rep.claims],["none","ask"])
+        self.assertEqual([v.evidence for v in rep.claims],[[],[]])
+        self.assertEqual([call.args[0] for call in pause.call_args_list],[2.0,4.0,4.0,3.0])
+        self.assertEqual(rep.source_cache["kind"],"source_replay")
+        self.assertIn("公开来源缓存",rep.source_cache["label"])
+        self.assertNotIn("DEMO",rep.report_no)
+        self.assertNotIn("演示",json.dumps(events,ensure_ascii=False))
+        self.assertTrue(any("整理来源" in e.get("log","") for e in events))
+        self.assertFalse(any("实时搜索" in e.get("log","") for e in events))
+        exported=serve.report_to_markdown(serve.to_presentation(rep))
+        self.assertIn(snap["cachedAt"],exported)
+        self.assertIn("公开来源缓存",exported)
+        self.assertNotIn("演示",exported)
 
     def test_nonmatch_uses_regular_pipeline(self):
         q=queue.Queue()

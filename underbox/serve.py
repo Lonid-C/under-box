@@ -64,6 +64,14 @@ def _risk_label(detail: str) -> str:
     return detail.split("（匹配片段")[0].strip() or detail
 
 
+def followup_contacts(vc):
+    """Old saved reports can reuse public routes without a network request."""
+    from app.contact_fallback import build_contact_review, needs_contacts
+    if not needs_contacts(vc):
+        return None
+    return getattr(vc, "verification_contacts", None) or build_contact_review(vc)
+
+
 def render_material(rep) -> str:
     """把 open_box 的 Report 压成给模型的材料文本。
 
@@ -93,7 +101,7 @@ def render_material(rep) -> str:
             out.append(f"  已证明：{'；'.join(v.proved)}")
         if v.unproved:
             out.append(f"  尚未证明：{'；'.join(v.unproved)}")
-        for review in (v.manual_review, getattr(v, "education_review", None)):
+        for review in (v.manual_review, getattr(v, "education_review", None), followup_contacts(v)):
             if review:
                 out.append(render_context_material(review))
         for note in getattr(v, "source_notes", []):
@@ -130,7 +138,10 @@ def render_material(rep) -> str:
 
 
 def render_context_material(review: dict) -> str:
-    lines = ["机构辅助资料（不能证明本人经历）：" + str(review.get("company") or review.get("school") or "")]
+    lines = ["人工核验联系方式：" if review.get("kind") == "verification_contacts" else
+             "机构辅助资料（不能证明本人经历）：" + str(review.get("company") or review.get("school") or "")]
+    if review.get("pendingElements"):
+        lines.append("待核对事项：" + "；".join(review["pendingElements"]))
     for key in ("companyUrl", "queryUrl", "tianyanchaQueryUrl"):
         if review.get(key):
             lines.append("公开查询入口：" + review[key])
@@ -141,9 +152,12 @@ def render_context_material(review: dict) -> str:
                      "｜来源：" + field.get("sourceUrl", "") + "｜" +
                      ("仅搜索摘要" if field.get("extractionMethod") == "search_snippet" else "资料概述" if field.get("valueKind") == "summary" else "页面原文节选"))
     for contact in review.get("contacts", []):
-        lines.append(contact.get("kind", "公开办公联系渠道") + "：" +
+        lines.append(contact.get("institution", "") + " · " + contact.get("kind", "公开办公联系渠道") + "：" +
                      str(contact.get("value") or contact.get("phone") or contact.get("email") or "") +
+                     "｜咨询范围：" + contact.get("scope", contact.get("kind", "")) +
                      "｜出处：" + contact.get("sourceUrl", ""))
+        if contact.get("subjectNote"):
+            lines.append("主体核对：" + contact["subjectNote"])
     if review.get("subjectNote"):
         lines.append("主体核对：" + review["subjectNote"])
     for related in (review.get("relatedCompanies") or [])[:4]:
@@ -250,6 +264,7 @@ def to_presentation(rep) -> dict:
             "githubAudit": getattr(v, "github_audit", None),
             "manualReview": getattr(v, "manual_review", None),
             "educationReview": getattr(v, "education_review", None),
+            "verificationContacts": followup_contacts(v),
             "verificationAgent": getattr(v, "verification_agent", None),
             "evidence": [{
                 "tier": e.source_tier,
@@ -654,7 +669,7 @@ def report_to_markdown(rep: dict) -> str:
                         L.extend('        '+line for line in f['patch'][:1200].splitlines())
             for note in audit.get('warnings', []) + audit.get('limitations', []): L.append('- ' + note)
             if audit.get('truncated'): L.append('- 本次范围被分页或预算截断，未检查记录保持未知。')
-        for key, heading in (("manualReview", "企业资料与实习人工背调"), ("educationReview", "院校专业官网与人工核验入口")):
+        for key, heading in (("manualReview", "企业资料与实习人工背调"), ("educationReview", "院校专业官网与人工核验入口"), ("verificationContacts", "人工核验联系方式")):
             review = c.get(key)
             if review:
                 L.append("### " + heading)

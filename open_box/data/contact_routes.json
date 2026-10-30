@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "note": "公开机构办公渠道；匹配院校、赛事或考试后使用，不含候选人信息。",
+  "routes": [
+    {
+      "id": "bnbu-registry",
+      "categories": [
+        "学历",
+        "奖学金"
+      ],
+      "pattern": "",
+      "schoolDomain": "bnbu.edu.cn",
+      "institution": "北师香港浸会大学 · 教务处",
+      "scope": "教务一般咨询，可询问学籍、成绩单及学业证明的核验手续",
+      "sourceUrl": "https://www.bnbu.edu.cn/about_us/contact_us.htm",
+      "excerpt": "教务处\n电话：0756-3620303\n电子邮件：ar@bnbu.edu.cn",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "0756-3620303"
+        },
+        {
+          "type": "email",
+          "value": "ar@bnbu.edu.cn"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "bnbu-sao",
+      "categories": [
+        "奖学金",
+        "校内荣誉",
+        "学生工作"
+      ],
+      "pattern": "奖学金|荣誉|学生会|学生工作|干部",
+      "schoolDomain": "bnbu.edu.cn",
+      "institution": "北师香港浸会大学 · 学生事务处",
+      "scope": "学生事务一般咨询，可转接奖助学金及在校表现证明受理人员",
+      "sourceUrl": "https://www.bnbu.edu.cn/about_us/contact_us.htm",
+      "excerpt": "学生事务处\n电话：0756-3620227\n电子邮件：sao@bnbu.edu.cn",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "0756-3620227"
+        },
+        {
+          "type": "email",
+          "value": "sao@bnbu.edu.cn"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "bnbu-dms",
+      "categories": [
+        "竞赛"
+      ],
+      "pattern": "数学建模|美赛|国赛|MathorCup|(?<![A-Za-z])(?:MCM|ICM|CUMCM)(?![A-Za-z])",
+      "schoolDomain": "bnbu.edu.cn",
+      "institution": "北师香港浸会大学 · 数学科学系",
+      "scope": "院系一般咨询，可询问校内数学建模赛事组织与证明材料的核对途径",
+      "sourceUrl": "https://fst.bnbu.edu.cn/fm/about/contact_us.htm",
+      "excerpt": "数学科学系（DMS）\n(86-756) 3620194, 3620132\n电子邮箱 fst-dms@bnbu.edu.cn",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "0756-3620194"
+        },
+        {
+          "type": "email",
+          "value": "fst-dms@bnbu.edu.cn"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "bnbu-fbm",
+      "categories": [
+        "竞赛"
+      ],
+      "pattern": "三创|电子商务.*创新.*创意|创新.*创意.*创业",
+      "schoolDomain": "bnbu.edu.cn",
+      "institution": "北师香港浸会大学 · 工商管理学院",
+      "scope": "学院一般咨询，可转接三创赛校赛组织老师",
+      "sourceUrl": "https://fbm.bnbu.edu.cn/about_us/contact_us.htm",
+      "excerpt": "电话：+86-756-3620423\n邮箱：fbm@bnbu.edu.cn",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "+86-756-3620423"
+        },
+        {
+          "type": "email",
+          "value": "fbm@bnbu.edu.cn"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "mcm",
+      "categories": [
+        "竞赛"
+      ],
+      "pattern": "美赛|美国大学生数学建模|(?<![A-Za-z])(?:MCM|ICM)(?![A-Za-z])",
+      "schoolDomain": "",
+      "institution": "COMAP · MCM/ICM",
+      "scope": "MCM/ICM 赛事一般咨询；队员职责可同时向本校指导老师确认",
+      "sourceUrl": "https://www.contest.comap.com/undergraduate/contests/mcm/flyer/MCM-ICM-Letter.pdf",
+      "excerpt": "Should you feel you need more information feel free to contact us at mcm@comap.com.",
+      "contacts": [
+        {
+          "type": "email",
+          "value": "mcm@comap.com"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "prosperity",
+      "categories": [
+        "竞赛"
+      ],
+      "pattern": "Prosperity",
+      "schoolDomain": "",
+      "institution": "IMC · Prosperity",
+      "scope": "赛事公开咨询邮箱，可询问队伍成绩、成员关联及排行榜记录的核对途径",
+      "sourceUrl": "https://prosperity.imc.com/",
+      "excerpt": "Who can I contact for additional questions? […] reach out to prosperity@imc.com.",
+      "contacts": [
+        {
+          "type": "email",
+          "value": "prosperity@imc.com"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "mathorcup-bigdata",
+      "categories": [
+        "竞赛"
+      ],
+      "pattern": "(?=.*MathorCup)(?=.*(?:大数据|Big.?Data))",
+      "schoolDomain": "",
+      "institution": "MathorCup · 大数据竞赛组委会",
+      "scope": "2025 年大数据竞赛公告所列邮箱；公示异议期已结束，可询问成绩或证书查询途径",
+      "sourceUrl": "https://www.mathorcup.org/detail/2469",
+      "excerpt": "对公示结果有异议的，请填写附件中的《MathorCup数学应用挑战赛——大数据竞赛异议申请表》，并发送至邮箱：bigdata@mathorcup.org",
+      "contacts": [
+        {
+          "type": "email",
+          "value": "bigdata@mathorcup.org"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "cet",
+      "categories": [
+        "校内荣誉",
+        "学历",
+        "教学活动"
+      ],
+      "pattern": "CET[-－ ]?[46]|英语[四六]级|大学英语.*[四六]级",
+      "schoolDomain": "",
+      "institution": "全国大学英语四、六级考试委员会办公室",
+      "scope": "CET 成绩核查流程咨询，办理对象为当次考试分数的错加或漏加问题",
+      "sourceUrl": "https://cet.neea.edu.cn/html1/folder/19081/5179-1.htm",
+      "excerpt": "全国大学英语四、六级考试委员会办公室 […] 电话：021-52583311",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "021-52583311"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "ielts",
+      "categories": [
+        "校内荣誉",
+        "学历",
+        "教学活动"
+      ],
+      "pattern": "雅思|IELTS",
+      "schoolDomain": "",
+      "institution": "雅思 · 全国服务热线",
+      "scope": "雅思考试与考后服务咨询，可询问成绩验证的办理途径",
+      "sourceUrl": "https://www.britishcouncil.cn/en/contact",
+      "excerpt": "IELTS national service hotline: +86 (0)10 8234 5671",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "010-82345671"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "isms",
+      "categories": [
+        "会议"
+      ],
+      "pattern": "INFORMS|ISMS|Marketing Science Conference",
+      "schoolDomain": "",
+      "institution": "INFORMS · 协会办公室",
+      "scope": "协会一般咨询，可请求转接 ISMS 会议秘书处，核对参会与论文收录途径",
+      "sourceUrl": "https://connect.informs.org/isms/aboutmktsci",
+      "excerpt": "phone 1 443-757-3500 […] email (informs@informs.org)",
+      "contacts": [
+        {
+          "type": "phone",
+          "value": "+1-443-757-3500"
+        },
+        {
+          "type": "email",
+          "value": "informs@informs.org"
+        }
+      ],
+      "verifiedAt": "2026-10-30"
+    },
+    {
+      "id": "hkbu-hro",
+      "categories": [
+        "实习",
+        "任职"
+      ],
+      "institutionNames": [
+        "香港浸会大学",
+        "Hong Kong Baptist University",
+        "HKBU"
+      ],
+      "institution": "香港浸会大学 · 人力资源处",
+      "scope": "人事一般咨询，可询问科研助理任职材料的核验及转接手续",
+      "sourceUrl": "https://iss.hkbu.edu.hk/ims2/ims/generalEnquiry.do",
+      "excerpt": "Human Resources Office […] Hong Kong Baptist University […] E-mail : hro@hkbu.edu.hk",
+      "contacts": [
+        {
+          "type": "email",
+          "value": "hro@hkbu.edu.hk"
+        }
+      ],
+      "verifiedAt": "2026-10-30",
+      "pattern": "(?<![师師学學\\-－])香港浸[会會]大[学學](?![联聯]合)|(?<![A-Za-z])HKBU(?![- ]?UIC|[A-Za-z])|Hong Kong Baptist University(?!.*United International College)"
+    }
+  ]
+}

@@ -414,6 +414,11 @@ def verify_prepared(
         with ThreadPoolExecutor(max_workers=min(3, len(pending))) as pool:
             list(pool.map(add_education_context, pending))
 
+    from .contact_fallback import attach_contact_reviews
+    attach_contact_reviews(verified, searcher, fetcher,
+        budget_factory if explicit_budget else lambda: Budget(max_searches=2, max_page_reads=4, max_seconds=30),
+        school_domains, say)
+
     say("[6/6] 汇总报告")
     return Report(
         id=report_id,

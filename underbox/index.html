@@ -723,7 +723,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
 </style>
-<link rel="stylesheet" href="/ui.css?v=20261030-drag1">
+<link rel="stylesheet" href="/ui.css?v=20261030-contacts1">
 </head>
 <body data-stage="gate">
 <!-- 云层：登录前盖住整页（深色主题）。鼠标移出登录卡先透一线光，
@@ -1105,6 +1105,9 @@ function detailOf(c) {
       el('h4', {text:`要素 · 逐项核对（${c.proved.length}/${c.elements.length} 已证）`}), list,
       c.unproved.length ? el('div', {class:'hint', text:'标记为 – 的要素尚未找到对应的公开资料。'}) : null));
   }
+  if (c.verificationContacts && c.status !== 'ok' && !['项目','开源项目'].includes(c.category))
+    d.appendChild(el('div', {class:'dsec contact-followup'},
+      el('h4', {text:'人工核验联系方式'}), renderVerificationContacts(c.verificationContacts)));
   if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
     el('h4', {text:'实习单位资料与联系渠道'}), renderManualReview(c.manualReview)));
   if (c.educationReview) d.appendChild(el('div', {class:'dsec'},
@@ -1191,6 +1194,44 @@ function contextLink(url, label) {
       return el('a', {href:u.href, target:'_blank', rel:'noopener noreferrer', text:label, style:'overflow-wrap:anywhere'});
   } catch {}
   return null;
+}
+
+function renderVerificationContacts(review) {
+  const box = el('div', {class:'contact-followup-body'});
+  if ((review.pendingElements || []).length)
+    box.appendChild(el('p', {class:'hint', text:'待核对：' + review.pendingElements.join('；')}));
+  const grid = el('div', {class:'institution-context'});
+  for (const contact of review.contacts || []) {
+    const value = String(contact.value || contact.phone || contact.email || '');
+    const card = el('div', {class:'ev verification-contact'});
+    card.appendChild(el('b', {text:contact.institution || contact.kind || '公开办公渠道'}));
+    const row = el('div', {class:'contact-value-row'});
+    const safeEmail = contact.type === 'email' && /^[\w.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value);
+    const safePhone = contact.type === 'phone' && /^[+\d() -]{8,32}$/.test(value);
+    if (safeEmail || safePhone)
+      row.appendChild(el('a', {class:'contact-value', href:(safeEmail ? 'mailto:' : 'tel:') + (safeEmail ? value : value.replace(/[^+\d]/g,'')), text:value}));
+    else row.appendChild(el('span', {class:'contact-value', text:value}));
+    const copy = el('button', {type:'button', class:'contact-copy', text:'复制', 'aria-label':'复制联系方式 ' + value});
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(value); UnderboxUI.toast('联系方式已复制。', 'success'); }
+      catch { UnderboxUI.toast('暂时无法复制，请选中联系方式复制。', 'error'); }
+    });
+    row.appendChild(copy); card.appendChild(row);
+    card.appendChild(el('p', {class:'hint', text:contact.scope || contact.kind || '公开办公咨询'}));
+    if (contact.subjectNote) card.appendChild(el('p', {class:'hint', text:contact.subjectNote}));
+    const source = contextLink(contact.sourceUrl, '联系信息出处 ↗');
+    if (source) card.appendChild(source);
+    const detail = el('details', {class:'contact-source'});
+    detail.appendChild(el('summary', {text:'查看原文 · ' + (contact.accessedAt || '未记录日期')}));
+    detail.appendChild(el('div', {class:'q', text:contact.excerpt || ''}));
+    card.appendChild(detail); grid.appendChild(card);
+  }
+  box.appendChild(grid);
+  if (!(review.contacts || []).length) {
+    (review.limitations || ['暂未找到公开电话或邮箱。']).forEach(text => box.appendChild(el('p', {class:'hint', text})));
+    (review.links || []).forEach(item => { const a = contextLink(item.url, item.title || '机构官网'); if (a) box.appendChild(a); });
+  }
+  return box;
 }
 
 function renderContextDetails(review, expected = []) {

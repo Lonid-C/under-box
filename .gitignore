@@ -34,3 +34,6 @@ venv/
 # 本地运行.md 写死了这台机器的路径与 conda 习惯，且部分内容已被 start.sh 的修复取代。
 _recovery/
 本地运行.md
+
+# Private consented source-replay snapshots and input files (deployment only).
+private/

@@ -1081,7 +1081,7 @@ function renderOverview() {
   const pct = (a,b) => b ? `${a}/${b}（${Math.round(a/b*100)}%）` : '—';
   const met = $('metrics'); met.innerHTML = '';
   [['检索到公开来源', pct(REPORT.claims.filter(x=>x.evidence.length).length, total)],
-   ['来源可关联到本人', pct(REPORT.claims.filter(x=>['ok','part','ask'].includes(x.status)).length, total)],
+   ['来源可关联到本人', pct(REPORT.claims.filter(x => x.evidence.some(e => !(e.conflicts || []).length && (e.signals || []).some(s => ['学校一致','任职单位一致','学院一致','专业一致','年级一致','队友或合作者一致','具体经历一致','英文作者联合关联','候选人自提供该链接','账号由候选人提供'].includes(s)))).length, total)],
    ['要素被全部证明', pct(c.ok, total)],
    ['要素级覆盖率', pct(proved, elements)],
    ['需人工复核', pct(human, total)]
@@ -2323,6 +2323,12 @@ async function probeMode() {
 
 function updateModeBadge() {
   const b = $('modeBadge'); if (!b) return;
+  if (REPORT?.sourceCache?.kind === 'source_replay') {
+    b.innerHTML = '<i></i>演示 · 公开来源缓存'; b.style.background = '#FAEEDA';
+    b.title = `来源整理于 ${REPORT.sourceCache.cachedAt}；加载动画为演示节奏`;
+    $('searchWarn').style.display = 'none'; return;
+  }
+  b.title = '';
   if (REPORT?.mode === 'mock') {
     b.innerHTML = '<i></i>演示数据'; b.style.background = '#F0EDF7';
     $('searchWarn').style.display = 'none'; return;
@@ -2367,7 +2373,7 @@ const StatusDock = {
     dock.classList.remove('done', 'failed', 'collapsed');
     this.keepOpen = false;
     this.el('spTitle').textContent = '正在核验';
-    this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
+    this.el('spFoot').textContent = '处理进度与来源记录';
     const box = this.el('spSteps'); box.innerHTML = '';
     this.stages.forEach((s, i) => box.appendChild(
       el('div', { class: 'sp-step', 'data-i': i }, el('span', { class: 'd' }), el('span', { text: s }))));
@@ -2405,7 +2411,7 @@ const StatusDock = {
     const dock = this.el('statusDock');
     dock.classList.remove('done', 'failed');
     this.el('spTitle').textContent = '正在核验';
-    this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
+    this.el('spFoot').textContent = '处理进度与来源记录';
     this.started = Date.now();
     clearInterval(this.timer);
     this.timer = setInterval(() => {
@@ -2579,6 +2585,7 @@ async function sseRequest(url, init, onEv) {
         const ev = JSON.parse(line.slice(6));
         if (epoch !== QUERY_EPOCH) throw new DOMException('查询已退出', 'AbortError');
         if (ev.ping) continue;
+        if (ev.sourceCache) { $('spTitle').textContent = '演示来源回放'; $('spFoot').textContent = `${ev.sourceCache.label} · 整理于 ${ev.sourceCache.cachedAt} · 加载动画为演示节奏`; }
         if (ev.usage) Usage.live(ev.usage);
         if (ev.usage && !ev.done) continue;           // 纯用量事件，不进业务回调
         onEv(ev);
@@ -2828,6 +2835,7 @@ async function runSplit(src) {
       return;
     }
     PICK.lead = `${PICK.fileType === 'web' ? '个人主页' : '简历'}拆成了 ${PICK.claims.length} 条陈述，已按类别分好。`
+      + (sp.sourceCache ? `演示 · 公开来源缓存（整理于 ${sp.sourceCache.cachedAt}）。` : '')
       + '勾选要核验的条目。'
       + (PICK.fileType === 'pdf' ? '点页码可以在左边原件里对照。' : '')
       + (PICK.fileType === 'web' ? '点「定位」可在左侧网页中查看原文；主页内容作为检索线索。' : '');

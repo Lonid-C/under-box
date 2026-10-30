@@ -78,6 +78,9 @@ def render_material(rep) -> str:
         f"报告编号：{rep.report_no}　共 {len(rep.claims)} 条陈述",
         "",
     ]
+    if getattr(rep, "source_cache", None):
+        cache = rep.source_cache
+        out.append(f"材料来源：{cache['label']}；整理时间：{cache['cachedAt']}；{cache['note']}")
     for v in rep.claims:
         c = v.claim
         out.append(f"[{c.id}] {status_cn.get(v.status, v.status)}"
@@ -213,6 +216,7 @@ def to_presentation(rep) -> dict:
         "disclaimer": rep.disclaimer,
         "generatedAt": rep.generated_at,
         "mode": rep.mode,
+        "sourceCache": getattr(rep, "source_cache", None),
         "sourceFile": rep.source_file,
         "verificationWorkflow": getattr(rep, "verification_workflow", None),
         "searchConfigured": _search_configured(),
@@ -258,8 +262,23 @@ def to_presentation(rep) -> dict:
     }
 
 
+def _source_replay_report(snapshot, filename, events, holder, *, claim_ids=None, risks=()):
+    from app.source_replay import report_from_snapshot
+    rep = report_from_snapshot(snapshot, filename=filename, claim_ids=claim_ids, risks=risks)
+    cache = rep.source_cache
+    events.put({"sourceCache": cache, "log": f"演示回放 · 公开来源整理于 {cache['cachedAt']}"})
+    events.put({"log": f"[3-5/6] {len(rep.claims)} 条陈述，回放已整理的公开来源"})
+    for i, v in enumerate(rep.claims, 1):
+        events.put({"log": f"整理来源 · {v.claim.id} · {v.claim.category} · {len(v.evidence)} 条公开材料"})
+        time.sleep(0.45)
+        events.put({"log": f"✓ ({i}/{len(rep.claims)}) {v.claim.id} · {STATUS_CN.get(v.status, v.status)}"})
+    events.put({"log": "[6/6] 汇总来源、核对范围和补充材料建议"})
+    holder["oby"], holder["profile"] = rep, snapshot["profile"]
+    return rep
+
+
 def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
-    """线程目标：跑真实流水线，把**真实发生的每一步**推进 events 队列。
+    """线程目标：运行核验；匹配私有来源快照时显式标注回放模式。
 
     events 上放的都是 JSON 可序列化的 dict；Report 对象与画像走 holder 传递
     （它们不能进 JSON，但 /api/plan 与对话材料需要对象本身）。
@@ -279,6 +298,14 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
     started = time.monotonic()
     try:
         parsed = parse_document(tmp)
+        from app.source_replay import load_snapshot
+        snapshot = load_snapshot(data)
+        if snapshot is not None:
+            rep = _source_replay_report(snapshot, filename, events, holder, risks=parsed.risks)
+            events.put({"done": True, "report": to_presentation(rep),
+                        "seconds": round(time.monotonic() - started, 1),
+                        "filename": filename, "fileType": parsed.kind})
+            return
         events.put({"log": f"识别文件格式：{parsed.kind.upper()}；正在判断是否为简历"})
         llm = build_llm()
         ensure_resume(parsed, llm)
@@ -354,6 +381,24 @@ def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict)
     started = time.monotonic()
     try:
         parsed = parse_document(tmp)
+        from app.source_replay import load_snapshot, metadata
+        snapshot = load_snapshot(data)
+        if snapshot is not None:
+            cache = metadata(snapshot)
+            events.put({"sourceCache": cache, "log": "已识别演示简历 · 读取已整理的公开来源"})
+            time.sleep(0.6)
+            events.put({"log": "[2/6] 画像完成，正在展开简历条目", "stage": "profile"})
+            token = _remember_prepared({"snapshot": snapshot, "risks": parsed.risks,
+                "filename": filename, "fileType": parsed.kind, "at": time.time()})
+            time.sleep(0.6)
+            events.put({"log": f"已拆成 {len(snapshot['report'].claims)} 条陈述，等待勾选"})
+            events.put({"done": True, "split": {"token": token,
+                "candidate": snapshot["report"].candidate_name, "filename": filename,
+                "fileType": parsed.kind, "sourceCache": cache,
+                "risks": [r.model_dump() for r in parsed.risks],
+                "claims": [{**claim_brief(v.claim), "githubMaterialEligible": False} for v in snapshot["report"].claims], "skipped": []},
+                "seconds": round(time.monotonic() - started, 1)})
+            return
         events.put({"log": f"识别文件格式：{parsed.kind.upper()}；正在判断是否为简历"})
         llm = build_llm()
         ensure_resume(parsed, llm)
@@ -479,6 +524,15 @@ def run_verify_selected_job(token: str, claim_ids: list, events: queue.Queue, ho
             entry = PREPARED.get(token)
         if entry is None:
             raise LookupError("这份简历的拆分结果已过期，请重新上传")
+        if entry.get("snapshot") is not None:
+            if materials:
+                raise ValueError("演示来源回放不接受补充材料，请上传其他版本进行实时核验")
+            rep = _source_replay_report(entry["snapshot"], entry["filename"], events, holder,
+                                       claim_ids=claim_ids, risks=entry.get("risks", ()))
+            events.put({"done": True, "report": to_presentation(rep),
+                        "seconds": round(time.monotonic() - started, 1),
+                        "filename": entry["filename"], "fileType": entry["fileType"]})
+            return
         prepared = entry["prepared"]
         if materials:
             from dataclasses import replace
@@ -561,6 +615,9 @@ def report_to_markdown(rep: dict) -> str:
          "",
          f"> {rep.get('disclaimer', '')}",
          ""]
+    if rep.get("sourceCache"):
+        cache = rep["sourceCache"]
+        L.extend([f"> {cache['label']} · 来源整理时间 {cache['cachedAt']} · {cache['note']}", ""])
     for c in rep.get("claims", []):
         st = STATUS_CN.get(c.get("status"), c.get("status"))
         L.append(f"## {c['id']}　{st}　{c.get('category', '')}"
@@ -822,9 +879,16 @@ class Handler(BaseHTTPRequestHandler):
             if entry is None or entry.get('owner', 'local') != self.uid():
                 return self._json({'error':'拆分结果已过期或不属于当前账户，请重新上传'}, 404)
             materials = payload.get('githubMaterials') or {}
+            if entry.get('snapshot') is not None:
+                valid = {v.claim.id for v in entry['snapshot']['report'].claims}
+                if materials:
+                    return self._json({'error': '演示回放不接受补充材料'}, 400)
+                if not set(ids) <= valid:
+                    return self._json({'error': '请选择有效的核验条目'}, 400)
             try:
                 from app.github_audit import supplement_claims
-                supplement_claims(entry['prepared'].claims, materials)
+                if entry.get('prepared') is not None:
+                    supplement_claims(entry['prepared'].claims, materials)
             except ValueError as exc:
                 return self._json({'error':str(exc)}, 400)
             from functools import partial
@@ -852,7 +916,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._sse(run_split_job, (data, fname), kind="split")
 
     def _sse(self, target, args: tuple, kind: str = "") -> None:
-        """把后台任务的事件原样推给页面。前端的状态窗口就是吃这个——每一行都是真实发生的。
+        """把后台任务的事件推给页面；真实核验记录实际动作，来源回放另带来源标签。
 
         kind 供网关模式记账用：verify 完成后消耗一次配额，split / 其余只记用量不扣。
         """

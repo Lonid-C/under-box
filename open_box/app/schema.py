@@ -209,6 +209,7 @@ class Report(BaseModel):
     # 显式按设置不核验的条目。如实列出，不让人以为漏看了。
     skipped_claims: list[Claim] = Field(default_factory=list)
     verification_workflow: dict | None = None
+    source_cache: dict | None = None  # Explicit provenance for private source replay.
     disclaimer: str = (
         "本报告仅汇总公开来源与候选人提交的材料，不构成录用决定的唯一依据；"
         "候选人可对任一条结论提交解释与更正。"

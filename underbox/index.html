@@ -1106,7 +1106,7 @@ function detailOf(c) {
       c.unproved.length ? el('div', {class:'hint', text:'标记为 – 的要素尚未找到对应的公开资料。'}) : null));
   }
   if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
-    el('h4', {text:'企业资料 · 实习经历待人工核实'}), renderManualReview(c.manualReview)));
+    el('h4', {text:'实习单位资料与联系渠道'}), renderManualReview(c.manualReview)));
   if (c.educationReview) d.appendChild(el('div', {class:'dsec'},
     el('h4', {text:'院校专业官网与人工核验入口'}), renderEducationReview(c.educationReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
@@ -1208,7 +1208,7 @@ function renderContextDetails(review, expected = []) {
     const link = contextLink(field.sourceUrl, '查看资料出处');
     if (link) card.appendChild(link);
     card.appendChild(el('div', {class:'hint',text:
-      (field.extractionMethod === 'search_snippet' ? '搜索摘要 · 尚未回读原文' : '页面原文节选')
+      (field.extractionMethod === 'search_snippet' ? '搜索摘要 · 尚未回读原文' : field.valueKind === 'summary' ? '资料概述 · 可查看原文' : '页面原文节选')
       + ' · 读取：' + (field.accessedAt || review.checkedAt || '未记录')}));
     box.appendChild(card);
   }
@@ -1223,10 +1223,11 @@ function renderContextDetails(review, expected = []) {
     box.appendChild(card);
   }
   const limitations = [...new Set(review.limitations || [])];
-  if (!(review.contacts || []).length && !limitations.some(note => note.includes('公开办公电话或邮箱')))
+  if (!(review.contacts || []).length && !(review.relatedCompanies || []).some(r => (r.contacts || []).length)
+      && !limitations.some(note => note.includes('公开办公电话或邮箱')))
     box.appendChild(el('p', {class:'hint',text:'未找到公开办公电话或邮箱，可通过官网或企业查询入口核对。'}));
   if (review.note) {
-    const note = review.kind === 'internship' ? '企业资料供人工核验；参保人数与注册资本为不同指标。'
+    const note = review.kind === 'internship' ? '企业公开资料与联系渠道。'
       : review.kind === 'education' ? '可通过公开办公渠道联系院校核实。' : review.note;
     box.appendChild(el('p', {class:'hint',text:note}));
   }
@@ -1250,8 +1251,9 @@ function renderContextDetails(review, expected = []) {
 
 function renderManualReview(review) {
   const box = el('div', {class:'manual-review'});
-  box.appendChild(el('p', {text:'实习公司：' + (review.company || '待补充公司全称')}));
-  const links = [...(review.registryLinks || [])];
+  box.appendChild(el('p', {class:'company-card-title',text:'实习单位：' + (review.company || '待补充单位全称')}));
+  if (review.subjectNote) box.appendChild(el('p', {class:'hint company-subject-note',text:review.subjectNote}));
+  const links = [...(review.registryLinks || []), ...(review.links || [])];
   if (review.companyUrl && !links.some(l => l.url === review.companyUrl))
     links.unshift({url:review.companyUrl,title:'打开企业详情页'});
   links.push({url:review.queryUrl,title:'企查查 · 按公司名称查询'},
@@ -1264,8 +1266,19 @@ function renderManualReview(review) {
     if (link) box.appendChild(el('p', {}, link));
   }
   box.appendChild(renderContextDetails(review, [
-    ['introduction','公司介绍'],['businessScope','经营范围'],['size','公司规模'],
-    ['mainBusiness','主营业务'],['legalRepresentative','法定代表人'],['contactPerson','公开业务联系人']]));
+    ['introduction',review.entityType === 'university' ? '机构介绍' : '公司介绍'],
+    ...(review.entityType === 'university' ? [] : [['registeredAddress','注册地址']]),
+    ['officeAddress','办公 / 联系地址'],
+    ...(review.entityType === 'university' ? [] : [['businessScope','登记经营范围'],['mainBusiness','主营业务']]),
+    ...[['establishedAt','成立时间'],['registrationNumber','登记编号'],['companyType','机构类型'],
+    ['registeredCapital','注册资本'],['registrationStatus','登记状态'],['size','公司规模'],
+    ['legalRepresentative','法定代表人'],['contactPerson','公开业务联系人']].filter(([key]) => review.profile?.[key])]));
+  for (const related of (review.relatedCompanies || []).slice(0,4)) {
+    const section = el('details', {class:'related-company-card'});
+    section.appendChild(el('summary', {text:(related.relationship || '关联单位') + ' · ' + related.company}));
+    section.appendChild(renderManualReview({...related, relatedCompanies:[]}));
+    box.appendChild(section);
+  }
   return box;
 }
 

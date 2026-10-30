@@ -123,6 +123,58 @@ class ContextTests(unittest.TestCase):
         self.assertNotIn("size", fields)
         self.assertEqual(fields["mainBusiness"]["value"], "软件开发")
 
+    def test_registration_and_office_address_are_separate(self):
+        html=HTML.replace("<table>","<table><tr><td>注册地址</td><td>测试市登记路1号</td></tr><tr><td>办公地址</td><td>测试市办公路2号</td></tr><tr><td>成立日期</td><td>2020-01-02</td></tr>")
+        vc=build_manual_review(claim(),Searcher([SearchHit(FIRM,COMPANY)]),Fetcher({FIRM:html}),Budget(3,4,45))
+        profile=vc.manual_review["profile"]
+        self.assertEqual(profile["registeredAddress"]["value"],"测试市登记路1号")
+        self.assertEqual(profile["officeAddress"]["value"],"测试市办公路2号")
+        self.assertEqual(profile["establishedAt"]["value"],"2020-01-02")
+        self.assertEqual(profile["registeredAddress"]["sourceUrl"],FIRM)
+        office=labeled_fields("公司地址：测试市联系路3号",COMPANY_FIELDS,FIRM)
+        self.assertNotIn("registeredAddress",office)
+        self.assertIn("officeAddress",office)
+
+    def test_owned_brand_site_can_supply_switchboard_and_service_contacts(self):
+        url="https://brand.example.com/contact"
+        html='<title>品牌联系我们</title><h1>联系我们</h1><p>总机：010-12345678</p><p>客服热线：400-123-4567</p><p>办公地址：测试市办公路2号</p><footer>Copyright © '+COMPANY+' 版权所有</footer>'
+        hit=SearchHit(url,"品牌联系我们",snippet=COMPANY+" 公开联系渠道")
+        vc=build_manual_review(claim(),Searcher([hit]),Fetcher({url:html}),Budget(3,4,45))
+        self.assertIn("010-12345678",[c["value"] for c in vc.manual_review["contacts"]])
+        self.assertIn("400-123-4567",[c["value"] for c in vc.manual_review["contacts"]])
+        self.assertFalse(vc.evidence)
+        self.assertFalse(vc.proved)
+        # Platform customer service still cannot become the company's number.
+        platform=HTML+'<p>客服热线：400-123-4567</p>'
+        blocked=build_manual_review(claim(),Searcher([SearchHit(FIRM,COMPANY)]),Fetcher({FIRM:platform}),Budget(3,4,45))
+        self.assertNotIn("400-123-4567",[c["value"] for c in blocked.manual_review["contacts"]])
+
+    def test_brand_snippet_cannot_supply_fields_without_subject_confirmation(self):
+        url="https://brand.example.com/contact"
+        hit=SearchHit(url,"另一个品牌",snippet=COMPANY+"的合作伙伴。\n注册地址：另一家公司地址")
+        for fetcher in (Fetcher(),Fetcher({url:"<h1>其他企业有限公司</h1>"})):
+            vc=build_manual_review(claim(),Searcher([hit]),fetcher,Budget(3,4,45))
+            self.assertFalse(vc.manual_review["profile"])
+            self.assertFalse(vc.manual_review["contacts"])
+
+    def test_hidden_copyright_does_not_bind_other_brand(self):
+        url="https://brand.example.com/contact"
+        html='<h1>联系我们</h1><p>电话：010-99999999</p><footer hidden>Copyright © '+COMPANY+' 版权所有</footer>'
+        vc=build_manual_review(claim(),Searcher([SearchHit(url,"其他品牌",snippet=COMPANY)]),Fetcher({url:html}),Budget(3,4,45))
+        self.assertFalse(vc.manual_review["contacts"])
+
+    def test_explicit_host_companies_keep_separate_profiles_and_export(self):
+        c=claim().model_copy(update={"raw_text":COMPANY+"科研助理，驻企于：甲方科技有限公司、乙方科技有限公司","entities":{"company":COMPANY}})
+        vc=build_manual_review(c,Searcher(),Fetcher(),Budget(0,0,45))
+        related=vc.manual_review["relatedCompanies"]
+        self.assertEqual([r["company"] for r in related],["甲方科技有限公司","乙方科技有限公司"])
+        related[0]["profile"]={"registeredAddress":{"label":"注册地址","value":"示例地址","sourceUrl":FIRM}}
+        rep=report(vc)
+        self.assertIn("甲方科技有限公司",serve.render_material(rep))
+        self.assertIn("示例地址",serve.report_to_markdown(serve.to_presentation(rep)))
+        self.assertEqual(vc.status,"none")
+        self.assertFalse(vc.evidence)
+
     def test_registry_hostname_and_paths_are_strict(self):
         for url in ("https://qcc.com.evil.com/firm/123.html", "https://www.tianyancha.com.evil.com/company/12",
                     "https://www.qcc.com/firm/a.html@evil.com", "javascript:alert(1)"):

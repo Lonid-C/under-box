@@ -38,17 +38,33 @@ def firm_url(url):
         return False
 
 
-def _page_company(html, company):
-    """Require the company to be the exact page subject, not a related company.
+def _owned_company_page(html, company):
+    """A copyright owner can bind a branded website to its exact legal entity."""
+    from bs4 import BeautifulSoup
+    from .public_context import visible_text
+    soup = BeautifulSoup(html, "html.parser")
+    for node in soup.select('footer,[class*="footer"],[id*="footer"]'):
+        text = _compact(visible_text(str(node)))
+        name = _compact(company)
+        if name in text and re.search(r"(?:版权所有.{0,120}" + re.escape(name) +
+                r"|" + re.escape(name) + r".{0,35}版权所有|(?:copyright|©).{0,150}" + re.escape(name) + r")", text, re.I):
+            return True
+    return False
 
-    This intentionally doesn't resolve short brand names into invented legal
-    entities. In that case the search link remains available for human selection.
-    """
+
+def _page_company(html, company):
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     names = [node.get_text(" ", strip=True) for node in soup.select("h1")]
+    if names and any(_compact(name) == _compact(company) for name in names):
+        return True
+    # An explicitly different legal entity in the heading wins over footer hints.
+    if any(re.search(r"有限公司|有限责任公司", name) for name in names):
+        return False
+    if _owned_company_page(html, company):
+        return True
     if names:
-        return _compact(company) in {_compact(name) for name in names}
+        return False
     if soup.title:
         names.append(re.split(r"\s*[-_|｜]\s*", soup.title.get_text(" ", strip=True))[0])
     return _compact(company) in {_compact(name) for name in names}
@@ -89,6 +105,13 @@ def public_phones(html, company):
 
 COMPANY_FIELDS = {
     "introduction": ("公司简介", "企业简介", "简介", "公司介绍"),
+    "registeredAddress": ("注册地址", "注册办事处地址", "注册办事处", "住所"),
+    "officeAddress": ("办公地址", "联系地址", "公司地址", "办公地点"),
+    "establishedAt": ("成立日期", "成立时间", "注册成立日期"),
+    "registrationNumber": ("统一社会信用代码", "公司注册编号", "商业登记号码"),
+    "companyType": ("企业类型", "公司类型"),
+    "registeredCapital": ("注册资本",),
+    "registrationStatus": ("登记状态", "经营状态"),
     "businessScope": ("经营范围",),
     "size": ("公司规模", "企业规模", "人员规模", "员工人数", "参保人数"),
     "mainBusiness": ("主营业务", "主要业务", "主营产品", "业务范围"),
@@ -112,7 +135,28 @@ def registry_url(url):
     return ""
 
 
-def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: None):
+def related_company_names(claim):
+    """Only explicitly named host companies; aliases are never resolved by guessing."""
+    names = []
+    values = claim.entities.get("host_companies") or []
+    if isinstance(values, str):
+        values = [values]
+    elif not isinstance(values, (list, tuple)):
+        values = []
+    match = re.search(r"(?:驻企于|驻企单位|合作企业)\s*[:：]?\s*([^\n。；;]{2,240})", claim.raw_text)
+    if match:
+        values = [*values, *re.split(r"[、，,]", match.group(1))]
+    primary = company_name(claim)
+    for value in values:
+        name = str(value).strip()
+        if (name != primary and name in claim.raw_text and len(name) <= 100
+                and re.fullmatch(r"[\w\u3400-\u9fff（）()·-]{2,}(?:有限公司|有限责任公司)", name)
+                and name not in names):
+            names.append(name)
+    return names[:3]
+
+
+def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: None, *, _include_related=True):
     from .public_context import (now, public_url, visible_text, labeled_fields, source_field,
                                  public_contacts, search_safely, read_safely)
     company = company_name(claim)
@@ -133,7 +177,7 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
                 progress("定位" + company + "的" + ("企查查" if site == "qcc.com" else "天眼查") + "资料")
                 yield from search_safely(searcher, '"' + company.replace('"', '') + '"', site,
                                         budget, review["limitations"])
-            yield from search_safely(searcher, company + " 公司简介 主营业务 经营范围", None,
+            yield from search_safely(searcher, company + " 官网 联系方式 注册地址 经营范围", None,
                                     budget, review["limitations"])
         seen = set()
         for hit in candidates():
@@ -149,12 +193,14 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
                     _compact(title_subject).startswith(_compact(company)) and
                     suffix in {"工商信息", "企业信息", "公司简介", "联系方式", "法律诉讼"})
             # Never resolve a brand, subsidiary or related-company mention into a legal entity.
-            if not exact_subject:
+            if not exact_subject and (registry or _compact(company) not in _compact(hit.snippet or "")):
                 continue
             if registry:
                 review["registryLinks"].append({"title": registry + "企业详情（搜索命中，主体待回读）",
                                                 "url": hit.url, "verifiedSubject": False})
             html, resolved = read_safely(fetcher, hit.url, budget)
+            if not exact_subject and (not html or not _page_company(html, company)):
+                continue
             method = "text"
             if not html or not _page_company(html, company) or (registry and registry_url(resolved) != registry):
                 # Search snippets remain visible as lower-confidence leads, with their provenance.
@@ -170,7 +216,7 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
                     review["registryLinks"][-1].update(title=registry + "企业详情", url=resolved, verifiedSubject=True)
                 # Contacts are only extracted from a subject-confirmed page, never a snippet.
                 review["contacts"].extend(public_contacts(text, resolved, kind="公司公开办公联系方式",
-                                                          allow_mobile=True))
+                                                          allow_mobile=True, allow_service=_owned_company_page(html, company)))
             text = re.split(r"相关推荐|相关企业|推荐企业|你可能感兴趣", text)[0]
             fields = labeled_fields(text, COMPANY_FIELDS, resolved, hit.title, method)
             if "introduction" not in fields:
@@ -199,6 +245,13 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
                                     if key not in review["profile"]]
     else:
         review["limitations"].append("输入未明确公司名称，请补充公司全称后查询。")
+    if _include_related:
+        review["relatedCompanies"] = []
+        for name in related_company_names(claim):
+            host = claim.model_copy(update={"entities": {**claim.entities, "company": name}})
+            child = build_manual_review(host, searcher, fetcher, budget, progress, _include_related=False).manual_review
+            child["relationship"] = "驻企单位"
+            review["relatedCompanies"].append(child)
     return VerifiedClaim(claim=claim, status="none", evidence=[], proved=[], unproved=list(claim.elements),
                          needs_human=True, search_exhausted=budget.exhausted, manual_review=review,
                          next_step="打开企业资料和公开联系渠道，确认公司主体后转接实习负责人，人工核对岗位和时间。",

@@ -139,11 +139,16 @@ def render_context_material(review: dict) -> str:
     for field in review.get("profile", {}).values():
         lines.append(field.get("label", "") + "：" + field.get("value", "") +
                      "｜来源：" + field.get("sourceUrl", "") + "｜" +
-                     ("仅搜索摘要" if field.get("extractionMethod") == "search_snippet" else "页面原文节选"))
+                     ("仅搜索摘要" if field.get("extractionMethod") == "search_snippet" else "资料概述" if field.get("valueKind") == "summary" else "页面原文节选"))
     for contact in review.get("contacts", []):
         lines.append(contact.get("kind", "公开办公联系渠道") + "：" +
                      str(contact.get("value") or contact.get("phone") or contact.get("email") or "") +
                      "｜出处：" + contact.get("sourceUrl", ""))
+    if review.get("subjectNote"):
+        lines.append("主体核对：" + review["subjectNote"])
+    for related in (review.get("relatedCompanies") or [])[:4]:
+        lines.append("关联单位类型：" + related.get("relationship", "关联单位"))
+        lines.append(render_context_material({**related, "relatedCompanies": []}))
     lines.extend([review.get("note", ""), *review.get("limitations", [])])
     return "\n".join(lines)
 

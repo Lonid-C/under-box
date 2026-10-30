@@ -70,21 +70,24 @@ EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-])
 PHONE = re.compile(r"(?<![\d*])(?:\+?86[ -]?)?(?:0\d{2,3}[ -]?\d{7,8}|400[ -]?\d{3}[ -]?\d{4}|800[ -]?\d{3}[ -]?\d{4}|1[3-9]\d{9})(?![\d*])")
 
 
-def public_contacts(text, url, *, kind, allow_mobile=False):
+def public_contacts(text, url, *, kind, allow_mobile=False, allow_service=False):
     """Only contact-labeled blocks; no candidate contacts, fax, or masked numbers."""
     contacts, seen = [], set()
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        if not re.search(r"电话|联系方式|联系邮箱|电子邮[件箱]|邮箱|E-?mail|Telephone|Phone|招生咨询|教务办", line, re.I):
+        labels = r"电话|总机|联系方式|联系邮箱|电子邮[件箱]|邮箱|E-?mail|Telephone|Phone|招生咨询|教务办"
+        if allow_service:
+            labels += r"|服务热线|客服热线"
+        if not re.search(labels, line, re.I):
             continue
-        if re.search(r"客服|技术支持|个人手机|私人", line, re.I) or (
+        if (re.search(r"技术支持|个人手机|私人", line, re.I) or (not allow_service and "客服" in line)) or (
                 "传真" in line and not re.search(r"电话|Telephone|Phone", line, re.I)):
             continue
         block = " ".join(lines[max(0, i-1):i+3])[:450]
         # A following fax label is not another contact.
         candidate = re.sub(r"电话\s*[/／、及和]\s*传真|传真\s*[/／、及和]\s*电话",
                            "电话", " ".join(lines[i:i+3]))
-        candidate = re.split(r"传真|技术支持|客服", candidate)[0]
+        candidate = re.split(r"传真|技术支持" + ("" if allow_service else "|客服"), candidate)[0]
         values = [("email", m.group()) for m in EMAIL.finditer(candidate)]
         values += [("phone", m.group()) for m in PHONE.finditer(candidate)
                    if allow_mobile or not re.fullmatch(r"(?:\+?86[ -]?)?1[3-9]\d{9}", m.group())]

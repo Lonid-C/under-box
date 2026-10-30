@@ -250,3 +250,9 @@ body[data-stage="hero"] .chat{border:2px solid var(--ink);box-shadow:var(--shado
 .chat-toggle.is-dragging{cursor:grabbing}
 .bocy-image{-webkit-user-drag:none;pointer-events:none}
 .chat-toggle,.chat-toggle:hover,.chat-toggle:active{box-shadow:none!important}
+
+.company-card-title{font-weight:700;font-size:14px}
+.company-subject-note{padding:10px 12px;border-left:3px solid var(--pink);background:var(--paper)}
+.related-company-card{margin-top:14px;border:1px solid var(--ink);border-radius:var(--rad);padding:12px;background:var(--paper)}
+.related-company-card>summary{cursor:pointer;font-weight:650;font-size:13px}
+.related-company-card[open]>summary{margin-bottom:12px}

@@ -197,7 +197,7 @@ def build_prompt(material: str, question: str, web_context: dict | None = None) 
 # ── 真实核验：Report → 网页端形状 ─────────────────────────────────────────
 
 def _search_configured() -> bool:
-    return bool(os.environ.get("SEARCH_API_KEY") or os.environ.get("BRAVE_SEARCH_API_KEY"))
+    return bool(os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("SEARCH_API_KEY") or os.environ.get("BRAVE_SEARCH_API_KEY"))
 
 
 def _llm_ready() -> bool:
@@ -1081,9 +1081,64 @@ class Handler(BaseHTTPRequestHandler):
             return self._split_stream()
         if path == "/api/ask/stream":
             return self._ask_stream()
+        if path == "/api/voice/asr":
+            return self._voice_asr()
+        if path == "/api/voice/tts":
+            return self._voice_tts()
         if path == "/api/plan":
             return self._plan()
         return self._json({"error": "not found"}, 404)
+
+    def _voice_asr(self) -> None:
+        import httpx
+        import io
+        import wave
+        if self._st()["oby"] is None:
+            return self._json({"error": "请先完成核验"}, 409)
+        try:
+            size = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return self._json({"error": "录音格式无效"}, 400)
+        if size <= 44 or size > 8 * 1024 * 1024:
+            return self._json({"error": "录音大小不符合要求"}, 413)
+        audio = self.rfile.read(size)
+        try:
+            with wave.open(io.BytesIO(audio), "rb") as w:
+                if w.getsampwidth() != 2 or w.getnchannels() != 1 or w.getframerate() not in (8000,16000,22050,24000,32000,44100,48000) or w.getnframes() / w.getframerate() > 120:
+                    raise ValueError("unsupported")
+            key = os.environ.get("DEEPSEEK_API_KEY", "")
+            if not key:
+                return self._json({"error": "语音服务尚未配置"}, 503)
+            r = httpx.post("https://api.deepseek.com/v1/tools/asr", headers={"Authorization": f"Bearer {key}"}, files={"file": ("speech.wav", audio, "audio/wav")}, timeout=120)
+            r.raise_for_status()
+            data = r.json()
+            if not isinstance(data.get("text"), str):
+                raise ValueError("invalid response")
+            return self._json({"text": data["text"], "durationMs": data.get("duration_ms")})
+        except (wave.Error, EOFError, ValueError):
+            return self._json({"error": "无法识别录音格式"}, 400)
+        except httpx.HTTPError:
+            return self._json({"error": "语音识别暂不可用，请重试"}, 503)
+
+    def _voice_tts(self) -> None:
+        import httpx
+        if self._st()["oby"] is None:
+            return self._json({"error": "请先完成核验"}, 409)
+        payload = self._read_json()
+        text = payload.get("text", "") if isinstance(payload, dict) else ""
+        if not isinstance(text, str) or not text.strip() or len(text) > 3000:
+            return self._json({"error": "朗读内容不能为空或超过 3000 字"}, 400)
+        key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not key:
+            return self._json({"error": "语音服务尚未配置"}, 503)
+        try:
+            r = httpx.post("https://api.deepseek.com/v1/tools/tts", headers={"Authorization": f"Bearer {key}"}, json={"text": text, "voice_id": "stella", "format": "wav", "filter_markdown": True}, timeout=120)
+            r.raise_for_status()
+            if not r.content.startswith(b"RIFF") or len(r.content) < 44:
+                raise ValueError("invalid audio")
+            return self._send(r.content, "audio/wav")
+        except (httpx.HTTPError, ValueError):
+            return self._json({"error": "语音朗读暂不可用，请重试"}, 503)
 
     def _read_json(self) -> dict:
         try:

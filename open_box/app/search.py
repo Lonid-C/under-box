@@ -1421,15 +1421,20 @@ def build_searcher(provider: str | None = None) -> Searcher:
     """
     from .api_config import search_credentials
     credentials = search_credentials()
-    if credentials is not None:
-        # Account binding is exclusive: never borrow another account's Brave key
-        # or send the bound Zhipu key to a globally configured custom endpoint.
-        return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
-    name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
+    name = (provider or os.environ.get("SEARCH_PROVIDER") or "deepseek").lower()
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
-    if name == "brave":
-        return BraveSearcher() if brave_key else NullSearcher()
-    if not os.environ.get("SEARCH_API_KEY"):
-        return BraveSearcher() if brave_key else NullSearcher()
-    primary = SEARCH_PROVIDERS.get(name, ZhipuSearcher)()
-    return FallbackSearcher(primary, BraveSearcher()) if brave_key else primary
+    if credentials is not None:
+        legacy = ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
+    elif name == "brave":
+        legacy = BraveSearcher() if brave_key else None
+    elif os.environ.get("SEARCH_API_KEY"):
+        legacy_name = name if name in SEARCH_PROVIDERS and name != "deepseek" else "zhipu"
+        legacy = SEARCH_PROVIDERS[legacy_name]()
+        if brave_key and legacy_name != "brave":
+            legacy = FallbackSearcher(legacy, BraveSearcher())
+    else:
+        legacy = BraveSearcher() if brave_key else None
+    if name == "deepseek":
+        from .deepseek_search import DeepSeekSearcher, FailureOnlyFallbackSearcher
+        return FailureOnlyFallbackSearcher(DeepSeekSearcher(), legacy)
+    return legacy or NullSearcher()

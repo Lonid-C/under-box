@@ -990,6 +990,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
       <label class="chat-web"><input id="chatWeb" type="checkbox"> 联网搜索 <span>附来源</span></label>
       <div class="in">
         <textarea id="chatIn" rows="1" placeholder="问问 boxy，这份报告还缺什么？" aria-label="输入问题"></textarea>
+        <button class="send" id="chatMic" type="button" title="语音输入" aria-label="开始录音">🎙</button>
         <button class="send" id="chatStop" type="button" hidden title="停止生成">停止</button>
         <button class="send" id="chatSend" type="button" disabled>发送</button>
       </div>
@@ -1874,6 +1875,66 @@ function initChat() {
   const dock = $('chatDock'), panel = $('chat'), body = $('chatBody');
   const input = $('chatIn'), send = $('chatSend'), stop = $('chatStop');
   let busy = false, activePainter = null;
+  let recording = null, speaking = null;
+  const mic = $('chatMic');
+  function wavBlob(chunks, rate) {
+    const input = new Float32Array(chunks.reduce((n, a) => n + a.length, 0));
+    let pos = 0; for (const a of chunks) { input.set(a, pos); pos += a.length; }
+    const outRate = 16000, count = Math.floor(input.length * outRate / rate);
+    const buffer = new ArrayBuffer(44 + count * 2), v = new DataView(buffer);
+    const write = (at, str) => { for(let i=0;i<str.length;i++) v.setUint8(at+i,str.charCodeAt(i)); };
+    write(0,'RIFF');v.setUint32(4,36+count*2,true);write(8,'WAVE');write(12,'fmt ');
+    v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+    v.setUint32(24,outRate,true);v.setUint32(28,outRate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);
+    write(36,'data');v.setUint32(40,count*2,true);
+    for(let i=0;i<count;i++){const x=Math.max(-1,Math.min(1,input[Math.floor(i*rate/outRate)]));v.setInt16(44+i*2,x<0?x*32768:x*32767,true);}
+    return new Blob([buffer],{type:'audio/wav'});
+  }
+  async function stopRecording() {
+    const rec=recording;if(!rec)return;recording=null;
+    clearTimeout(rec.timer);rec.processor.disconnect();rec.source.disconnect();
+    rec.stream.getTracks().forEach(t=>t.stop());await rec.ctx.close();
+    if(rec.epoch !== QUERY_EPOCH){mic.textContent='🎙';return;}
+    mic.textContent='识别中…';mic.disabled=true;
+    try {
+      const res=await fetch('/api/voice/asr',{method:'POST',headers:{'Content-Type':'audio/wav'},body:wavBlob(rec.chunks,rec.rate)});
+      const data=await res.json();if(!res.ok)throw new Error(data.error||'识别失败');
+      if(rec.epoch !== QUERY_EPOCH)return;
+      input.value=(input.value ? input.value+' ' : '')+data.text;
+      input.dispatchEvent(new Event('input'));input.focus();
+    } catch(e) { UnderboxUI.toast(e.message || '语音识别失败','error'); }
+    finally {mic.disabled=false;mic.textContent='🎙';mic.setAttribute('aria-label','开始录音');}
+  }
+  mic.addEventListener('click',async()=>{
+    if(recording){await stopRecording();return;}
+    if(!REPORT){UnderboxUI.toast('完成核验后即可语音提问');return;}
+    let stream;
+    try {
+      stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const source=ctx.createMediaStreamSource(stream), processor=ctx.createScriptProcessor(4096,1,1), chunks=[];
+      source.connect(processor);processor.connect(ctx.destination);
+      processor.onaudioprocess=e=>chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      recording={stream,ctx,source,processor,chunks,epoch:QUERY_EPOCH,rate:ctx.sampleRate,timer:setTimeout(()=>stopRecording(),120000)};
+      mic.textContent='停止录音';mic.setAttribute('aria-label','停止录音');
+    } catch(e) {stream?.getTracks().forEach(t=>t.stop());UnderboxUI.toast('无法使用麦克风，请检查浏览器权限','error');}
+  });
+  function addSpeechButton(answer, text) {
+    const button=el('button',{type:'button',class:'ghost',text:'朗读'});
+    button.addEventListener('click',async()=>{
+      if(speaking){speaking.audio.pause();URL.revokeObjectURL(speaking.url);speaking.button.textContent='朗读';const same=speaking.button===button;speaking=null;if(same)return;}
+      button.disabled=true;button.textContent='准备中…';
+      try {
+        const res=await fetch('/api/voice/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text.slice(0,3000)})});
+        if(!res.ok){const data=await res.json();throw new Error(data.error||'朗读失败');}
+        const url=URL.createObjectURL(await res.blob()), audio=new Audio(url);
+        speaking={audio,url,button};button.textContent='停止朗读';
+        audio.onended=()=>{if(speaking?.audio===audio){URL.revokeObjectURL(url);speaking=null;button.textContent='朗读';}};
+        await audio.play();
+      } catch(e){if(speaking?.button===button){speaking.audio.pause();URL.revokeObjectURL(speaking.url);speaking=null;}button.textContent='朗读';UnderboxUI.toast(e.message||'朗读失败','error');}
+      finally{button.disabled=false;}
+    });answer.appendChild(button);
+  }
   const updateWebNote = () => {
     $('chatNote').textContent = $('chatWeb').checked
       ? '联网资料会附上来源，不会改动报告结论。'
@@ -1966,6 +2027,7 @@ function initChat() {
       if (painter.closed) throw new DOMException('已停止生成','AbortError');
       if (epoch !== QUERY_EPOCH) return;
       if (!acc) painter.status('本次没有收到回答，可以稍后再试。');
+      if (acc) addSpeechButton(answer, acc);
       UnderboxUI.answerReady(answer);
       $('chatAnnouncement').textContent = 'boxy 已回答。';
     } catch (err) {

@@ -274,7 +274,11 @@ class ContextTests(unittest.TestCase):
 class ContextAPITests(unittest.TestCase):
     def setUp(self):
         import threading
+        import os
         from http.server import ThreadingHTTPServer
+        self._env_patch = patch.dict(os.environ, {"DEEPSEEK_QA_NATIVE": "0"})
+        self._env_patch.start()
+        self.addCleanup(self._env_patch.stop)
         self.rep = report(VerifiedClaim(claim=claim(), status="none"))
         self.state = {"oby": self.rep, "presentation": serve.to_presentation(self.rep), "profile": None}
         state = self.state

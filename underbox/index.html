@@ -633,6 +633,9 @@ body[data-stage="hero"] .chat{display:none}          /* 落地页不出现，出
 .msg.me{display:flex;flex-direction:column;align-items:flex-end}
 .msg.me .bub{background:var(--ink);color:#fff}
 .msg.ai .bub{background:var(--cream)}
+.msg.ai .bub ul,.msg.ai .bub ol{margin:3px 0;padding-left:22px}
+.msg.ai .bub a{color:inherit;text-decoration:underline}
+.msg.ai .bub code{font-family:monospace;background:#ece7df;padding:0 3px}
 .msg.err .bub{background:#FAECE7;border-color:#712B13;color:#712B13}
 .msg .tag{display:inline-block;font-size:9.5px;font-weight:600;border:1.5px solid var(--ink);border-radius:3px;padding:0 5px;margin-left:6px;vertical-align:1px}
 .typing i{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--ink-2);margin-right:3px;animation:blink 1.05s infinite}
@@ -834,10 +837,11 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
             </svg>
           </div>
           <b>把简历扔进来</b>
-          <span class="s" id="hint">拖拽文件到这里，或点击选择 · PDF / DOCX / TXT / MD</span>
+          <span class="s" id="hint">拖拽文件到这里，或点击选择 · PDF / DOC / DOCX / TXT / MD</span>
         </div>
         <p class="ub-upload-note"><span aria-hidden="true">⌁</span>上传后选择需要核验的条目。</p>
-        <input type="file" id="file" accept=".pdf,.docx,.md,.txt" hidden>
+        <div class="hint" id="fileProcessingNotice">上传的简历将发送至 DeepSeek 解析。</div>
+        <input type="file" id="file" accept=".pdf,.doc,.docx,.md,.txt" hidden>
 
         <div class="fileline" id="fileline">
           <span class="ic" id="fileKind">PDF</span>
@@ -1006,7 +1010,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   </div>
 </div>
 <script src="/boxy-drag.js?v=20261030-drag1"></script>
-<script src="/ui.js?v=20261030-drag1"></script>
+<script src="/ui.js?v=20261114-deepseek1"></script>
 <script>
 let REPORT = null;
 let QUERY_EPOCH = 0;
@@ -1030,7 +1034,7 @@ const summaryOf = t => {
   const s = (t || '').replace(DATE_PREFIX, '').replace(DATE_SUFFIX, '').trim();
   return s || t;
 };
-const OK_EXT = ['pdf','docx','md','txt'];
+const OK_EXT = ['pdf','doc','docx','md','txt'];
 
 const $ = id => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -1482,7 +1486,7 @@ function runSteps() {
 /* ══ 投料交互 ═══════════════════════════════════ */
 let started = false;
 let pendingUrl = null;           // 个人主页模式下用户贴的网址
-const HINT_DEFAULT = '拖拽文件到这里，或点击选择 · PDF / DOCX / TXT / MD';
+const HINT_DEFAULT = '拖拽文件到这里，或点击选择 · PDF / DOC / DOCX / TXT / MD';
 const URL_TIP = '请输入本人或所在单位发布的公开个人主页。';
 
 function reject(name) {
@@ -1783,12 +1787,18 @@ async function loadClaimPlan(claimId, out, btn) {
    这里把已完成任务的累计（done）与进行中任务的累计（cur）相加。新上传一份简历才清零。 */
 const Usage = {
   done: null, cur: null,
-  blank: () => ({ deepseek: { calls: 0, in: 0, cached: 0, out: 0, tokens: 0, yuan: 0 },
+  blank: () => ({ deepseek: { calls: 0, in: 0, cached: 0, out: 0, tokens: 0, yuan: 0, tools: {} },
                   glm: { calls: 0, in: 0, out: 0, tokens: 0, searches: 0, searchYuan: 0, yuan: 0 } }),
   add(a, b) {
     const o = this.blank();
     for (const side of ['deepseek', 'glm']) for (const k of Object.keys(o[side])) {
       const x = a?.[side]?.[k], y = b?.[side]?.[k];
+      if (k === 'tools') {
+        o[side][k] = {};
+        for(const name of new Set([...Object.keys(x || {}), ...Object.keys(y || {})]))
+          o[side][k][name] = (x?.[name] || 0) + (y?.[name] || 0);
+        continue;
+      }
       // yuan 为 null = 单价未配置；任一方未知则合计也未知
       o[side][k] = (k === 'yuan' && (x === null || y === null)) ? null : (x || 0) + (y || 0);
     }
@@ -1801,19 +1811,23 @@ const Usage = {
   render() {
     const t = this.total(), d = t.deepseek, g = t.glm;
     const dock = document.getElementById('usageDock');
-    const any = d.calls || g.calls || g.searches;
+    const any = d.calls || g.calls || g.searches || Object.keys(d.tools || {}).length;
     dock.hidden = !any;
     dock.classList.toggle('idle', !this.cur);
     const n = v => Number(v || 0).toLocaleString('zh-CN');
     const yuan = v => v === null ? '' : ' · ¥' + Number(v).toFixed(v < 1 ? 4 : 2);
     const row = (k, main, sub) => `<div class="u-row"><span class="u-k">${k}</span><span class="u-v">${main}<span class="u-sub">${sub}</span></span></div>`;
     const dsMain = `${n(d.tokens)} tokens` + yuan(d.yuan);
-    const dsSub = `输入 ${n(d.in)}${d.cached ? `（缓存 ${n(d.cached)}）` : ''} · 输出 ${n(d.out)} · ${n(d.calls)} 次调用`;
+    const tools=d.tools || {};
+    const toolText=[['search','搜索','次'],['fetch','读页','次'],['ocr_pages','OCR','页'],
+      ['file_upload','文件','次'],['asr_seconds','语音识别','秒'],['tts_chars','语音合成','输入字符']]
+      .filter(([key])=>tools[key]).map(([key,label,unit])=>label+' '+n(tools[key])+unit).join(' · ');
+    const dsSub = `输入 ${n(d.in)}${d.cached ? `（缓存 ${n(d.cached)}）` : ''} · 输出 ${n(d.out)} · ${n(d.calls)} 次调用` + (toolText ? ' · '+toolText : '');
     const glMain = `${n(g.searches)} 次搜索` + yuan(g.yuan ?? g.searchYuan);
     const glSub = g.tokens ? `搜索 ${n(g.searches)} 次 · 模型 ${n(g.tokens)} tokens` : '按次计费（智谱 web_search）';
     document.getElementById('usageBody').innerHTML =
       row('DeepSeek', dsMain, dsSub) + row('GLM', glMain, glSub) +
-      (d.yuan === null && d.tokens ? '<div class="u-note">DeepSeek 折算金额需配置单价环境变量，当前仅显示 tokens。</div>' : '');
+      (d.yuan === null && d.tokens ? '<div class="u-note">DeepSeek 工具用量按实际调用显示，金额以供应商账单为准。</div>' : '');
   },
 };
 document.getElementById('usageHead').addEventListener('click', () => {
@@ -1903,36 +1917,69 @@ function initChat() {
       input.value=(input.value ? input.value+' ' : '')+data.text;
       input.dispatchEvent(new Event('input'));input.focus();
     } catch(e) { UnderboxUI.toast(e.message || '语音识别失败','error'); }
-    finally {mic.disabled=false;mic.textContent='🎙';mic.setAttribute('aria-label','开始录音');}
+    finally {mic.disabled=false;mic.textContent='🎙';mic.title='语音输入';mic.setAttribute('aria-label','开始录音');}
   }
   mic.addEventListener('click',async()=>{
     if(recording){await stopRecording();return;}
     if(!REPORT){UnderboxUI.toast('完成核验后即可语音提问');return;}
     let stream;
+    const epoch=QUERY_EPOCH;mic.disabled=true;
     try {
       stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(epoch !== QUERY_EPOCH || !REPORT){stream.getTracks().forEach(t=>t.stop());return;}
       const ctx=new (window.AudioContext||window.webkitAudioContext)();
       const source=ctx.createMediaStreamSource(stream), processor=ctx.createScriptProcessor(4096,1,1), chunks=[];
       source.connect(processor);processor.connect(ctx.destination);
       processor.onaudioprocess=e=>chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
       recording={stream,ctx,source,processor,chunks,epoch:QUERY_EPOCH,rate:ctx.sampleRate,timer:setTimeout(()=>stopRecording(),120000)};
-      mic.textContent='停止录音';mic.setAttribute('aria-label','停止录音');
+      mic.textContent='停止录音';mic.title='停止录音';mic.setAttribute('aria-label','停止录音');
     } catch(e) {stream?.getTracks().forEach(t=>t.stop());UnderboxUI.toast('无法使用麦克风，请检查浏览器权限','error');}
+    finally {mic.disabled=false;}
   });
+  const stopSpeech=()=>{
+    if(!speaking)return;
+    const current=speaking;speaking=null;
+    current.controller.abort();
+    if(current.audio){current.audio.pause();current.audio.src='';}
+    if(current.url)URL.revokeObjectURL(current.url);
+    current.button.textContent='朗读';
+  };
+  function cancelRecording() {
+    if(!recording)return;
+    const rec=recording;recording=null;clearTimeout(rec.timer);
+    rec.processor.disconnect();rec.source.disconnect();
+    rec.stream.getTracks().forEach(t=>t.stop());rec.ctx.close();
+    mic.disabled=false;mic.textContent='🎙';mic.title='语音输入';mic.setAttribute('aria-label','开始录音');
+  }
   function addSpeechButton(answer, text) {
     const button=el('button',{type:'button',class:'ghost',text:'朗读'});
     button.addEventListener('click',async()=>{
-      if(speaking){speaking.audio.pause();URL.revokeObjectURL(speaking.url);speaking.button.textContent='朗读';const same=speaking.button===button;speaking=null;if(same)return;}
-      button.disabled=true;button.textContent='准备中…';
+      const same=speaking?.button===button;
+      stopSpeech();if(same)return;
+      const session={button,controller:new AbortController(),audio:null,url:null,epoch:QUERY_EPOCH};
+      speaking=session;button.textContent='停止朗读';
+      // Small chunks fit the API's billed-character limit and cover the whole answer.
+      const chunks=Array.from(text).reduce((out,ch)=>{
+        if(!out.length || out[out.length-1].length>=2500)out.push('');
+        out[out.length-1]+=ch;return out;
+      },[]);
       try {
-        const res=await fetch('/api/voice/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text.slice(0,3000)})});
-        if(!res.ok){const data=await res.json();throw new Error(data.error||'朗读失败');}
-        const url=URL.createObjectURL(await res.blob()), audio=new Audio(url);
-        speaking={audio,url,button};button.textContent='停止朗读';
-        audio.onended=()=>{if(speaking?.audio===audio){URL.revokeObjectURL(url);speaking=null;button.textContent='朗读';}};
-        await audio.play();
-      } catch(e){if(speaking?.button===button){speaking.audio.pause();URL.revokeObjectURL(speaking.url);speaking=null;}button.textContent='朗读';UnderboxUI.toast(e.message||'朗读失败','error');}
-      finally{button.disabled=false;}
+        for(const part of chunks){
+          if(speaking!==session || session.epoch!==QUERY_EPOCH)break;
+          const res=await fetch('/api/voice/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({text:part}),signal:session.controller.signal});
+          if(!res.ok){const data=await res.json();throw new Error(data.error||'朗读失败');}
+          if(speaking!==session || session.epoch!==QUERY_EPOCH)break;
+          session.url=URL.createObjectURL(await res.blob());session.audio=new Audio(session.url);
+          await new Promise((resolve,reject)=>{
+            session.audio.onended=resolve;session.audio.onerror=()=>reject(new Error('音频播放失败'));
+            session.controller.signal.addEventListener('abort',resolve,{once:true});
+            session.audio.play().catch(reject);
+          });
+          URL.revokeObjectURL(session.url);session.url=null;session.audio=null;
+        }
+      } catch(e){if(e.name!=='AbortError')UnderboxUI.toast(e.message||'朗读失败','error');}
+      finally{if(speaking===session)stopSpeech();}
     });answer.appendChild(button);
   }
   const updateWebNote = () => {
@@ -1945,6 +1992,7 @@ function initChat() {
 
   /* 没有报告就没有材料——问答在核验完成前是关着的 */
   const setChatReady = ready => {
+    if(!ready){cancelRecording();stopSpeech();}
     $('chatToggle').disabled = false;
     $('chatToggle').dataset.ready = String(ready);
     input.disabled = !ready;
@@ -2027,7 +2075,7 @@ function initChat() {
       if (painter.closed) throw new DOMException('已停止生成','AbortError');
       if (epoch !== QUERY_EPOCH) return;
       if (!acc) painter.status('本次没有收到回答，可以稍后再试。');
-      if (acc) addSpeechButton(answer, acc);
+      if (acc) { UnderboxUI.renderChatMarkdown(bub, acc); addSpeechButton(answer, acc); }
       UnderboxUI.answerReady(answer);
       $('chatAnnouncement').textContent = 'boxy 已回答。';
     } catch (err) {
@@ -2430,6 +2478,7 @@ async function probeMode() {
     MODE.real = !!h.verify;
     MODE.searchConfigured = !!h.searchConfigured;
     MODE.llmConfigured = h.llmConfigured !== false;
+    if(h.documentParser === 'local') $('fileProcessingNotice').textContent = '简历由服务器解析，正文用于模型核验。';
   } catch { MODE.real = false; }
   if (!MODE.real) {
     setFirstEmpty('核验服务暂时不可用，请稍后刷新或联系管理员。');
@@ -3332,6 +3381,9 @@ const Sheet = {
         this.field('思考模式', this.select('llm_thinking', s.llm_thinking || 'disabled', op.llm_thinking || [])),
         this.field('模型自定义端点', this.input('llm_endpoint', { ph: s.llm_endpoint || '留空用预设' }),
                    '只有「自定义（OpenAI 兼容）」需要填'),
+        this.field('简历解析', this.select('document_parser', s.document_parser || 'deepseek', op.document_parser || [])),
+        this.field('DeepSeek 网页读取', this.select('deepseek_fetch', s.deepseek_fetch || '1', op.deepseek_fetch || []), '1 开启，0 使用原读取器'),
+        this.field('DeepSeek 联网问答', this.select('deepseek_qa_native', s.deepseek_qa_native || '1', op.deepseek_qa_native || []), '1 开启，0 使用备用检索'),
         this.field('DeepSeek 密钥', this.input('deepseek_api_key', { type: 'password', ph: ph('deepseek_api_key') })),
         this.field('智谱密钥', this.input('zhipu_api_key', { type: 'password', ph: ph('zhipu_api_key') }),
                    'GLM 与 web_search 共用这一把'),
@@ -3453,7 +3505,11 @@ const Sheet = {
       this.kpi(q.unlimited ? '不限' : q.left, '剩余核验次数'),
       this.kpi(q.used, '累计已用'),
       this.kpi(u.runs || 0, '近 30 天核验'),
-      this.kpi(`¥${Number(u.yuan || 0).toFixed(2)}`, '近 30 天用量'))];
+      this.kpi(u.yuan == null ? '见账单' : `¥${Number(u.yuan).toFixed(2)}`, '近 30 天用量'))];
+    const toolUsage = u.deepseekTools || {};
+    out.push(this.card('DeepSeek 工具用量', '近 30 天',
+      el('p', {class:'ad-note', text:
+        `搜索 ${toolUsage.search || 0} 次 · 读页 ${toolUsage.fetch || 0} 次 · OCR ${toolUsage.ocr_pages || 0} 页 · 语音识别 ${toolUsage.asr_seconds || 0} 秒 · 语音合成 ${toolUsage.tts_chars || 0} 输入字符`})));
 
     if (!q.unlimited) {
       const pct = q.total > 0 ? Math.min(100, Math.round(q.used / q.total * 100)) : 0;
@@ -3540,7 +3596,7 @@ const Sheet = {
         el('td', { class: 'num', text: u.quota_total < 0 ? '不限' : u.quota_total }),
         el('td', { class: 'num', text: u.quota_used }),
         el('td', { class: 'num', text: u.runs || 0 }),
-        el('td', { class: 'num', text: `¥${Number(u.yuan || 0).toFixed(2)}` }),
+        el('td', { class: 'num', text: u.yuan == null ? '见账单' : `¥${Number(u.yuan).toFixed(2)}` }),
         el('td', { class: 'num', text: u.last_at || '—' }),
         el('td', {}, this.act('调配额', () => this.setQuota(u)))))
     ), el('p', { class: 'ad-note', text: '配额为 -1 表示不限额（管理员默认不限额）。' })));

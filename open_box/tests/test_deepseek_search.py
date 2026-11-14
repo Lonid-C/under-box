@@ -22,6 +22,23 @@ class DeepSeekSearchTests(unittest.TestCase):
             def search(self, *args, **kwargs): raise AssertionError("unexpected fallback")
         self.assertEqual(FailureOnlyFallbackSearcher(Searcher(), Backup()).search("x"), [])
 
+    def test_default_prefers_deepseek_with_account_key_as_fallback(self):
+        import os
+        from app.api_config import SearchCredentials, bind_search_credentials
+        from app.search import build_searcher, ZhipuSearcher
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY":"test", "SEARCH_PROVIDER":"deepseek"}, clear=True), \
+             bind_search_credentials(SearchCredentials("account-key")), \
+             patch("app.deepseek_client.DeepSeekClient.search", return_value=[]), \
+             patch.object(ZhipuSearcher, "search", return_value=[]) as backup:
+            self.assertEqual(build_searcher().search("q"), [])
+            backup.assert_not_called()
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY":"test", "SEARCH_PROVIDER":"deepseek"}, clear=True), \
+             bind_search_credentials(SearchCredentials("account-key")), \
+             patch("app.deepseek_client.DeepSeekClient.search", side_effect=ValueError("failed")), \
+             patch.object(ZhipuSearcher, "search", return_value=["fallback"]) as backup:
+            self.assertEqual(build_searcher().search("q"), ["fallback"])
+            backup.assert_called_once()
+
     def test_failure_triggers_backup(self):
         class Primary:
             def search(self, *args, **kwargs): raise SearchUnavailable("unavailable")

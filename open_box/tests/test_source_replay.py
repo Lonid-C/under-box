@@ -64,7 +64,7 @@ class ReplayTests(unittest.TestCase):
     def test_split_selected_full_upload_and_export_provenance(self):
         snap=self.snapshot();q=queue.Queue();holder={}
         doc=ParsedDocument("synthetic",[],"input","pdf")
-        with patch("app.parse.parse_document",return_value=doc), patch("app.source_replay.load_snapshot",return_value=snap), patch("serve.time.sleep"), patch("app.llm.build_llm",side_effect=AssertionError("no network model calls")):
+        with patch("serve.parse_upload_document",return_value=doc), patch("app.source_replay.load_snapshot",return_value=snap), patch("serve.time.sleep"), patch("app.llm.build_llm",side_effect=AssertionError("no network model calls")):
             serve.run_split_job(self.data,"renamed.pdf",q,holder)
             events=list(q.queue);done=next(e for e in events if e and e.get("done"))
             self.assertFalse(done.get("failed"));self.assertEqual(len(done["split"]["claims"]),2)
@@ -103,7 +103,7 @@ class ReplayTests(unittest.TestCase):
 
     def test_nonmatch_uses_regular_pipeline(self):
         q=queue.Queue()
-        with patch("app.parse.parse_document",return_value=ParsedDocument("synthetic",[],"input","pdf")), patch("app.source_replay.load_snapshot",return_value=None), patch("app.llm.build_llm",side_effect=ValueError("ordinary pipeline reached")):
+        with patch("serve.parse_upload_document",return_value=ParsedDocument("synthetic",[],"input","pdf")), patch("app.source_replay.load_snapshot",return_value=None), patch("app.llm.build_llm",side_effect=ValueError("ordinary pipeline reached")):
             serve.run_split_job(b"other","same-name.pdf",q,{})
         done=next(e for e in list(q.queue) if e and e.get("done"))
         self.assertTrue(done["failed"])

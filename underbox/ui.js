@@ -150,6 +150,43 @@
     static cancelAll(){for(const item of [...InkStream.active])item.cancel();}
   }
 
+
+  // Render after the ink animation completes; all provider text stays in text nodes.
+  function renderChatMarkdown(host, text) {
+    const lines=String(text || '').replace(/\\begin\{(?:itemize|enumerate)\}/g,'')
+      .replace(/\\end\{(?:itemize|enumerate)\}/g,'').split(/\r?\n/);
+    host.replaceChildren();let list=null, listType='';
+    function inline(parent, value) {
+      const rx=/(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g;
+      let offset=0,m;
+      while((m=rx.exec(value))){
+        parent.append(document.createTextNode(value.slice(offset,m.index)));
+        const token=m[0];let node;
+        if(token.startsWith('**') || token.startsWith('__')){
+          node=create('strong',{text:token.slice(2,-2)});
+        } else if(token.startsWith('`')) {
+          node=create('code',{text:token.slice(1,-1)});
+        } else {
+          const link=/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(token);
+          node=create('a',{href:link[2],target:'_blank',rel:'noopener noreferrer',text:link[1]});
+        }
+        parent.append(node);offset=rx.lastIndex;
+      }
+      parent.append(document.createTextNode(value.slice(offset)));
+    }
+    for(const line of lines){
+      const match=/^\s*(?:[-*+]\s+|\\item\s*|\d+[.)、]\s*)(.*)$/.exec(line);
+      if(match){
+        const type=/^\s*\d+[.)、]/.test(line)?'ol':'ul';
+        if(!list || listType!==type){list=create(type,{});host.append(list);listType=type;}
+        const item=create('li',{});inline(item,match[1]);list.append(item);
+      } else {
+        list=null;listType='';
+        const row=create('div',{});inline(row,line || '\u00a0');host.append(row);
+      }
+    }
+  }
+
   function sync() {
     if (!initialized) return;
     const report = typeof REPORT !== 'undefined' ? REPORT : null;
@@ -360,7 +397,7 @@
   window.InkStream=InkStream;
   window.UnderboxUI={
     toast,confirm:confirmAction,prompt:options=>confirmAction({...options,input:{value:String(options.value)}}),
-    sync,tour:startTour,icon,
+    sync,tour:startTour,icon,renderChatMarkdown,
     reportReady(report,{quiet=false}={}){
       const changed = report?.reportNo !== lastReport;
       sync();

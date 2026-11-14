@@ -36,7 +36,7 @@ search-strategy/     检索策略的设计文档与对照脚本
 
 实习条目提供企查查/天眼查入口，补充带来源的公司介绍、经营范围、规模、主营业务和公开业务联系信息。学历未完全核实时提供对应院校/专业官网及公开办公联系渠道。机构资料独立展示，不作为本人经历已证实的依据。
 
-报告问答提供动态问题建议和可选联网搜索，展示实际检索来源，保持原报告判定不变。字段、预算、访问限制和验证说明见 [功能文档](docs/INSTITUTION_CONTEXT_2026-10-29.md)。
+报告问答提供动态问题建议、可选联网搜索、语音输入和回答朗读，展示实际检索来源，保持原报告判定不变。字段与访问限制见 [功能文档](docs/INSTITUTION_CONTEXT_2026-10-29.md)；DeepSeek 接入、计量和回滚见 [接入说明](docs/DEEPSEEK_INTEGRATION.md)。
 
 ## 原版风格与 boxy
 
@@ -44,19 +44,19 @@ search-strategy/     检索策略的设计文档与对照脚本
 
 ## 怎么跑
 
-需要 Python 3.11+、Node 22+（插件用），以及两个 key：
+需要 Python 3.11+、Node 22+（插件用），以及 DeepSeek API 密钥：
 
 | 变量 | 用途 | 放哪 |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | 拆陈述、画像、澄清问题、问答 | `open_box/.env`（已 gitignore） |
-| `SEARCH_API_KEY` | 检索证据（默认智谱 web_search） | 同上 |
+| `DEEPSEEK_API_KEY` | 文件解析、模型、搜索、网页读取和语音 | `open_box/.env`（已 gitignore） |
+| `SEARCH_API_KEY` / `BRAVE_SEARCH_API_KEY` | 可选的故障备用搜索 | 同上 |
 
 ```bash
-cp open_box/.env.example open_box/.env     # 填入两个 key
+cp open_box/.env.example open_box/.env     # 填入 DeepSeek key
 cd underbox && ./start.sh                  # 打开 http://127.0.0.1:8787/
 ```
 
-拖一份 PDF 进去，约 3–10 分钟出结果。左下角状态窗口会实时显示流水线的**真实日志**。
+上传 PDF、DOC、DOCX、TXT 或 MD，先选择需要核验的条目。左下角状态窗口会实时显示流水线的**真实日志**。
 
 跑规则层验收（不需要 key）：
 

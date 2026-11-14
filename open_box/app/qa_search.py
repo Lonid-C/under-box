@@ -31,7 +31,8 @@ def question_query(question, report):
 
 def search_question(question, report, *, searcher=None, fetcher=None):
     searcher = searcher or build_searcher()
-    fetcher = fetcher or PageFetcher(timeout=7, connect_timeout=4)
+    from .deepseek_fetch import build_fetcher
+    fetcher = fetcher or build_fetcher(timeout=7, connect_timeout=4)
     budget = Budget(max_searches=1, max_page_reads=3, max_seconds=40)
     result = {"query": question_query(question, report), "sources": [], "limitations": [], "searchedAt": now()}
     if not result["query"]:

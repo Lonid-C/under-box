@@ -208,7 +208,8 @@ def verify_prepared(
     resume_path = prepared.resume_path
     say = progress or (lambda *a, **k: None)
     searcher = CachedSearcher(searcher or build_searcher())
-    fetcher = fetcher or PageFetcher()
+    from .deepseek_fetch import build_fetcher
+    fetcher = fetcher or build_fetcher()
     # 调用方显式给了预算工厂，就完全照它走（验收里就是用它把预算压到 1 次来跑断路场景）；
     # 没给的话才由**检索计划自己带预算**——档案说 8 次检索、执行层却仍用默认 6 的话，
     # 多出来的查询永远不会执行，差异化策略就成了装饰。

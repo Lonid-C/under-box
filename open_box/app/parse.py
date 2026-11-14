@@ -103,6 +103,36 @@ def detect_pdf_visual_risks(path: str | Path, *, background=(255, 255, 255)) -> 
         from pdfminer.high_level import extract_pages
         from pdfminer.layout import LAParams, LTChar, LTTextContainer
     except ImportError:
+        # PyMuPDF is a required server dependency. Its span geometry and colour
+        # provide the same checks when pdfminer is not installed.
+        try:
+            import fitz
+            with fitz.open(str(path)) as document:
+                for page_no, page in enumerate(document, 1):
+                    groups = {"tiny_font": [], "low_contrast": [], "offscreen": []}
+                    rect = page.rect
+                    for block in page.get_text("dict").get("blocks", []):
+                        for line in block.get("lines", []):
+                            for span in line.get("spans", []):
+                                text = (span.get("text") or "").strip()
+                                if not text:
+                                    continue
+                                if 0 < float(span.get("size", 0)) < TINY_FONT_PT:
+                                    groups["tiny_font"].append(text)
+                                color = int(span.get("color", 0))
+                                rgb = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+                                if max(abs(a-b) for a, b in zip(rgb, background)) < COLOR_DELTA:
+                                    groups["low_contrast"].append(text)
+                                if not fitz.Rect(span.get("bbox", (0,0,0,0))).intersects(rect):
+                                    groups["offscreen"].append(text)
+                    for kind, texts in groups.items():
+                        details = {"tiny_font": "字号过小", "low_contrast": "文字与背景近似同色",
+                                   "offscreen": "文字位于页面可视区域之外"}
+                        for text in list(dict.fromkeys(texts))[:100]:
+                            risks.append(InputRisk(kind=kind, detail=details[kind],
+                                                   excerpt=text[:120], locator=f"第{page_no}页"))
+        except (ImportError, OSError, ValueError):
+            pass
         return risks
 
     def _flag(kind, detail, text, page_no):
@@ -145,7 +175,7 @@ def scrub(text: str, risks: list[InputRisk]) -> str:
     out = []
     for line in text.splitlines():
         s = line.strip()
-        if s and any(s.startswith(b) or b.startswith(s) for b in bad):
+        if s and any(s.startswith(b) or b.startswith(s) or (len(b) >= 4 and b in s) for b in bad):
             out.append("［该行因命中输入风险检测已移除］")
         else:
             out.append(line)
@@ -160,7 +190,7 @@ _PDF_MAGIC = b"%PDF-"
 _OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
-def detect_document_type(path: str | Path) -> str:
+def detect_document_type(path: str | Path, *, allow_legacy: bool = False) -> str:
     """根据文件内容识别格式；文件名和浏览器上报的 MIME 不能作为依据。"""
     p = Path(path)
     with p.open("rb") as stream:
@@ -171,6 +201,8 @@ def detect_document_type(path: str | Path) -> str:
     if _PDF_MAGIC in head:
         return "pdf"
     if head.startswith(_OLE_MAGIC):
+        if allow_legacy and p.suffix.lower() == ".doc":
+            return "doc"
         raise ValueError("旧版 .doc 暂不支持，请另存为 PDF 或 DOCX 后上传")
     if zipfile.is_zipfile(p):
         with zipfile.ZipFile(p) as archive:

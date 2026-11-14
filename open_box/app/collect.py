@@ -1004,7 +1004,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         from .github_audit import audit_claim
         return audit_claim(claim, links, llm, progress=progress, budget=budget)
     budget = budget or Budget()
-    fetcher = fetcher or PageFetcher()
+    from .deepseek_fetch import build_fetcher
+    fetcher = fetcher or build_fetcher()
     if sources and not isinstance(fetcher, SourceGuardFetcher):
         fetcher = SourceGuardFetcher(fetcher, sources)
     if sources and not isinstance(searcher, SourceGuardSearcher):

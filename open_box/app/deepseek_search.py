@@ -23,17 +23,11 @@ class DeepSeekSearcher:
             query = query[:128]
         if not query:
             return []
+        from .deepseek_client import DeepSeekClient, DeepSeekError
         try:
-            r = httpx.post("https://api.deepseek.com/v1/tools/search",
-                           headers={"Authorization": f"Bearer {self.api_key}"},
-                           json={"query": query, "count": 10, "need_content": False},
-                           timeout=self.timeout)
-            r.raise_for_status()
-            payload = r.json()
-            if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
-                raise ValueError("Invalid search response")
+            items = DeepSeekClient(self.api_key).search(query)
             hits = []
-            for item in payload["results"]:
+            for item in items:
                 if not isinstance(item, dict):
                     continue
                 url = item.get("url")
@@ -45,8 +39,9 @@ class DeepSeekSearcher:
                                       snippet=str(item.get("snippet") or ""),
                                       publisher=str(item.get("site_name") or "")))
             return hits
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
+        except (DeepSeekError, httpx.HTTPError, ValueError, TypeError) as exc:
             raise SearchUnavailable("DeepSeek search unavailable") from exc
+
 
 class FailureOnlyFallbackSearcher:
     def __init__(self, primary, secondary):

@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.collect import Budget, collect_for_claim, extract_evidence
+from app.collect import Budget, collect_for_claim, extract_evidence, _read_and_extract
 from app.plan import Query, school_domain
 from app.schema import Claim
 from app.search import SearchHit, SearchUnavailable, ZhipuSearcher
@@ -58,10 +58,10 @@ class RecallTests(unittest.TestCase):
     def test_structured_content_does_not_require_display_page(self):
         fetcher = Fetcher()
         hit = SearchHit("https://github.com/example/demo", content="张三获一等奖")
-        with patch("app.collect.github_hits", return_value=[hit]):
-            found, _ = collect_for_claim(
-                claim(repo="example/demo"), "张三", object(), Extractor(), queries=[],
-                fetcher=fetcher, budget=Budget(max_searches=0, max_page_reads=2))
+        # 结构化来源的正文可直接提取；GitHub 项目核验现在走独立审计流程。
+        found = _read_and_extract(
+            claim(), [hit], fetcher, Extractor(), set(),
+            candidate_name="张三", budget=Budget(max_searches=0, max_page_reads=2))
         self.assertEqual(len(found), 1)
         self.assertEqual(fetcher.calls, [])
 
@@ -143,7 +143,10 @@ class RecallTests(unittest.TestCase):
         with patch("app.collect.paper_hits", return_value=[SearchHit(
                 "https://doi.org/test", content="张三获一等奖")]) as api:
             found, _ = collect_for_claim(
-                claim(), "张三", NoSearch(), Extractor(), fetcher=Fetcher(),
+                Claim(id="paper", raw_text="张三发表论文 Some paper", raw_locator="第1页",
+                      category="论文", date_label="2024", elements=["论文标题=Some paper"],
+                      entities={"title":"Some paper"}),
+                "张三", NoSearch(), Extractor(), fetcher=Fetcher(),
                 queries=[Query("Some paper", kind="crossref")])
         api.assert_called_once()
         self.assertTrue(found)

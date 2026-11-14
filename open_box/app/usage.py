@@ -61,7 +61,7 @@ def _ds_price(name: str) -> float | None:
 
 
 def _blank() -> dict:
-    return {"deepseek": {"calls": 0, "in": 0, "cached": 0, "out": 0, "tokenYuan": 0.0, "unpricedCalls": 0},
+    return {"deepseek": {"calls": 0, "in": 0, "cached": 0, "out": 0, "tokenYuan": 0.0, "unpricedCalls": 0, "tools": {}},
             "glm": {"calls": 0, "in": 0, "out": 0,
                     "searches": 0, "searchYuan": 0.0, "byEngine": {}, "tokenYuan": 0.0, "unpricedCalls": 0}}
 
@@ -159,6 +159,18 @@ class UsageMeter:
             g["byEngine"][engine] = g["byEngine"].get(engine, 0) + 1
         self._notify(scope)
 
+    def record_tool(self, operation: str, units: int = 1) -> None:
+        if not isinstance(units, int) or units < 0:
+            return
+        scope = self._scope.get()
+        with self._lock:
+            bucket = self._buckets.get(scope)
+            if bucket is None:
+                return
+            tools = bucket["deepseek"]["tools"]
+            tools[operation] = tools.get(operation, 0) + units
+        self._notify(scope)
+
     # -- 读取 -----------------------------------------------------------
     def snapshot(self, scope: str | None = None) -> dict:
         with self._lock:
@@ -200,13 +212,14 @@ class UsageMeter:
 def _copy(d: dict) -> dict:
     out = {k: dict(v) for k, v in d.items()}
     out["glm"]["byEngine"] = dict(d["glm"]["byEngine"])
+    out["deepseek"]["tools"] = dict(d["deepseek"]["tools"])
     return out
 
 
 def _diff(now: dict, base: dict) -> dict:
     for side, vals in now.items():
         for k, v in vals.items():
-            if k == "byEngine":
+            if k in ("byEngine", "tools"):
                 prev = base[side].get(k, {})
                 vals[k] = {e: n - prev.get(e, 0) for e, n in v.items() if n - prev.get(e, 0)}
             else:
@@ -220,7 +233,8 @@ def _decorate(d: dict) -> dict:
     ds["tokens"] = ds["in"] + ds["out"]
     gl["tokens"] = gl["in"] + gl["out"]
 
-    ds["yuan"] = None if ds["unpricedCalls"] else round(ds["tokenYuan"], 4)
+    billable_tools = {"search", "fetch", "image_search", "ocr_pages", "file_upload", "asr_seconds", "tts_chars"}
+    ds["yuan"] = None if ds["unpricedCalls"] or any(ds["tools"].get(k, 0) for k in billable_tools) else round(ds["tokenYuan"], 4)
     token_yuan = None if gl["unpricedCalls"] else round(gl["tokenYuan"], 4)
     gl["tokenYuan"] = token_yuan
     gl["yuan"] = round(gl["searchYuan"] + token_yuan, 4) if token_yuan is not None else None

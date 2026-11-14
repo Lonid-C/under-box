@@ -209,12 +209,16 @@ class OpenAICompatLLM:
         last_exc: Exception | None = None
         for attempt in range(self.max_retries):
             try:
-                r = httpx.post(
-                    self.endpoint,
-                    headers={"Authorization": f"Bearer {self.api_key}",
-                             "Content-Type": "application/json"},
-                    json=body, timeout=self.timeout,
-                )
+                if self.provider == "deepseek" and self.endpoint == PROVIDERS["deepseek"]["endpoint"]:
+                    from .deepseek_client import DeepSeekClient
+                    r = DeepSeekClient(self.api_key).raw_model_post(self.endpoint, body, self.timeout)
+                else:
+                    r = httpx.post(
+                        self.endpoint,
+                        headers={"Authorization": f"Bearer {self.api_key}",
+                                 "Content-Type": "application/json"},
+                        json=body, timeout=self.timeout,
+                    )
             except Exception as exc:                       # 网络层问题，可重试
                 last_exc = exc
                 time.sleep(min(2 ** attempt, 8))

@@ -54,6 +54,20 @@ def _lines(observations: list[dict]) -> str:
 def recognize_image(data: bytes, *, timeout: float = 15) -> str | None:
     if not data or len(data) > 8 * 1024 * 1024:
         return None
+    # Public roster images can be sent to DeepSeek OCR. Returned text is
+    # marked as OCR by the collector and never independently establishes "ok".
+    if os.environ.get("DEEPSEEK_API_KEY"):
+        try:
+            from .deepseek_client import DeepSeekClient
+            from .deepseek_document import _ocr_text
+            suffix = ".png" if data.startswith(b"\x89PNG") else ".jpg" if data.startswith(b"\xff\xd8") else ".webp"
+            pages = DeepSeekClient().ocr_bytes(data, "roster" + suffix, timeout=max(timeout, 30))
+            if any(raw.strip() for _, raw in pages):
+                text = _ocr_text(pages)
+                if len(text.strip()) > 4:
+                    return text
+        except Exception:
+            pass
     try:
         binary = _vision_binary()
         if not binary:

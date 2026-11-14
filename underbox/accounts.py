@@ -142,7 +142,7 @@ class Workers:
         with store.connect(self.accounts.path) as conn:
             settings = store.get_settings(conn)
             env.update(store.settings_env(conn))
-        if (env.get("SEARCH_PROVIDER") or "zhipu").lower() == "zhipu":
+        if (env.get("SEARCH_PROVIDER") or "deepseek").lower() in ("deepseek", "zhipu"):
             env["SEARCH_API_KEY"] = zhipu_search_key(settings, raw_env)
         env.update(
             UNDERBOX_ENV_FILE=str(env_file),
@@ -160,7 +160,7 @@ class Workers:
         # serve.py 据此分存报告/画像，也据此记账。
         env.pop("UNDERBOX_USER_ID", None)
         env.pop("UNDERBOX_USER_NAME", None)
-        if not (env.get("SEARCH_API_KEY") or env.get("BRAVE_SEARCH_API_KEY")):
+        if not (env.get("DEEPSEEK_API_KEY") or env.get("SEARCH_API_KEY") or env.get("BRAVE_SEARCH_API_KEY")):
             raise ValueError("缺少搜索配置")
         if not (env.get("DEEPSEEK_API_KEY") or env.get("LLM_API_KEY") or env.get("ZHIPU_API_KEY")):
             raise ValueError("缺少模型配置")
@@ -260,6 +260,10 @@ API_CATALOG = (
     {"kind": "llm", "id": "openai-compatible", "name": "自定义（OpenAI 兼容）",
      "key_fields": ("llm_api_key",), "model": "", "endpoint": "",
      "hint": "端点和模型名都要自己填"},
+    {"kind": "search", "id": "deepseek", "name": "DeepSeek Search",
+     "key_fields": ("deepseek_api_key",),
+     "endpoint": "https://api.deepseek.com/v1/tools/search",
+     "hint": "默认搜索，故障时使用已配置的备用搜索"},
     {"kind": "search", "id": "zhipu", "name": "智谱 web_search",
      "key_fields": ("search_api_key", "zhipu_api_key"),
      "engine": "search_std", "endpoint": ZHIPU_SEARCH_ENDPOINT,
@@ -279,7 +283,10 @@ SETTING_OPTIONS = {
     "llm_provider": ["deepseek", "zhipu", "openai-compatible"],
     "llm_model": ["deepseek-flash", "deepseek-v4-pro", "glm-4.7-flash"],
     "llm_thinking": ["disabled", "enabled"],
-    "search_provider": ["zhipu", "brave", "generic"],
+    "search_provider": ["deepseek", "zhipu", "brave", "generic"],
+    "document_parser": ["deepseek", "local"],
+    "deepseek_fetch": ["1", "0"],
+    "deepseek_qa_native": ["1", "0"],
     "search_engine": ["search_std", "search_pro"],
     "search_engine_open": ["search_pro_sogou", "search_pro_quark", "search_pro"],
 }
@@ -321,9 +328,19 @@ def probe_llm(cfg: dict) -> dict:
 
 def probe_search(cfg: dict) -> dict:
     import httpx
-    provider = (cfg.get("search_provider") or "zhipu").lower()
+    provider = (cfg.get("search_provider") or "deepseek").lower()
     try:
         with httpx.Client(timeout=20) as client:
+            if provider == "deepseek":
+                key = cfg.get("deepseek_api_key") or ""
+                if not key:
+                    return {"ok": False, "detail": "缺少 DeepSeek 密钥"}
+                r = client.post("https://api.deepseek.com/v1/tools/search",
+                                headers={"Authorization": f"Bearer {key}"},
+                                json={"query": "DeepSeek 官网", "count": 2})
+                if r.status_code == 200:
+                    return {"ok": True, "detail": f"DeepSeek Search 已连通，返回 {len(r.json().get('results', []))} 条"}
+                return {"ok": False, "detail": f"HTTP {r.status_code}"}
             if provider == "brave":
                 key = cfg.get("brave_api_key") or ""
                 if not key:
@@ -488,7 +505,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
 
             selected = {
                 "llm": stored.get("llm_provider") or raw_env.get("LLM_PROVIDER") or "deepseek",
-                "search": stored.get("search_provider") or raw_env.get("SEARCH_PROVIDER") or "zhipu",
+                "search": stored.get("search_provider") or raw_env.get("SEARCH_PROVIDER") or "deepseek",
             }
             out = {kind: {"selected": selected[kind], "items": []} for kind in ("llm", "search")}
             for spec in API_CATALOG:
@@ -591,7 +608,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                     continue
                 merged[key] = value
                 explicit[key] = value
-            provider = merged.get("search_provider") or "zhipu"
+            provider = merged.get("search_provider") or "deepseek"
             if provider.lower() == "zhipu":
                 merged["search_api_key"] = zhipu_search_key(explicit, raw_env)
             return merged

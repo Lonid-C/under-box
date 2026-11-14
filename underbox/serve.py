@@ -8,6 +8,7 @@ Search credentials and usage remain scoped to the current authenticated user.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import hashlib
 import hmac
 import json
@@ -299,6 +300,14 @@ def _source_replay_report(snapshot, filename, events, holder, *, claim_ids=None,
     return rep
 
 
+def parse_upload_document(path):
+    if os.environ.get("UNDERBOX_DOCUMENT_PARSER", "deepseek") == "local":
+        from app.parse import parse_document
+        return parse_document(path)
+    from app.deepseek_document import parse_deepseek_document
+    return parse_deepseek_document(path)
+
+
 def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
     """线程目标：运行核验；匹配私有来源快照时读取已整理的公开来源。
 
@@ -306,7 +315,6 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
     （它们不能进 JSON，但 /api/plan 与对话材料需要对象本身）。
     队列最后会放入 None 作为结束哨兵。
     """
-    from app.parse import parse_document             # noqa: PLC0415
     from app.pipeline import run_pipeline            # noqa: PLC0415
     from app.llm import build_llm                    # noqa: PLC0415
     from app.resume_gate import ensure_resume         # noqa: PLC0415
@@ -319,7 +327,7 @@ def run_verify_job(data: bytes, filename: str, events: queue.Queue, holder: dict
     tmp.write_bytes(data)
     started = time.monotonic()
     try:
-        parsed = parse_document(tmp)
+        parsed = parse_upload_document(tmp)
         from app.source_replay import load_snapshot
         snapshot = load_snapshot(data)
         if snapshot is not None:
@@ -389,7 +397,6 @@ def claim_brief(c) -> dict:
 
 def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict) -> None:
     """线程目标：解析 → 确认是简历 → 画像与拆分（同时进行）。结束时推送陈述清单和 token。"""
-    from app.parse import parse_document             # noqa: PLC0415
     from app.pipeline import prepare_resume          # noqa: PLC0415
     from app.llm import build_llm                    # noqa: PLC0415
     from app.resume_gate import ensure_resume         # noqa: PLC0415
@@ -402,7 +409,7 @@ def run_split_job(data: bytes, filename: str, events: queue.Queue, holder: dict)
     tmp.write_bytes(data)
     started = time.monotonic()
     try:
-        parsed = parse_document(tmp)
+        parsed = parse_upload_document(tmp)
         from app.source_replay import load_snapshot, metadata
         snapshot = load_snapshot(data)
         if snapshot is not None:
@@ -584,49 +591,95 @@ _DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions"
 
 
 def stream_answer(material: str, question: str, web_context: dict | None = None):
-    """逐段 yield 模型增量。异常以 {"error": ...} 形式 yield，由调用方写成 SSE。"""
-    import httpx                                      # noqa: PLC0415
-    key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not key:
-        yield {"error": "模型没配：.env 里缺 DEEPSEEK_API_KEY"}
-        return
-    prompt = build_prompt(material, question, web_context)
+    """Stream model text and provider-reported source cards to the browser."""
+    import httpx
+    from app.deepseek_client import DeepSeekClient, DeepSeekError
+    from app.deepseek_fetch import _public_url
+    from app.usage import METER
+    native = bool(web_context and web_context.get("_native"))
+    prompt = build_prompt(material, question, None if native else web_context)
+    if native:
+        prompt = prompt.replace("只依据下面材料回答。没有联网资料时直接说明材料缺失，不要假称搜索过网络。",
+                                "根据报告和本轮真实联网结果回答；没有检索结果时如实说明。")
     body = {
         "model": "deepseek-flash",
-        "messages": [{"role": "system", "content": QA_POLICY}, {"role": "user", "content": prompt}],
-        "max_tokens": 4096,
-        "temperature": 0,
-        "stream": True,
-        "stream_options": {"include_usage": True},      # 末尾多一块带 usage 的 chunk，用于记账
-        "thinking": {"type": "disabled"},
+        "messages": [{"role": "system", "content": (
+                     QA_POLICY.replace("引用网络资料时标注 [W1] 等已提供编号，", "") +
+                     " 引用网络来源时使用返回的引用，不要编造网址或编号。"
+                     if native else QA_POLICY)},
+                     {"role": "user", "content": prompt}],
+        "max_tokens": 4096, "temperature": 0, "stream": True,
+        "stream_options": {"include_usage": True}, "thinking": {"type": "disabled"},
     }
+    if native:
+        body["tools"] = [{"type": "deepseek_web_search"}, {"type": "deepseek_read_url"}]
+        body["safety_check"] = {"level": "high"}
+    sources, seen = [], set()
+    def add_source(item, method):
+        if not isinstance(item, dict):
+            return
+        url = item.get("url")
+        if not isinstance(url, str) or not _public_url(url) or url in seen:
+            return
+        seen.add(url)
+        sources.append({"id": "W" + str(len(sources)+1), "url": url,
+                        "title": str(item.get("title") or url)[:180],
+                        "extractionMethod": method, "accessedAt": "本次问答"})
+    completed = False
     try:
-        with httpx.stream("POST", _DEEPSEEK_ENDPOINT, json=body,
-                          headers={"Authorization": f"Bearer {key}",
-                                   "Content-Type": "application/json"},
-                          timeout=180.0) as r:
+        with DeepSeekClient().stream_chat(body) as r:
             if r.status_code != 200:
-                detail = r.read().decode("utf-8", "ignore")[:200]
-                yield {"error": f"模型返回 {r.status_code}：{detail}"}
+                yield {"error": f"问答服务返回 HTTP {r.status_code}"}
                 return
             for line in r.iter_lines():
                 if not line.startswith("data:"):
                     continue
                 payload = line[5:].strip()
                 if payload == "[DONE]":
+                    completed = True
                     break
                 try:
                     chunk = json.loads(payload)
                 except json.JSONDecodeError:
                     continue
-                if chunk.get("usage"):
-                    from app.usage import METER            # noqa: PLC0415
-                    METER.record_llm("deepseek", chunk["usage"])
-                delta = ((chunk.get("choices") or [{}])[0].get("delta") or {}).get("content")
-                if delta:
-                    yield {"delta": delta}
-    except httpx.HTTPError as exc:
-        yield {"error": f"模型连接失败：{exc}"}
+                usage = chunk.get("usage")
+                if usage:
+                    METER.record_llm("deepseek", usage)
+                    tool_usage = usage.get("server_tool_use") or {}
+                    for key, operation in (("tool_search", "search"), ("tool_fetch", "fetch"),
+                                           ("tool_image_search", "image_search")):
+                        amount = tool_usage.get(key) or 0
+                        if isinstance(amount, int):
+                            METER.record_tool(operation, amount)
+                if chunk.get("error"):
+                    yield {"error": "问答生成中断，请重试"}
+                    return
+                choice = (chunk.get("choices") or [{}])[0]
+                event = choice.get("server_tool_event") or {}
+                call = event.get("call") or {}
+                if event.get("type") == "call_completed" and call.get("status") == "completed":
+                    for item in call.get("sources") or []:
+                        add_source(item, "search_snippet")
+                    add_source(call.get("page"), "text")
+                    yield {"search": {"status": "complete", "sources": list(sources), "limitations": []}}
+                delta = choice.get("delta") or {}
+                for annotation in delta.get("annotations") or []:
+                    add_source(annotation.get("url_citation") or {}, "search_snippet")
+                if delta.get("annotations"):
+                    yield {"search": {"status": "complete", "sources": list(sources), "limitations": []}}
+                content = delta.get("content")
+                if content:
+                    yield {"delta": content}
+                if choice.get("finish_reason") == "content_filter":
+                    yield {"error": "本次问题暂时无法回答，请调整问题后重试"}
+                    return
+        if not completed:
+            yield {"error": "问答连接中断，请重试"}
+        elif native and not sources:
+            yield {"search": {"status": "complete", "sources": [],
+                              "limitations": ["本次未取得可引用的联网资料。"]}}
+    except (httpx.HTTPError, DeepSeekError, ValueError):
+        yield {"error": "问答服务暂不可用，请稍后重试"}
 
 
 def report_to_markdown(rep: dict) -> str:
@@ -732,6 +785,22 @@ STATUS_CN = {"ok": "已证实", "part": "部分证实", "ask": "待澄清",
 # 身份来自网关转发的 X-Underbox-User；单机模式没有这个头，统一落到 'local'。
 _STATE_LOCK = threading.Lock()
 _STATES: dict[str, dict] = {}
+_VOICE_LOCK = threading.Lock()
+_VOICE_CALLS: dict[tuple[str, str], deque] = {}
+
+
+def voice_allowed(user_id: str, kind: str) -> bool:
+    limit = 10 if kind == "asr" else 30
+    now = time.monotonic()
+    with _VOICE_LOCK:
+        key = (user_id, kind)
+        recent = _VOICE_CALLS.setdefault(key, deque())
+        while recent and recent[0] <= now - 60:
+            recent.popleft()
+        if len(recent) >= limit:
+            return False
+        recent.append(now)
+        return True
 
 
 def user_state(user_id: str) -> dict:
@@ -1022,6 +1091,7 @@ class Handler(BaseHTTPRequestHandler):
                 "searchConfigured": _search_configured(),
                 "hasReport": self._st()["presentation"] is not None,
                 "model": "deepseek-flash",
+                "documentParser": os.environ.get("UNDERBOX_DOCUMENT_PARSER", "deepseek"),
             })
         if path == "/api/report":
             # 页面刷新后把最近一次真实报告交还——不然用户一刷新就"丢"了报告
@@ -1081,10 +1151,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._split_stream()
         if path == "/api/ask/stream":
             return self._ask_stream()
-        if path == "/api/voice/asr":
-            return self._voice_asr()
-        if path == "/api/voice/tts":
-            return self._voice_tts()
+        if path in ("/api/voice/asr", "/api/voice/tts"):
+            kind = "asr" if path.endswith("/asr") else "tts"
+            if not voice_allowed(self.uid(), kind):
+                return self._json({"error": "语音请求较多，请稍后再试"}, 429)
+            from app.usage import METER
+            scope = METER.open_scope()
+            base = METER.mark(scope)
+            self._voice_ok = False
+            started = time.monotonic()
+            try:
+                with METER.bind(scope):
+                    return self._voice_asr() if path.endswith("/asr") else self._voice_tts()
+            finally:
+                record_gateway_usage("asr" if path.endswith("/asr") else "tts",
+                                     {"failed": not self._voice_ok, "seconds": time.monotonic()-started,
+                                      "usage": METER.since(base)}, self.uid())
+                METER.release_scope(scope)
         if path == "/api/plan":
             return self._plan()
         return self._json({"error": "not found"}, 404)
@@ -1093,6 +1176,7 @@ class Handler(BaseHTTPRequestHandler):
         import httpx
         import io
         import wave
+        from app.deepseek_client import DeepSeekClient, DeepSeekError
         if self._st()["oby"] is None:
             return self._json({"error": "请先完成核验"}, 409)
         try:
@@ -1104,40 +1188,36 @@ class Handler(BaseHTTPRequestHandler):
         audio = self.rfile.read(size)
         try:
             with wave.open(io.BytesIO(audio), "rb") as w:
-                if w.getsampwidth() != 2 or w.getnchannels() != 1 or w.getframerate() not in (8000,16000,22050,24000,32000,44100,48000) or w.getnframes() / w.getframerate() > 120:
+                rate = w.getframerate()
+                if w.getsampwidth() != 2 or w.getnchannels() != 1 or rate not in (8000,16000,22050,24000,32000,44100,48000):
                     raise ValueError("unsupported")
-            key = os.environ.get("DEEPSEEK_API_KEY", "")
-            if not key:
-                return self._json({"error": "语音服务尚未配置"}, 503)
-            r = httpx.post("https://api.deepseek.com/v1/tools/asr", headers={"Authorization": f"Bearer {key}"}, files={"file": ("speech.wav", audio, "audio/wav")}, timeout=120)
-            r.raise_for_status()
-            data = r.json()
-            if not isinstance(data.get("text"), str):
-                raise ValueError("invalid response")
+                # Streaming WAV headers can have an unknown frame count.
+                # Check the actual PCM bytes rather than trusting the header.
+                pcm = w.readframes(rate * 120 + 1)
+                if not pcm or len(pcm) > rate * 120 * 2:
+                    raise ValueError("unsupported")
+            data = DeepSeekClient().asr(audio)
+            self._voice_ok = True
             return self._json({"text": data["text"], "durationMs": data.get("duration_ms")})
         except (wave.Error, EOFError, ValueError):
             return self._json({"error": "无法识别录音格式"}, 400)
-        except httpx.HTTPError:
+        except (httpx.HTTPError, DeepSeekError):
             return self._json({"error": "语音识别暂不可用，请重试"}, 503)
 
     def _voice_tts(self) -> None:
         import httpx
+        from app.deepseek_client import DeepSeekClient, DeepSeekError
         if self._st()["oby"] is None:
             return self._json({"error": "请先完成核验"}, 409)
         payload = self._read_json()
         text = payload.get("text", "") if isinstance(payload, dict) else ""
         if not isinstance(text, str) or not text.strip() or len(text) > 3000:
             return self._json({"error": "朗读内容不能为空或超过 3000 字"}, 400)
-        key = os.environ.get("DEEPSEEK_API_KEY", "")
-        if not key:
-            return self._json({"error": "语音服务尚未配置"}, 503)
         try:
-            r = httpx.post("https://api.deepseek.com/v1/tools/tts", headers={"Authorization": f"Bearer {key}"}, json={"text": text, "voice_id": "stella", "format": "wav", "filter_markdown": True}, timeout=120)
-            r.raise_for_status()
-            if not r.content.startswith(b"RIFF") or len(r.content) < 44:
-                raise ValueError("invalid audio")
-            return self._send(r.content, "audio/wav")
-        except (httpx.HTTPError, ValueError):
+            audio = DeepSeekClient().tts(text)
+            self._voice_ok = True
+            return self._send(audio, "audio/wav")
+        except (httpx.HTTPError, DeepSeekError, ValueError):
             return self._json({"error": "语音朗读暂不可用，请重试"}, 503)
 
     def _read_json(self) -> dict:
@@ -1187,14 +1267,32 @@ class Handler(BaseHTTPRequestHandler):
                 web = None
                 if online:
                     push({"search": {"status": "searching", "sources": []}})
-                    from app.qa_search import search_question
-                    try:
-                        web = search_question(question, report)
-                    except Exception:
-                        web = {"sources": [], "limitations": ["本次联网服务暂不可用，回答将如实说明资料缺失。"]}
-                    push({"search": {"status": "complete", **web}})
+                    if os.environ.get("DEEPSEEK_QA_NATIVE", "1") == "1":
+                        web = {"_native": True}
+                    else:
+                        from app.qa_search import search_question
+                        try:
+                            web = search_question(question, report)
+                        except Exception:
+                            web = {"sources": [], "limitations": ["本次联网服务暂不可用，回答将如实说明资料缺失。"]}
+                        push({"search": {"status": "complete", **web}})
+                sent_text = False
                 for ev in stream_answer(material, question, web):
+                    if "error" in ev and online and web and web.get("_native") and not sent_text:
+                        from app.qa_search import search_question
+                        try:
+                            fallback = search_question(question, report)
+                        except Exception:
+                            fallback = {"sources": [], "limitations": ["本次联网服务暂不可用。"]}
+                        push({"search": {"status": "complete", **fallback}})
+                        for fallback_ev in stream_answer(material, question, fallback):
+                            push(fallback_ev)
+                            if "error" in fallback_ev:
+                                failed = True
+                                return
+                        break
                     push(ev)
+                    sent_text = sent_text or bool(ev.get("delta"))
                     if "error" in ev:
                         failed = True
                         return
@@ -1271,11 +1369,11 @@ def main() -> int:
 
     print(f"underbox  http://{args.host}:{args.port}/", flush=True)
     print(f"  模型     {'deepseek-flash' if _llm_ready() else '⚠ 未配置 DEEPSEEK_API_KEY'}", flush=True)
-    provider_label = ("智谱 web_search + Brave 备用" if os.environ.get("SEARCH_API_KEY") and
-                      os.environ.get("BRAVE_SEARCH_API_KEY") else
-                      "智谱 web_search" if os.environ.get("SEARCH_API_KEY") else
-                      "Brave Web Search" if os.environ.get("BRAVE_SEARCH_API_KEY") else
-                      "⚠ 未配置搜索 key（检索为空，结果会如实标 none）")
+    selected = (os.environ.get("SEARCH_PROVIDER") or "deepseek").lower()
+    if selected == "deepseek":
+        provider_label = "DeepSeek Search" + (" + 备用搜索" if os.environ.get("SEARCH_API_KEY") or os.environ.get("BRAVE_SEARCH_API_KEY") else "")
+    else:
+        provider_label = selected
     print(f"  检索     {provider_label}", flush=True)
     print("  数据     无预置报告——上传简历后由真实流水线产生", flush=True)
     print("  Ctrl-C 停止", flush=True)

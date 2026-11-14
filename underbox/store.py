@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS report_history (
 CREATE INDEX IF NOT EXISTS idx_report_history_user ON report_history(user_id, id DESC);
 """
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 
 def now() -> str:
@@ -190,6 +190,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
                      ("last_login_at", "TEXT")):
         if col not in have:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+    usage_columns = {r["name"] for r in conn.execute("PRAGMA table_info(usage_log)")}
+    if "ds_tools" not in usage_columns:
+        conn.execute("ALTER TABLE usage_log ADD COLUMN ds_tools TEXT NOT NULL DEFAULT '{}'")
 
 
 def save_report(conn: sqlite3.Connection, user_id: str, report: dict) -> int:
@@ -346,55 +349,74 @@ def record_usage(conn, user_id: str, *, kind: str, claims: int = 0, seconds: flo
     ds = u.get("deepseek") or {}
     gl = u.get("glm") or {}
     yuan = None
-    if isinstance(ds.get("yuan"), (int, float)) or isinstance(gl.get("yuan"), (int, float)):
-        yuan = round(float(ds.get("yuan") or 0) + float(gl.get("yuan") or 0), 4)
+    if isinstance(ds.get("yuan"), (int, float)) and isinstance(gl.get("yuan"), (int, float)):
+        yuan = round(float(ds["yuan"]) + float(gl["yuan"]), 4)
     conn.execute(
         """INSERT INTO usage_log(user_id, at, kind, claims, seconds, ds_calls, ds_in,
-                                 ds_cached, ds_out, glm_searches, yuan, ok)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                 ds_cached, ds_out, glm_searches, yuan, ok, ds_tools)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (user_id, now(), kind, int(claims or 0), float(seconds or 0),
          int(ds.get("calls") or 0), int(ds.get("in") or 0), int(ds.get("cached") or 0),
-         int(ds.get("out") or 0), int(gl.get("searches") or 0), yuan, 1 if ok else 0))
+         int(ds.get("out") or 0), int(gl.get("searches") or 0), yuan, 1 if ok else 0,
+         json.dumps(ds.get("tools") or {}, ensure_ascii=False)))
 
 
 def user_usage(conn, user_id: str, *, days: int = 30) -> dict:
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     row = conn.execute(
-        """SELECT COUNT(*) runs, COALESCE(SUM(claims),0) claims, COALESCE(SUM(seconds),0) seconds,
+        """SELECT SUM(CASE WHEN kind='verify' AND ok=1 THEN 1 ELSE 0 END) runs,
+                  COALESCE(SUM(claims),0) claims, COALESCE(SUM(seconds),0) seconds,
                   COALESCE(SUM(ds_in+ds_out),0) tokens, COALESCE(SUM(glm_searches),0) searches,
-                  COALESCE(SUM(yuan),0) yuan
-             FROM usage_log WHERE user_id = ? AND at >= ? AND ok = 1""",
-        (user_id, since)).fetchone()
-    return dict(row) if row else {}
+                  CASE WHEN SUM(CASE WHEN yuan IS NULL THEN 1 ELSE 0 END) > 0 THEN NULL
+                       ELSE COALESCE(SUM(yuan),0) END yuan
+             FROM usage_log WHERE user_id = ? AND at >= ?""", (user_id, since)).fetchone()
+    out = dict(row) if row else {}
+    out["runs"] = out.get("runs") or 0
+    totals = {}
+    for item in conn.execute("SELECT ds_tools FROM usage_log WHERE user_id=? AND at>=?", (user_id, since)):
+        try:
+            tools = json.loads(item["ds_tools"] or "{}")
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(tools, dict):
+            continue
+        for key, value in tools.items():
+            if isinstance(value, int) and value >= 0:
+                totals[key] = totals.get(key, 0) + value
+    out["deepseekTools"] = totals
+    return out
 
 
 def usage_daily(conn, *, days: int = 14, user_id: str | None = None) -> list[dict]:
-    """按天聚合，供看板画趋势。"""
+    """Daily completed verifications and known usage costs."""
     since = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d 00:00:00")
-    sql = ("SELECT substr(at,1,10) day, COUNT(*) runs, COALESCE(SUM(claims),0) claims, "
-           "COALESCE(SUM(yuan),0) yuan, COALESCE(SUM(glm_searches),0) searches "
-           "FROM usage_log WHERE at >= ? AND ok = 1")
+    sql = ("""SELECT substr(at,1,10) day,
+           SUM(CASE WHEN kind='verify' AND ok=1 THEN 1 ELSE 0 END) runs,
+           COALESCE(SUM(claims),0) claims,
+           CASE WHEN SUM(CASE WHEN yuan IS NULL THEN 1 ELSE 0 END)>0 THEN NULL
+                ELSE COALESCE(SUM(yuan),0) END yuan,
+           COALESCE(SUM(glm_searches),0) searches FROM usage_log WHERE at >= ?""")
     args: list = [since]
     if user_id:
         sql += " AND user_id = ?"
         args.append(user_id)
     sql += " GROUP BY day ORDER BY day"
     rows = {r["day"]: dict(r) for r in conn.execute(sql, args)}
-    out = []
-    for i in range(days - 1, -1, -1):
-        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        out.append(rows.get(d, {"day": d, "runs": 0, "claims": 0, "yuan": 0.0, "searches": 0}))
-    return out
+    return [rows.get((datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d"),
+                     {"day": (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d"),
+                      "runs": 0, "claims": 0, "yuan": 0.0, "searches": 0})
+            for i in range(days - 1, -1, -1)]
 
 
 def usage_by_user(conn, *, days: int = 30) -> list[dict]:
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     return [dict(r) for r in conn.execute(
         """SELECT u.id, u.name, u.role, u.quota_total, u.quota_used,
-                  COUNT(l.id) runs, COALESCE(SUM(l.claims),0) claims,
-                  COALESCE(SUM(l.yuan),0) yuan, MAX(l.at) last_at
-             FROM users u LEFT JOIN usage_log l
-               ON l.user_id = u.id AND l.at >= ? AND l.ok = 1
+                  SUM(CASE WHEN l.kind='verify' AND l.ok=1 THEN 1 ELSE 0 END) runs,
+                  COALESCE(SUM(l.claims),0) claims,
+                  CASE WHEN SUM(CASE WHEN l.id IS NOT NULL AND l.yuan IS NULL THEN 1 ELSE 0 END)>0
+                       THEN NULL ELSE COALESCE(SUM(l.yuan),0) END yuan, MAX(l.at) last_at
+             FROM users u LEFT JOIN usage_log l ON l.user_id=u.id AND l.at>=?
             GROUP BY u.id ORDER BY (u.role='admin') DESC, u.id""", (since,))]
 
 
@@ -458,6 +480,9 @@ SETTING_ENVS = {
     "search_engine_open": "SEARCH_ENGINE_OPEN",
     "search_endpoint":    "SEARCH_ENDPOINT",
     "brave_api_key":      "BRAVE_SEARCH_API_KEY",
+    "document_parser":    "UNDERBOX_DOCUMENT_PARSER",
+    "deepseek_fetch":     "DEEPSEEK_FETCH_ENABLED",
+    "deepseek_qa_native": "DEEPSEEK_QA_NATIVE",
 }
 SECRET_KEYS = ("deepseek_api_key", "zhipu_api_key", "llm_api_key", "search_api_key", "brave_api_key")
 

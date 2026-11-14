@@ -208,6 +208,15 @@ function renderCard(v) {
       }))
     : el("span", { class: "empty-note", text: "该条要素已全部覆盖。" })));
 
+  if (v.claim_verification) dl.appendChild(field('主张逐项核对', el('div', {}, v.claim_verification.checks.map(c => el('p', {text:c.element+' · '+c.state})))));
+  if (v.github_audit?.triggered) {
+    const a=v.github_audit;
+    const lines=[a.identityBasis, ...(a.warnings || []), ...(a.limitations || [])];
+    const box=el('div', {}, lines.map(text=>el('p',{text})));
+    for (const r of a.records || []) box.appendChild(el('p', {}, el('a',{href:r.url,target:'_blank',rel:'noopener noreferrer',text:r.url}),
+      el('span',{text:' · '+(r.files || []).map(f=>f.path+' ['+f.type+']').join('；')})));
+    dl.appendChild(field('GitHub 贡献核验 · 本条关联范围',box));
+  }
   if ((v.source_notes || []).length) {
     const scope = el("div", {}, v.source_notes.map(note => el("p", { text: note })));
     for (const url of (v.competition_lookup || {}).official_urls || []) {

@@ -1,0 +1,16 @@
+[Unit]
+Description=Underbox ICT fictional fixture adapter
+After=network.target
+[Service]
+Type=simple
+DynamicUser=yes
+EnvironmentFile=/etc/underbox-ict/adapter.env
+WorkingDirectory=/opt/underbox-huawei-ict/agentarts-adapter
+ExecStart=/opt/underbox/.venv/bin/python -B /opt/underbox-huawei-ict/agentarts-adapter/server.py
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+[Install]
+WantedBy=multi-user.target

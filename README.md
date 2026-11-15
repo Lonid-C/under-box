@@ -98,3 +98,12 @@ python3 scripts/regression.py
 本轮按用户要求未运行测试；五项旧验收差异仍保留，见 [REGRESSION.md](REGRESSION.md)。
 
 细节与设计取舍见 `search-strategy/DESIGN.md`，各部分的踩坑记录在各自的 README 里。
+
+
+## 华为 ICT 创新赛版本
+
+分支 `codex/huawei-ict` 新增 [完整比赛工作台](full-workbench/README.md) 和 [AgentArts 适配层](agentarts-adapter/README.md)，保留原应用目录。核心核验由已发布的 AgentArts 实例编排，原 DeepSeek、检索、证据规则与完整前端复用。
+
+调试入口：<https://8.208.14.251/ict/>。服务器已启用临时免登录会话，管理配置仍需身份认证。会话、报告、额度相互隔离；访客仅使用虚构内置示例。运行密钥、数据库、真实简历及报告不进入仓库。配置开关与 [测试和验证记录](full-workbench/VALIDATION.md) 见完整版本目录。
+
+完整版本回归：`python full-workbench/scripts/regression.py --output outputs/regression/ict --timeout 180`。40项工作台测试、两套Node检查，以及适配器17项测试单独运行；旧规则的存量失败仍按验证记录报告。

@@ -1,0 +1,195 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "UnderboxLive",
+    "description": "Underbox真实简历证据核验：提交任务、查询报告、删除结果。仅辅助人工复核。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://8.208.14.251"
+    }
+  ],
+  "paths": {
+    "/v1/live/submit": {
+      "post": {
+        "operationId": "SubmitResume",
+        "summary": "提交已获授权的简历文本，开始真实核验；返回 job_id。数据将交给服务器配置的 DeepSeek 模型和智谱搜索处理。",
+        "description": "提交已获授权的简历文本，开始真实核验；返回 job_id。数据将交给服务器配置的 DeepSeek 模型和智谱搜索处理。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resume_text": {
+                    "type": "string",
+                    "maxLength": 20000,
+                    "description": "已脱敏的简历文本，最多8条待核验陈述；不要包含身份证号、联系方式等无关敏感数据。"
+                  },
+                  "consent": {
+                    "type": "boolean",
+                    "description": "只有用户明确同意上述第三方数据处理时才为 true；默认 false。",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "resume_text",
+                  "consent"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "任务状态或结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/live/status": {
+      "post": {
+        "operationId": "GetResumeResult",
+        "summary": "查询本次会话提交任务的状态及报告；只使用 SubmitResume 返回的 job_id。running 时稍后再次调用，不得假造报告。",
+        "description": "查询本次会话提交任务的状态及报告；只使用 SubmitResume 返回的 job_id。running 时稍后再次调用，不得假造报告。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "job_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "job_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "任务状态或结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "result_json": {
+                      "type": "string",
+                      "description": "completed时为核验报告JSON字符串"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/live/delete": {
+      "post": {
+        "operationId": "DeleteResumeResult",
+        "summary": "应用户要求删除已完成的任务报告。",
+        "description": "应用户要求删除已完成的任务报告。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "job_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "job_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "任务状态或结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/live/action": {
+      "post": {
+        "operationId": "RunUnderbox",
+        "summary": "通过JSON字符串提交、查询、删除真实核验任务",
+        "description": "request_json是JSON字符串；action=submit时包含resume_text及用户明确同意的consent:true；action=status或delete时包含job_id。completed时解析result_json。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "request_json"
+                ],
+                "properties": {
+                  "request_json": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "任务状态或结果JSON"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1680 @@
+{
+  "version": 1,
+  "notes": [
+    "检索策略档案。加一种简历类型 / 一种行业 = 加一个 profile，不改代码。",
+    "这是**领域知识**，不是模型输出：哪些机构会公开什么类型的文档，是长期观察的结论。",
+    "占位符：{name} 候选人 {org} {dept} {role} {year} {term} {terms} {contest} {award}",
+    "        {paper} 论文标题 {repo} 仓库 {title} 标题 {company} {venue} {team} 队伍名 {major} {org_latin}/{org_han} 双语组织短名 {conference} 会议名 {doi} {arxiv} {patent_no} 专利号/登记号",
+    "site 取值：school=学校主域名（查 data/schools.json）、organizer=组委会域名（claim.entities.organizer_domain）、",
+    "          wechat=mp.weixin.qq.com（只吃搜索引擎已收录的）、gov=政府站、null=不限定",
+    "round：1 定锚 / 2 取证 / 3 补漏"
+  ],
+  "elements_map": {
+    "_why": [
+      "占位符的第二数据源。entities 是模型填的，不保证有；elements 是拆分步骤保证会有的。",
+      "所以取值的顺序是 entities 优先、elements 兜底——entities 更具体（能区分 org/dept），",
+      "elements 更可靠（一定存在）。两者都没有时，这条查询模板直接判为'搜不了'，不生成空词查询。"
+    ],
+    "org": [
+      "任职组织",
+      "授予单位",
+      "单位",
+      "学校",
+      "公司",
+      "机构"
+    ],
+    "dept": [
+      "部门",
+      "院系"
+    ],
+    "role": [
+      "职务",
+      "岗位",
+      "参赛身份"
+    ],
+    "orgname": [
+      "任职组织",
+      "组织",
+      "单位"
+    ],
+    "company": [
+      "单位",
+      "公司",
+      "任职组织"
+    ],
+    "contest": [
+      "赛事",
+      "比赛",
+      "竞赛"
+    ],
+    "award": [
+      "奖项",
+      "获奖",
+      "荣誉",
+      "奖学金",
+      "荣誉名称"
+    ],
+    "team": [
+      "参赛身份",
+      "队伍",
+      "团队"
+    ],
+    "title": [
+      "论文标题",
+      "标题",
+      "专利名称",
+      "软件名称",
+      "报告题目",
+      "题目",
+      "作品"
+    ],
+    "conference": [
+      "会议名称",
+      "会议"
+    ],
+    "doi": [
+      "DOI",
+      "doi"
+    ],
+    "arxiv": [
+      "arXiv",
+      "arxiv"
+    ],
+    "patent_no": [
+      "专利号",
+      "授权公告号",
+      "公开号",
+      "申请号",
+      "登记号"
+    ],
+    "paper": [
+      "论文标题",
+      "标题"
+    ],
+    "project": [
+      "项目",
+      "作品",
+      "项目名称"
+    ],
+    "repo": [
+      "仓库"
+    ],
+    "venue": [
+      "刊物",
+      "期刊",
+      "会议"
+    ],
+    "major": [
+      "专业",
+      "方向"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "cn-university-student",
+      "name": "中国大陆在校生 / 应届生",
+      "match": {
+        "identity": [
+          "student"
+        ],
+        "levels": [
+          "intern",
+          "entry",
+          "unknown"
+        ],
+        "categories_any": [
+          "校内荣誉",
+          "奖学金",
+          "学生工作",
+          "竞赛",
+          "项目",
+          "学历"
+        ]
+      },
+      "authority_map": [
+        {
+          "who": "学校学生工作部 / 研工部",
+          "host": "school",
+          "expect_tier": "A",
+          "what": "评奖评优公示、名单、通知"
+        },
+        {
+          "who": "学院官网",
+          "host": "school",
+          "expect_tier": "A",
+          "what": "院级公示与任免"
+        },
+        {
+          "who": "竞赛组委会",
+          "host": "organizer",
+          "expect_tier": "A",
+          "what": "获奖名单、赛果公示"
+        },
+        {
+          "who": "学校 / 学院公众号",
+          "host": "wechat",
+          "expect_tier": "B",
+          "what": "换届公告、活动报道（仅已收录部分）"
+        }
+      ],
+      "anchor_first": [
+        "队伍名",
+        "队友姓名组合",
+        "仓库名",
+        "导师姓名"
+      ],
+      "budget": {
+        "searches": 8,
+        "reads": 10,
+        "seconds": 120
+      },
+      "extra_forms": [
+        {
+          "tpl": "\"{org}\" {year} 学年 评奖 公示",
+          "site": "school",
+          "round": 2,
+          "weight": 70,
+          "categories": [
+            "校内荣誉",
+            "奖学金"
+          ],
+          "purpose": "按学年找整批公示，再从名单里认人"
+        },
+        {
+          "tpl": "\"{org}\" 优秀学生 名单 {year}",
+          "site": "school",
+          "round": 2,
+          "weight": 65,
+          "categories": [
+            "校内荣誉",
+            "奖学金"
+          ],
+          "purpose": "名单类页面"
+        },
+        {
+          "tpl": "\"{org}\" {dept} 换届 公告",
+          "site": "school",
+          "round": 2,
+          "weight": 72,
+          "categories": [
+            "学生工作"
+          ],
+          "purpose": "校内学生组织的任免公告"
+        }
+      ],
+      "notes": [
+        "校内任免与评奖多数**只在学校官网公示**，所以 site 限定是第一手段。",
+        "公众号只能吃搜索引擎已收录的部分，收录率本就低——拿不到就标 none，这是产品上限，不硬突破。",
+        "普通学历仅检索学校官网与已收录公众号的公开线索；学籍、学位及 GPA 仍需授权补证。"
+      ]
+    },
+    {
+      "id": "cn-professional-internet",
+      "name": "互联网 / 软件职场人",
+      "match": {
+        "identity": [
+          "professional"
+        ],
+        "industries": [
+          "internet",
+          "software"
+        ],
+        "levels": [
+          "entry",
+          "mid",
+          "senior",
+          "lead"
+        ],
+        "categories_any": [
+          "任职",
+          "实习",
+          "项目",
+          "开源项目",
+          "论文",
+          "专利"
+        ]
+      },
+      "authority_map": [
+        {
+          "who": "公司官网 / 团队页",
+          "host": null,
+          "expect_tier": "D",
+          "what": "部门简介——注意：官方站点上的非公示页按规则只到 D 级"
+        },
+        {
+          "who": "GitHub / Gitee",
+          "host": "platform",
+          "expect_tier": "C",
+          "what": "仓库、贡献者列表、commit 署名"
+        },
+        {
+          "who": "技术博客 / 会议讲师页",
+          "host": null,
+          "expect_tier": "C",
+          "what": "署名文章、speaker bio"
+        },
+        {
+          "who": "技术媒体",
+          "host": null,
+          "expect_tier": "B",
+          "what": "人物专访、项目报道"
+        }
+      ],
+      "anchor_first": [
+        "GitHub 用户名",
+        "仓库名",
+        "项目名",
+        "技术会议讲师名"
+      ],
+      "budget": {
+        "searches": 8,
+        "reads": 10,
+        "seconds": 120
+      },
+      "extra_forms": [
+        {
+          "tpl": "\"{name}\" {repo}",
+          "site": null,
+          "kind": "github",
+          "round": 1,
+          "weight": 95,
+          "purpose": "用仓库名当锚点，确认 GitHub 账号属于本人"
+        },
+        {
+          "tpl": "\"{name}\" {company} 技术 分享",
+          "site": null,
+          "round": 2,
+          "weight": 60,
+          "purpose": "技术分享与讲师页"
+        },
+        {
+          "tpl": "\"{name}\" {company} 专访",
+          "site": null,
+          "round": 3,
+          "weight": 50,
+          "purpose": "资深/负责人层级可能有媒体记录"
+        }
+      ],
+      "notes": [
+        "企业内部的任职与实习**通常没有公开记录**——检索无结果不指向任何问题，这是这一类的常态。",
+        "开源是这类简历里唯一高可验证的部分，优先把预算给它。"
+      ]
+    },
+    {
+      "id": "cn-professional-finance",
+      "name": "金融 / 上市与持牌机构",
+      "match": {
+        "identity": [
+          "professional"
+        ],
+        "industries": [
+          "finance"
+        ],
+        "levels": [
+          "mid",
+          "senior",
+          "lead",
+          "exec"
+        ],
+        "categories_any": [
+          "任职",
+          "实习",
+          "学历",
+          "专利"
+        ]
+      },
+      "authority_map": [
+        {
+          "who": "证监会 / 交易所披露",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "董监高名单、年报、任职公告"
+        },
+        {
+          "who": "基金业协会 / 证券业协会",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "从业人员备案信息"
+        },
+        {
+          "who": "上市公司公告",
+          "host": null,
+          "expect_tier": "A",
+          "what": "高管任免公告"
+        },
+        {
+          "who": "财经媒体",
+          "host": null,
+          "expect_tier": "B",
+          "what": "人物报道"
+        }
+      ],
+      "anchor_first": [
+        "机构全称 + 职务",
+        "执业证书编号（若候选人提供）",
+        "任职公告的公告编号"
+      ],
+      "budget": {
+        "searches": 10,
+        "reads": 12,
+        "seconds": 150
+      },
+      "extra_forms": [
+        {
+          "tpl": "\"{company}\" 高管 任职 公告 \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 100,
+          "purpose": "上市公司高管任免公告"
+        },
+        {
+          "tpl": "\"{company}\" 年报 董事 监事 \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "年报里的董监高名单"
+        },
+        {
+          "tpl": "\"{name}\" 基金 从业 资格 公示",
+          "site": "gov",
+          "round": 2,
+          "weight": 80,
+          "purpose": "持牌人员备案"
+        }
+      ],
+      "notes": [
+        "金融是**少数中层以上任职有公开权威记录**的行业，值得多给预算。",
+        "但要注意：从业备案只证明'这个人有证/在册'，不证明他在**某一段具体任职期间**的职务——要素还是要分开证。",
+        "只查公开披露，不碰任何泄露数据源。"
+      ]
+    },
+    {
+      "id": "cn-researcher",
+      "name": "高校教师 / 科研人员",
+      "match": {
+        "identity": [
+          "researcher",
+          "student"
+        ],
+        "levels": [
+          "mid",
+          "senior",
+          "lead"
+        ],
+        "categories_any": [
+          "论文",
+          "专利",
+          "会议",
+          "任职",
+          "学历"
+        ]
+      },
+      "authority_map": [
+        {
+          "who": "Crossref / DOI",
+          "host": "platform",
+          "expect_tier": "C",
+          "what": "论文元数据、作者列表与位次"
+        },
+        {
+          "who": "ORCID",
+          "host": "platform",
+          "expect_tier": "C",
+          "what": "本人维护的学术档案"
+        },
+        {
+          "who": "高校官网师资页",
+          "host": "school",
+          "expect_tier": "D",
+          "what": "师资简介——非公示页，按规则只到 D 级"
+        },
+        {
+          "who": "国家知识产权局",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "专利公开公告"
+        }
+      ],
+      "anchor_first": [
+        "论文标题（最稀有的一对一标识）",
+        "DOI",
+        "导师姓名",
+        "课题组名"
+      ],
+      "budget": {
+        "searches": 10,
+        "reads": 12,
+        "seconds": 150
+      },
+      "extra_forms": [
+        {
+          "tpl": "{paper}",
+          "site": null,
+          "kind": "crossref",
+          "round": 1,
+          "weight": 100,
+          "purpose": "论文标题是最强的锚点，先拿元数据"
+        },
+        {
+          "tpl": "\"{name}\" {org} 课题组",
+          "site": "school",
+          "round": 2,
+          "weight": 70,
+          "purpose": "课题组页面"
+        },
+        {
+          "tpl": "\"{name}\" 会议 程序委员会 {year}",
+          "site": null,
+          "round": 2,
+          "weight": 60,
+          "purpose": "学术服务记录"
+        }
+      ],
+      "notes": [
+        "Crossref 的作者列表**不记录共同一作**，所以'列于第二位'不足以否认'第一作者'——这类差异进 unproved 并交澄清问题，不判 ask。",
+        "知网/万方没有开放检索 API，只能在通用搜索里吃已收录的页面。"
+      ]
+    },
+    {
+      "id": "cn-public-sector",
+      "name": "体制内 / 事业单位 / 国企",
+      "match": {
+        "identity": [
+          "public_sector",
+          "professional"
+        ],
+        "industries": [
+          "gov",
+          "education",
+          "healthcare"
+        ],
+        "levels": [
+          "entry",
+          "mid",
+          "senior",
+          "lead",
+          "exec"
+        ],
+        "categories_any": [
+          "任职",
+          "学历",
+          "校内荣誉",
+          "专利"
+        ]
+      },
+      "authority_map": [
+        {
+          "who": "政府 / 部门官网",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "任免公示、录用公示、表彰决定"
+        },
+        {
+          "who": "事业单位招聘公示",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "拟聘人员公示"
+        },
+        {
+          "who": "行业主管部门",
+          "host": "gov",
+          "expect_tier": "A",
+          "what": "执业注册、资质公示"
+        },
+        {
+          "who": "地方媒体",
+          "host": null,
+          "expect_tier": "B",
+          "what": "任免报道"
+        }
+      ],
+      "anchor_first": [
+        "单位全称 + 职务",
+        "公示期",
+        "录用批次"
+      ],
+      "budget": {
+        "searches": 10,
+        "reads": 12,
+        "seconds": 150
+      },
+      "extra_forms": [
+        {
+          "tpl": "\"{company}\" {year} 拟聘用 人员 公示 \"{name}\"",
+          "site": "gov",
+          "round": 2,
+          "weight": 100,
+          "purpose": "事业单位拟聘公示"
+        },
+        {
+          "tpl": "\"{company}\" {name} 任免",
+          "site": "gov",
+          "round": 2,
+          "weight": 95,
+          "purpose": "任免公示"
+        },
+        {
+          "tpl": "\"{company}\" \"{name}\" 表彰 决定",
+          "site": "gov",
+          "round": 2,
+          "weight": 80,
+          "purpose": "表彰决定"
+        }
+      ],
+      "notes": [
+        "这一类公开程度反而高，但**公示期通常只有 5–7 个工作日**，过期后页面常被撤下——查不到很常见，不代表不实。"
+      ]
+    },
+    {
+      "id": "fallback-generic",
+      "name": "兜底：未识别出身份类型",
+      "match": {
+        "identity": [
+          "*"
+        ],
+        "levels": [
+          "*"
+        ],
+        "categories_any": [
+          "*"
+        ],
+        "is_fallback": true
+      },
+      "authority_map": [
+        {
+          "who": "官方站点公示类页面",
+          "host": null,
+          "expect_tier": "A",
+          "what": "公示 / 通知 / 名单 / 决定"
+        },
+        {
+          "who": "认证主体公众号 / 权威媒体",
+          "host": null,
+          "expect_tier": "B",
+          "what": "报道与公告"
+        },
+        {
+          "who": "平台元数据",
+          "host": "platform",
+          "expect_tier": "C",
+          "what": "GitHub / ORCID / Crossref"
+        }
+      ],
+      "anchor_first": [
+        "组织全称 + 职务 + 年份",
+        "项目名 / 仓库名"
+      ],
+      "budget": {
+        "searches": 6,
+        "reads": 8,
+        "seconds": 90
+      },
+      "extra_forms": [],
+      "notes": [
+        "识别不出身份类型时用它。宁可少搜，也不猜。",
+        "注意：fallback 的预算低于具体档案——不知道去哪找时，广撒网只会烧预算换噪音。"
+      ]
+    }
+  ],
+  "categories": {
+    "学历": {
+      "official_forms": [
+        {
+          "tpl": "\"{name}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "always": true,
+          "push_weight": 112,
+          "purpose": "优先查学校官网及院系子站的人名线索；报道不等于学历证明。推免陈述里排在整批名单查询之后：搜索索引几乎不收录 PDF 名单里的人名"
+        }
+      ],
+      "never_search": true,
+      "exception_budget": {
+        "searches": 10,
+        "reads": 12,
+        "seconds": 180
+      },
+      "search_if_terms": [
+        "保研",
+        "保送",
+        "推免",
+        "推荐免试",
+        "免试攻读",
+        "免试研究生",
+        "拟录取",
+        "考研",
+        "统考",
+        "初试",
+        "复试",
+        "夏令营",
+        "优秀营员"
+      ],
+      "elements": [
+        "学校={org}",
+        "专业/方向={dept}"
+      ],
+      "terms": [
+        "推免",
+        "推荐免试",
+        "拟录取",
+        "保研"
+      ],
+      "forms": [
+        {
+          "tpl": "\"{name}\" 推免",
+          "site": "school",
+          "round": 2,
+          "weight": 101,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "预算有余时补查接收学校本人推免记录；首选官网人名和公众号就读线索，保留正式名单路径"
+        },
+        {
+          "tpl": "\"{name}\" 推免",
+          "site": "source_school",
+          "requires_site": true,
+          "round": 2,
+          "weight": 108,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "本科来源学校官网查本人推免资格；来源学校只作检索线索"
+        },
+        {
+          "tpl": "{year} 推免 拟录取 名单",
+          "site": "school",
+          "round": 2,
+          "weight": 114,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "接收学校按招生年度查推免拟录取名单，回读名单后核对本人"
+        },
+        {
+          "tpl": "免试攻读{year}年硕士学位研究生 资格",
+          "site": "source_school",
+          "requires_site": true,
+          "round": 2,
+          "weight": 120,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "本科推荐方正式公示标题（如哈工程《获得免试攻读2023年硕士学位研究生资格学生名单》）；名单多在 PDF 附件或内嵌播放器里，搜到公告后进附件找本人"
+        },
+        {
+          "tpl": "{year} 免试 资格 名单",
+          "site": "source_school",
+          "requires_site": true,
+          "round": 2,
+          "weight": 116,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "本科推荐方按届别查正式免试资格名单，不强制院系名；公告可能不写保研或推免二字"
+        },
+        {
+          "tpl": "{year} {source_field} 免试 名单",
+          "site": "source_school",
+          "requires_site": true,
+          "round": 2,
+          "weight": 104,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "本科院系按推免届别搜无姓名的整批拟推荐名单，点开附件核对本人"
+        },
+        {
+          "tpl": "{notice_year} 推免 公示",
+          "site": "source_school",
+          "requires_site": true,
+          "round": 2,
+          "weight": 118,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "本科推荐方按实际公示年份查通知，不强制学院名；2023 届往往在 2022 年 9 月发布"
+        },
+        {
+          "tpl": "{year} 硕士 拟录取 名单",
+          "site": "school",
+          "round": 2,
+          "weight": 103,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "春季全校硕士拟录取总公告可能附单独的推免名单；须进入正文和推免附件核对，统考附件不能证明推免"
+        },
+        {
+          "tpl": "\"{name}\" 统考",
+          "site": "school",
+          "round": 2,
+          "weight": 109,
+          "when_terms": [
+            "考研",
+            "统考",
+            "初试",
+            "复试"
+          ],
+          "purpose": "仅在简历声称考试入学时查本人统考记录，须核对招生年与院系专业"
+        },
+        {
+          "tpl": "{year} 硕士研究生 统考 拟录取 名单",
+          "site": "school",
+          "round": 2,
+          "weight": 99,
+          "when_terms": [
+            "考研",
+            "统考",
+            "初试",
+            "复试"
+          ],
+          "purpose": "考试入学按招生年度查录取名单；复试名单本身不等于录取"
+        },
+        {
+          "tpl": "\"{name}\" 夏令营 优秀营员",
+          "site": "school",
+          "round": 2,
+          "weight": 90,
+          "when_terms": [
+            "夏令营",
+            "优秀营员"
+          ],
+          "purpose": "只有简历明确声称夏令营经历时才查优秀营员；入营不等于取得推免资格"
+        },
+        {
+          "tpl": "\"{org}\" 推免 拟录取 \"{name}\"",
+          "site": null,
+          "round": 3,
+          "weight": 60,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "拿不到学校域时的通用退化查询"
+        },
+        {
+          "tpl": "\"{name}\" \"{org}\" 推荐免试",
+          "site": null,
+          "round": 3,
+          "weight": 55,
+          "when_terms": [
+            "保研",
+            "保送",
+            "推免",
+            "推荐免试",
+            "免试攻读",
+            "免试研究生"
+          ],
+          "purpose": "姓名 + 学校交叉兜底"
+        },
+        {
+          "tpl": "\"{school}\" \"{name}\"",
+          "site": "wechat",
+          "round": 2,
+          "weight": 111,
+          "always": true,
+          "purpose": "接收方公众号按学校和姓名查人物介绍、在读、奖学金及活动记录；结合学院和年级确认身份，不强制推免关键词，只读搜索引擎收录原文"
+        }
+      ],
+      "notes": [
+        "普通学历只探查学校官网和已收录的学校公众号公开线索，不自动化访问学信网；报道不等于学籍或学位证明。",
+        "例外：命中「保研/保送/推免/推荐免试/考研/统考/夏令营」等词时恢复对应检索；推免、统考、夏令营分开查询，避免将不同名单混作入学方式证明。",
+        "推免须分推荐方资格与接收方录取两个环节；仅在同份简历能按时间唯一识别来源学校时同时查双方官网，来源学校只是检索线索。覆盖推免名单、正式免试名单、接收方春季硕士拟录取总公告，同时试入学届别与前一年的公示时间；从官网栏目跟进公告及 PDF/DOCX/XLSX 附件。候补、复试、拟录取须保留阶段区别。",
+        "接收方就读佐证可以来自官网或公众号的本人介绍、总师班、奖学金及研究生记录；按姓名、学校、学院、专业、年级交叉匹配，不限于拟录取名单。仅就读佐证与本科推免资格组合时保留间接支持的性质，入学方式另行核对。",
+        "推免陈述先查整批名单（正式标题 → 公示年份 → 免试资格 → 接收方推免拟录取），再查姓名：人名多在 PDF 附件里，搜索索引基本搜不到。推免陈述预算放宽到 exception_budget，仍受硬天花板约束。",
+        "本科就读另有一条不花检索的路径：同一份简历其他条目已取得的官方名单（推免资格、奖学金、竞赛获奖等），若发布在本科学校官网或原文写明本校并列出本人，作为该学历的关联佐证（只证明学校，不证明专业、学位）。"
+      ]
+    },
+    "校内荣誉": {
+      "official_forms": [
+        {
+          "tpl": "\"{name}\" \"{award}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网按姓名与荣誉短词取证"
+        },
+        {
+          "tpl": "\"{name}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网按姓名查公开荣誉线索"
+        }
+      ],
+      "elements": [
+        "授予单位={org}",
+        "荣誉={dept}"
+      ],
+      "terms": [
+        "三好学生",
+        "优秀学生",
+        "优秀毕业生",
+        "先进个人",
+        "优秀共青团员",
+        "标兵"
+      ],
+      "anchor_forms": [],
+      "forms": [
+        {
+          "tpl": "\"{org}\" \"{award}\"",
+          "site": "school",
+          "round": 2,
+          "weight": 100,
+          "purpose": "**荣誉全称（含学年）直查学校公示**——学年用简历原词，不做任何换算"
+        },
+        {
+          "tpl": "\"{org}\" 夏令营 优秀营员 名单 {year}",
+          "site": "school",
+          "round": 2,
+          "weight": 85,
+          "purpose": "夏令营/训练营优秀营员名单（官网公示）"
+        },
+        {
+          "tpl": "\"{org}\" \"{award}\" 公示",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "公示类页面"
+        },
+        {
+          "tpl": "\"{name}\" \"{award}\"",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "姓名 + 全称交叉"
+        },
+        {
+          "tpl": "\"{org}\" \"{award}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 88,
+          "purpose": "机构 + 全称 + 姓名三重交叉"
+        },
+        {
+          "tpl": "\"{org}\" {term} {period} 公示",
+          "site": "school",
+          "round": 2,
+          "weight": 70,
+          "purpose": "全称对不上时退回：类别词 + 简历原词的学年/期间"
+        },
+        {
+          "tpl": "\"{org}\" {term} {year} \"{name}\"",
+          "site": "wechat",
+          "round": 3,
+          "weight": 55,
+          "purpose": "公众号是这类公示的常见发布渠道，但只吃搜索引擎已收录的部分"
+        }
+      ]
+    },
+    "奖学金": {
+      "official_forms": [
+        {
+          "tpl": "\"{name}\" \"{award}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网按姓名与奖项短词取证"
+        },
+        {
+          "tpl": "\"{name}\" 奖学金",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网奖学金名单线索"
+        }
+      ],
+      "elements": [
+        "授予单位={org}",
+        "奖项={dept}"
+      ],
+      "terms": [
+        "国家奖学金",
+        "国家励志奖学金",
+        "校级奖学金",
+        "学业奖学金",
+        "优秀学生奖学金"
+      ],
+      "anchor_forms": [],
+      "forms": [
+        {
+          "tpl": "\"{org}\" \"{award}\"",
+          "site": "school",
+          "round": 2,
+          "weight": 100,
+          "purpose": "**奖项全称（含学年）直查学校公示**——学年用简历原词，不做任何换算"
+        },
+        {
+          "tpl": "\"{org}\" \"{award}\" 公示",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "公示类页面"
+        },
+        {
+          "tpl": "\"{name}\" \"{award}\"",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "姓名 + 全称交叉"
+        },
+        {
+          "tpl": "\"{org}\" \"{award}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 88,
+          "purpose": "机构 + 全称 + 姓名三重交叉"
+        },
+        {
+          "tpl": "\"{org}\" {term} {period} 公示",
+          "site": "school",
+          "round": 2,
+          "weight": 70,
+          "purpose": "全称对不上时退回：类别词 + 简历原词的学年/期间"
+        },
+        {
+          "tpl": "\"{org}\" {term} {year} \"{name}\"",
+          "site": "wechat",
+          "round": 3,
+          "weight": 55,
+          "purpose": "公众号是这类公示的常见发布渠道，但只吃搜索引擎已收录的部分"
+        }
+      ]
+    },
+    "学生工作": {
+      "official_forms": [
+        {
+          "tpl": "\"{name}\" \"{role}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网按姓名与职务查询，避免拼接完整组织名"
+        },
+        {
+          "tpl": "\"{name}\" 学生会",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "学校官网学生组织公示线索"
+        }
+      ],
+      "elements": [
+        "任职组织={org}",
+        "职务={dept}",
+        "起止时间"
+      ],
+      "terms": [
+        "换届",
+        "任命",
+        "公示",
+        "学生会"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "\"{org_latin}\" \"{org_han}\"",
+          "site": null,
+          "round": 1,
+          "weight": 105,
+          "purpose": "双语社团名先用英文和中文短名找官方组织页；只证明组织存在，不证明本人任职"
+        },
+        {
+          "tpl": "\"{org}\" {dept} 换届 {year}",
+          "site": null,
+          "round": 1,
+          "weight": 95,
+          "purpose": "换届公告里会列出一批人，是定锚的好材料"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "\"{org_latin}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 108,
+          "purpose": "用社团英文短名与姓名交叉，寻找本人参与记录"
+        },
+        {
+          "tpl": "\"{org_han}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 107,
+          "purpose": "用社团中文短名与姓名交叉，避免简称或标点变化漏检"
+        },
+        {
+          "tpl": "\"{orgname}\" 换届 {year}",
+          "site": "school",
+          "round": 2,
+          "weight": 100,
+          "purpose": "学校官网的换届公告"
+        },
+        {
+          "tpl": "\"{org}\" \"{orgname}\" 任命 公告 \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "任命公告直搜本人"
+        },
+        {
+          "tpl": "\"{org}\" \"{orgname}\" 换届公告 {year}",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "换届公告"
+        },
+        {
+          "tpl": "\"{orgname}\" 换届 名单 {year}",
+          "site": "wechat",
+          "round": 3,
+          "weight": 60,
+          "purpose": "公众号公告"
+        }
+      ],
+      "notes": [
+        "换届公告通常同时写'部长'和'副部长'——**公告证明了任职组织不等于证明了职务**，两个要素要分开搜、分开判。"
+      ]
+    },
+    "竞赛": {
+      "organizer_forms": [
+        {
+          "tpl": "\"{name}\" \"{contest}\"",
+          "site": "organizer",
+          "round": 1,
+          "weight": 108,
+          "purpose": "到赛事或主办方官网核对获奖者姓名与赛事"
+        }
+      ],
+      "official_forms": [
+        {
+          "tpl": "\"{name}\" \"{contest}\"",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "简历明确所属学校时，优先查学校及院系官网获奖报道"
+        },
+        {
+          "tpl": "\"{name}\" 获奖",
+          "site": "school",
+          "round": 1,
+          "weight": 110,
+          "purpose": "所属学校官网获奖线索"
+        }
+      ],
+      "elements": [
+        "赛事={contest}",
+        "奖项={award}",
+        "参赛身份={team}"
+      ],
+      "terms": [
+        "获奖名单",
+        "获奖公示",
+        "赛果"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "\"{team}\" {contest} {year}",
+          "site": null,
+          "round": 1,
+          "weight": 100,
+          "purpose": "队伍名 + 赛事是一对一标识，最强锚点"
+        },
+        {
+          "tpl": "\"{contest}\" {year} 获奖名单",
+          "site": "organizer",
+          "round": 1,
+          "weight": 95,
+          "purpose": "先拿组委会的完整名单"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "\"{contest}\" {year} 获奖名单 \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "名单里直搜本人"
+        },
+        {
+          "tpl": "{year} 获奖",
+          "site": "organizer",
+          "requires_site": true,
+          "round": 2,
+          "weight": 90,
+          "purpose": "组委会官网的获奖页——**精确性完全靠域限定，拿不到域就不该发**"
+        },
+        {
+          "tpl": "\"{contest}\" {year} 获奖 公示",
+          "site": null,
+          "round": 2,
+          "weight": 85,
+          "purpose": "公示类页面"
+        },
+        {
+          "tpl": "\"{org}\" \"{contest}\" {year} \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 75,
+          "purpose": "学校侧的报道"
+        },
+        {
+          "tpl": "\"{org}\" \"{contest}\" {year} \"{name}\"",
+          "site": "wechat",
+          "round": 3,
+          "weight": 55,
+          "purpose": "公众号是竞赛获奖的常见发布渠道，但只吃已收录的部分"
+        }
+      ],
+      "notes": [
+        "队伍奖项 ≠ 个人贡献。名单只证'这个队获奖且此人在队里'，不证'个人发挥了多少'——后者进 unproved。",
+        "**需要组委会域名（claim.entities.organizer_domain）才能做 site 限定**；拿不到时组委会官网会掉到 D 级。"
+      ]
+    },
+    "论文": {
+      "publisher_forms": [
+        {
+          "tpl": "\"{paper}\" \"{name}\"",
+          "site": "publisher",
+          "round": 1,
+          "weight": 108,
+          "purpose": "到期刊或出版社官网查论文题名和作者"
+        }
+      ],
+      "elements": [
+        "论文标题={title}",
+        "作者位次",
+        "刊物={venue}"
+      ],
+      "terms": [
+        "第一作者",
+        "通讯作者",
+        "论文"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "{paper}",
+          "site": null,
+          "kind": "crossref",
+          "round": 1,
+          "weight": 100,
+          "purpose": "论文标题直接查 Crossref 元数据"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "{paper}",
+          "site": null,
+          "kind": "crossref",
+          "round": 2,
+          "weight": 100,
+          "purpose": "Crossref 元数据"
+        },
+        {
+          "tpl": "\"{paper}\"",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "通用搜索找在线版本"
+        },
+        {
+          "tpl": "\"{paper}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 85,
+          "purpose": "标题 + 姓名交叉"
+        },
+        {
+          "tpl": "\"{paper}\" \"{venue}\"",
+          "site": null,
+          "round": 3,
+          "weight": 70,
+          "purpose": "按刊物确认发表"
+        },
+        {
+          "tpl": "\"{doi}\"",
+          "site": null,
+          "round": 3,
+          "weight": 75,
+          "purpose": "简历写了 DOI 时按 DOI 找出版方页面（Crossref 精确查询已在元数据那一步做过）"
+        }
+      ],
+      "notes": [
+        "Crossref 不记录共同一作，位次差异进 unproved 而非 ask。",
+        "在投 / 审稿中的稿件通常没有公开记录，none 是常态；预印本由 OpenAlex 按标题收录。",
+        "简历写了 DOI 的，元数据查询会先按 DOI 精确取回，再与标题比对——DOI 对不上标题的不算证据。"
+      ]
+    },
+    "专利": {
+      "elements": [
+        "专利名称={title}",
+        "专利号={patent_no}",
+        "发明人位次",
+        "专利权人"
+      ],
+      "terms": [
+        "专利",
+        "公开",
+        "授权"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "{patent_no}",
+          "site": null,
+          "kind": "patent",
+          "round": 1,
+          "weight": 110,
+          "unless_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "purpose": "专利号是一对一标识：直接在专利库里按号查，页面上有题名、发明人和专利权人"
+        },
+        {
+          "tpl": "\"{name}\" {title}",
+          "site": null,
+          "kind": "patent",
+          "round": 1,
+          "weight": 100,
+          "unless_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "purpose": "国家知识产权局公开公告"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "\"{name}\" {title}",
+          "site": null,
+          "kind": "patent",
+          "round": 2,
+          "weight": 100,
+          "unless_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "purpose": "专利公开公告"
+        },
+        {
+          "tpl": "\"{patent_no}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "按专利号 / 登记号全网找公告与转载"
+        },
+        {
+          "tpl": "\"{title}\" 软件著作权 登记",
+          "site": null,
+          "round": 2,
+          "weight": 92,
+          "when_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "purpose": "软件著作权不在专利库里，按软件名称找登记公告"
+        },
+        {
+          "tpl": "\"{title}\" 专利 公开",
+          "unless_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "通用搜索"
+        },
+        {
+          "tpl": "\"{title}\" 申请人 \"{name}\"",
+          "unless_terms": [
+            "软件著作权",
+            "软著",
+            "著作权登记"
+          ],
+          "site": null,
+          "round": 2,
+          "weight": 85,
+          "purpose": "申请人字段交叉"
+        }
+      ],
+      "notes": [
+        "申请中 / 已受理但未公开的专利查不到公开文本，none 是常态；发明专利一般在申请后 18 个月左右公开。",
+        "软件著作权归在本类，但不在专利库里：专利库限定的查询对它跳过，改按软件名称和登记号查。"
+      ]
+    },
+    "会议": {
+      "elements": [
+        "会议名称={conference}",
+        "报告题目={title}",
+        "参与形式"
+      ],
+      "terms": [
+        "会议",
+        "报告",
+        "墙报",
+        "Poster"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "site": null,
+          "round": 1,
+          "weight": 100,
+          "purpose": "报告 / 墙报题目与本人姓名交叉：会议日程、摘要集和报道里通常两者同时出现"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "\"{conference}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 95,
+          "purpose": "会议名称与姓名交叉，找日程、讲者名单或报道"
+        },
+        {
+          "tpl": "\"{title}\" \"{conference}\"",
+          "site": null,
+          "round": 2,
+          "weight": 88,
+          "purpose": "题目与会议交叉，找会议程序册或摘要集"
+        },
+        {
+          "tpl": "\"{conference}\" {year} 会议日程",
+          "site": null,
+          "round": 3,
+          "weight": 65,
+          "purpose": "会议程序册（Program / Agenda）——多为 PDF，回读后在里面找本人"
+        }
+      ],
+      "notes": [
+        "只参会、没有报告的，通常没有任何公开记录，none 是常态，不指向任何问题。",
+        "会议论文已收进论文集的归「论文」，走 Crossref / 出版方；本类只管报告、墙报和参会本身。"
+      ]
+    },
+    "项目": {
+      "elements": [
+        "项目名称={title}",
+        "本人参与",
+        "项目结果"
+      ],
+      "forms": [
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "site": null,
+          "round": 1,
+          "weight": 100,
+          "purpose": "项目名称与本人姓名交叉检索公开成果"
+        },
+        {
+          "tpl": "\"{title}\"",
+          "site": null,
+          "round": 2,
+          "weight": 70,
+          "purpose": "仅查项目名称，确认是否有公开作品；同名项目不能证明本人参与"
+        }
+      ],
+      "notes": [
+        "课程或内部项目没有公开仓库时，不应误标为开源项目；公开网页未收录也不代表项目不存在。"
+      ]
+    },
+    "开源项目": {
+      "elements": [
+        "仓库={repo}",
+        "贡献者身份"
+      ],
+      "terms": [
+        "contributor",
+        "maintainer"
+      ],
+      "anchor_forms": [
+        {
+          "tpl": "{repo}",
+          "site": null,
+          "kind": "github",
+          "round": 1,
+          "weight": 100,
+          "purpose": "仓库路径是最强的锚点"
+        }
+      ],
+      "forms": [
+        {
+          "tpl": "{repo}",
+          "site": null,
+          "kind": "github",
+          "round": 2,
+          "weight": 100,
+          "purpose": "仓库元数据"
+        },
+        {
+          "tpl": "\"{repo}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "仓库 + 姓名交叉，确认贡献者身份"
+        },
+        {
+          "tpl": "\"{repo}\" contributor",
+          "site": null,
+          "round": 3,
+          "weight": 70,
+          "purpose": "贡献者列表"
+        },
+        {
+          "tpl": "\"{project}\"",
+          "site": null,
+          "round": 3,
+          "weight": 65,
+          "purpose": "没有仓库路径时退回项目名（很多项目只有名字没有公开仓库）"
+        },
+        {
+          "tpl": "\"{project}\" \"{name}\"",
+          "site": null,
+          "round": 3,
+          "weight": 62,
+          "purpose": "项目名 + 姓名交叉"
+        },
+        {
+          "tpl": "\"{title}\"",
+          "site": null,
+          "round": 3,
+          "weight": 60,
+          "purpose": "同上，取实体里填的项目名称"
+        },
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "site": null,
+          "round": 3,
+          "weight": 58,
+          "purpose": "项目名 + 姓名交叉"
+        }
+      ],
+      "notes": [
+        "**repo 必须是真仓库路径**（形如 user/repo）。简历里常只有项目名——那种情况走 {project} 的 web 查询，",
+        "而不是把中文项目名塞给 GitHub 搜索（那只会得到 0 结果）。",
+        "贡献者身份靠 commit 署名/PR 记录，属 C 级平台元数据——只能证明'有人在用这个名字提交'，作证力度有限。"
+      ]
+    },
+    "实习": {
+      "elements": [
+        "单位={org}",
+        "岗位",
+        "起止时间"
+      ],
+      "terms": [
+        "实习",
+        "实习生"
+      ],
+      "anchor_forms": [],
+      "forms": [
+        {
+          "tpl": "\"{company}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 100,
+          "purpose": "公司与姓名交叉"
+        },
+        {
+          "tpl": "\"{company}\" {name} {year}",
+          "site": null,
+          "round": 2,
+          "weight": 85,
+          "purpose": "加年份"
+        },
+        {
+          "tpl": "\"{company}\" {role} 团队",
+          "site": null,
+          "round": 3,
+          "weight": 55,
+          "purpose": "团队页——注意官方站点的非公示页只到 D 级"
+        }
+      ],
+      "notes": [
+        "**企业实习绝大多数没有公开记录**，这一类的 none 是常态，不指向任何问题。"
+      ]
+    },
+    "任职": {
+      "elements": [
+        "单位={org}",
+        "职务={dept}",
+        "起止时间"
+      ],
+      "terms": [
+        "任职",
+        "任命",
+        "任命公告"
+      ],
+      "anchor_forms": [],
+      "forms": [
+        {
+          "tpl": "\"{company}\" \"{name}\"",
+          "site": null,
+          "round": 2,
+          "weight": 100,
+          "purpose": "公司与姓名交叉"
+        },
+        {
+          "tpl": "\"{company}\" \"{name}\" {role}",
+          "site": null,
+          "round": 2,
+          "weight": 90,
+          "purpose": "加上职务"
+        },
+        {
+          "tpl": "\"{company}\" \"{name}\" 任免 公告",
+          "site": "gov",
+          "round": 2,
+          "weight": 85,
+          "purpose": "体制内/国企的任免公示"
+        },
+        {
+          "tpl": "\"{company}\" \"{name}\" 公告 {year}",
+          "site": null,
+          "round": 3,
+          "weight": 70,
+          "purpose": "披露类公告"
+        }
+      ],
+      "notes": [
+        "高管层级由 profile 的 extra_forms 追加'上市公司公告 / 年报董监高'这类强来源。"
+      ]
+    },
+    "教学活动": {
+      "forms": [
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "round": 1,
+          "weight": 100,
+          "purpose": "活动或作品与本人交叉检索独立公开记录"
+        },
+        {
+          "tpl": "\"{name}\" 公开课 授课",
+          "round": 2,
+          "weight": 80,
+          "purpose": "查举办方公告、演出程序或课程报道，活动存在与本人角色分别证明"
+        }
+      ],
+      "notes": [
+        "提交的个人主页不能自证；好评、世界首演、最长等评价与范围需独立证明。"
+      ]
+    },
+    "艺术成果": {
+      "forms": [
+        {
+          "tpl": "\"{title}\" \"{name}\"",
+          "round": 1,
+          "weight": 100,
+          "purpose": "活动或作品与本人交叉检索独立公开记录"
+        },
+        {
+          "tpl": "\"{name}\" 首演 演出",
+          "round": 2,
+          "weight": 80,
+          "purpose": "查举办方公告、演出程序或课程报道，活动存在与本人角色分别证明"
+        }
+      ],
+      "notes": [
+        "提交的个人主页不能自证；好评、世界首演、最长等评价与范围需独立证明。"
+      ]
+    },
+    "著作": {
+      "forms": [],
+      "budget": {
+        "searches": 4,
+        "reads": 6,
+        "seconds": 70
+      },
+      "notes": [
+        "逐本核对题名、本人责任者、出版社和版本；主编与执行主编分别证明，出版总量另核。"
+      ]
+    }
+  }
+}

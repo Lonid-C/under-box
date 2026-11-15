@@ -1,0 +1,31 @@
+[Unit]
+Description=Underbox ICT full workbench with AgentArts orchestration
+After=network.target
+[Service]
+Type=simple
+User=underbox-ict-ui
+Group=underbox-ict-ui
+WorkingDirectory=/opt/underbox-huawei-ict/full-workbench/underbox
+EnvironmentFile=/etc/underbox-ict/workbench.env
+EnvironmentFile=/etc/underbox-ict/full.env
+ExecStart=/opt/underbox-ict-full-venv/bin/python -B serve.py --host 127.0.0.1 --port 18905
+Restart=on-failure
+RestartSec=3
+StateDirectory=underbox-ict-full
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+MemoryMax=1G
+CPUQuota=150%
+TasksMax=96
+LimitNOFILE=512
+[Install]
+WantedBy=multi-user.target

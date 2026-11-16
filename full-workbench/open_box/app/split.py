@@ -60,7 +60,8 @@ SYSTEM = """你在把一份简历拆成可以逐条核验的陈述。
 输出 JSON 对象 {"claims": [Claim, ...]}，不要输出任何解释文字。
 
 Claim 字段：id, raw_text, raw_locator, category, date_label, date_start, date_end, elements, entities
-category 只能取：学历 校内荣誉 奖学金 学生工作 竞赛 论文 专利 会议 项目 开源项目 实习 任职 教学活动 艺术成果 著作
+category 只能取：学历 校内荣誉 奖学金 学生工作 竞赛 论文 专利 会议 项目 开源项目 实习 任职 教学活动 艺术成果 著作 交流活动
+访问交流、访学或交换学习且没有获奖事实时归交流活动，不归校内荣誉。
 entities 形如 {"org":"某大学","dept":"计算机学院","role":"部长","level":"校级"}
 **这些键直接决定检索策略能不能展开，务必填准**：
   GitHub     → provided_urls（本条项目明确关联的仓库、PR、commit 原始链接），repo（user/repo）。不要从仓库 owner 猜测候选人的账号，也不要把个人主页链接传播给所有项目。
@@ -167,7 +168,7 @@ def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
 LAST_SPLIT: dict = {}
 
 _CATEGORIES = {"学历", "校内荣誉", "奖学金", "学生工作", "竞赛", "论文", "专利", "会议", "项目",
-               "开源项目", "实习", "任职", "教学活动", "艺术成果", "著作"}
+               "开源项目", "实习", "任职", "教学活动", "艺术成果", "著作", "交流活动"}
 # 模型偶尔用简历栏目名当类别。只收含义确定的别名；拿不准的（如"获奖"）不猜。
 _CATEGORY_ALIASES = {
     "教育经历": "学历", "教育背景": "学历", "学位": "学历",
@@ -186,6 +187,11 @@ _CATEGORY_ALIASES = {
 
 def correct_activity_category(claim):
     """仅修正明显错放进项目的活动；工程/科研项目保留项目性质。"""
+    from .retrieval_policy import enabled
+    from .retrieval_repairs import exchange_activity
+    if enabled() and exchange_activity(claim):
+        elements=[re.sub(r'^获奖年份=', '活动年份=',e) for e in claim.elements]
+        return claim.model_copy(update={'category':'交流活动','elements':elements})
     if claim.category not in {'项目', '开源项目'}:
         return claim
     text = claim.raw_text

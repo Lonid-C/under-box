@@ -93,6 +93,10 @@ class DeepSeekPageFetcher(PageFetcher):
 
 
 def build_fetcher(**kwargs):
+    from .retrieval_policy import enabled
+    if enabled():
+        # ICT follows the historical direct reader; no paid fetch-first retry.
+        return PageFetcher(**kwargs)
     if os.environ.get("DEEPSEEK_FETCH_ENABLED", "1") == "0":
         return PageFetcher(**kwargs)
     return DeepSeekPageFetcher(**kwargs)

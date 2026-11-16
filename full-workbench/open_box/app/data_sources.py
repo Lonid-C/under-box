@@ -16,7 +16,7 @@ import re
 
 
 ALL_CATEGORIES = ("学历", "校内荣誉", "奖学金", "学生工作", "竞赛", "论文", "专利", "会议",
-                  "项目", "开源项目", "实习", "任职", "教学活动", "艺术成果", "著作")
+                  "项目", "开源项目", "实习", "任职", "教学活动", "艺术成果", "著作", "交流活动")
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class DataSource:
 SOURCES = {s.id: s for s in (
     DataSource("school_catalog", "学校域名与公示栏目目录", ALL_CATEGORIES, "plan.school_domain / school_archives", "navigation_only"),
     DataSource("competition_catalog", "赛事及历年名单入口目录", ("竞赛",), "competitions.competition_for_claim / seed_pages", "navigation_only"),
-    DataSource("school_records", "学校公开培养、招生及荣誉记录", ("学历", "校内荣誉", "奖学金", "竞赛", "学生工作"), "searcher + PageFetcher / public attachments"),
+    DataSource("school_records", "学校公开培养、招生及荣誉记录", ("学历", "校内荣誉", "奖学金", "竞赛", "学生工作", "交流活动"), "searcher + PageFetcher / public attachments"),
     DataSource("public_web", "独立第三方公开网页", tuple(c for c in ALL_CATEGORIES if c != "实习"), "account-bound searcher + PageFetcher"),
     DataSource("paper_metadata", "Crossref / OpenAlex 论文登记记录", ("论文",), "search.paper_hits", "public_metadata"),
     DataSource("publisher_records", "期刊与出版社原始记录", ("论文", "著作"), "searcher + PageFetcher"),

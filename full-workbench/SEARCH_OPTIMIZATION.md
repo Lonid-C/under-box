@@ -1,5 +1,7 @@
 # ICT搜索优化：参考10月30日前实现
 
+当前取证修正见[RETRIEVAL_REPAIRS.md](RETRIEVAL_REPAIRS.md)。GLM继续检索；ICT核心读页恢复原生PageFetcher，不再逐页先调用DeepSeek抓取。拆分/身份记录关联/论文要素匹配不能仅因搜索接口相同就视为与原站完全一致。
+
 当前部署已按要求关闭金额限制（`UNDERBOX_ICT_COST_BUDGET=0`）。下述查询、排序、读页优化继续生效；金额份额仅在预算开关开启时执行。详见[BUDGET.md](BUDGET.md)。
 
 历史参照为原开发分支的[f7efc31（2026-10-15）](https://github.com/Lonid-C/under-box/commit/f7efc31)，以及main日期截止前的[6f11799（2026-10-10）](https://github.com/Lonid-C/under-box/commit/6f117993d9046a0b49e082913618f14ccbcc98aa)。按查询和预算行为对照，没有整体回滚或用缓存回放替代真实召回测试。

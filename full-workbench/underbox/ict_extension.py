@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.9'
+VERSION='ict-full-20261116.10'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -497,7 +497,8 @@ def install(engine):
             from app.retrieval_policy import enabled
             from app.cost_budget import enforced
             return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
-                               'retrieval':{'expanded':enabled(),'search_ceiling':100,'read_ceiling':40,
+                               'retrieval':{'expanded':enabled(),'page_reader':'native' if enabled() else 'configured',
+                                            'search_ceiling':100,'read_ceiling':40,
                                             'failed_read_recovery_ceiling':8,'alternate_searches_per_claim':0 if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 4,
                                             'search_policy':'zhipu_only' if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 'configured_with_fallback',
                                             'cost_budget_enforced':enforced(),

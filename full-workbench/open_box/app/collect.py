@@ -804,8 +804,12 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 budget.exhausted = True
                 break
             try:
-                reader = getattr(fetcher, "get_roster", None)
-                html = hit.content or (reader(hit.url, claim) if callable(reader) else fetcher.get(hit.url))
+                from .search import READ_DEADLINE
+                token=READ_DEADLINE.set(budget.started+budget.max_seconds if budget and recall_enabled() else None)
+                try:
+                    reader = getattr(fetcher, "get_roster", None)
+                    html = hit.content or (reader(hit.url, claim) if callable(reader) else fetcher.get(hit.url))
+                finally:READ_DEADLINE.reset(token)
             except Exception:
                 html = None
             if html:

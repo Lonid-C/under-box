@@ -181,6 +181,10 @@ def check_person(claim, url, text, title="", *, published_at=None, school_domain
     accepted, rejected = [], []
     for record in records:
         row_year = year or _year(record)
+        if claim.category=='竞赛' and not re.search(r'指导|教练',claim.raw_text):
+            if any(re.search(r'(?:指导教师|指导老师|教练)\s*[:：=]\s*'+p.pattern,record) for p in patterns):
+                rejected.append('本人位于指导教师列，不能据此证明参赛队员身份')
+                continue
         if _own_faculty_role(record, patterns) and _undergrad_during(context, row_year):
             rejected.append("本人行显示教师职称，与输入中同一时期的本科在读身份无法关联")
             continue

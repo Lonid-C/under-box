@@ -23,6 +23,15 @@ from typing import Protocol
 from urllib.parse import urlparse
 
 from .usage import METER
+from contextvars import ContextVar
+from contextlib import contextmanager
+
+READ_DEADLINE = ContextVar('ict_read_deadline',default=None)
+
+
+def read_remaining():
+    deadline=READ_DEADLINE.get()
+    return max(0,deadline-time.monotonic()) if deadline is not None else float('inf')
 
 def _ascii_header(value: str, fallback: str) -> str:
     """HTTP 头必须是 latin-1 可编码的。
@@ -173,6 +182,49 @@ def _award_table_text(document) -> str:
             + " | ".join(headers) + "\n" + "\n".join(lines)) if lines else ""
 
 
+def _roster_table_text(document) -> str:
+    """Preserve school/member relationships from actual PDF table cells only."""
+    import unicodedata
+    if len(document)>80:return ''
+    headers=None;previous_number=None;section='';lines=[]
+    clean=lambda s:' '.join(unicodedata.normalize('NFKC',str(s or '')).split())
+    for page_no,page in enumerate(document,1):
+        try:tables=page.find_tables().tables
+        except Exception:headers=None;section='';continue
+        if not tables:headers=None;section='';continue
+        for table in tables:
+            table_section=''
+            # Only a section actually printed above this table can set its award.
+            try:
+                above='\n'.join(b[4] for b in page.get_text('blocks') if b[3]<=table.bbox[1]+2)
+                labels=re.findall(r'(?:本科组|专科组|高职组)[一二三特]等奖',above)
+                if labels:
+                    table_section=labels[-1]
+                    if section!=labels[-1]:previous_number=None
+                    section=labels[-1]
+            except Exception:pass
+            for raw in table.extract():
+                row=[clean(c) for c in raw]
+                school_cols=[i for i,v in enumerate(row) if v in ('学校','学校名称','院校','参赛学校')]
+                member_cols=[i for i,v in enumerate(row) if re.fullmatch(r'队员[一二三四五六123456]|参赛学生|学生姓名|姓名',v)]
+                if len(school_cols)==1 and member_cols:
+                    if headers and headers!=row:section=table_section;previous_number=None
+                    headers=row;continue
+                if not headers or len(row)!=len(headers):continue
+                school_i=next(i for i,v in enumerate(headers) if v in ('学校','学校名称','院校','参赛学校'))
+                members=[i for i,v in enumerate(headers) if re.fullmatch(r'队员[一二三四五六123456]|参赛学生|学生姓名|姓名',v)]
+                if not row[school_i] or not any(row[i] for i in members):continue
+                # A new numbering sequence cannot inherit another group's award.
+                number=int(row[0]) if row[0].isdigit() else None
+                if number is None:continue
+                if previous_number is not None and number<=previous_number:section=''
+                previous_number=number
+                fields=[h+'='+v for h,v in zip(headers,row) if h and v]
+                if section:fields.append('原文名单分段='+section)
+                lines.append(' | '.join(fields)+f' ［名单表格第{page_no}页］')
+    return '\n［名单表格按真实单元格逐行读取］\n'+'\n'.join(lines) if lines else ''
+
+
 def _pdf_text(data: bytes) -> str | None:
     """公开名单常是 PDF；按文件签名解析，不能把二进制当网页文字。"""
     if not data[:1024].lstrip().startswith(b"%PDF-") or len(data) > MAX_PUBLIC_PDF_BYTES:
@@ -183,7 +235,7 @@ def _pdf_text(data: bytes) -> str | None:
         with pymupdf.open(stream=data, filetype="pdf") as document:
             text = unicodedata.normalize("NFKC", "\n".join(page.get_text() for page in document))
             try:
-                rows = _award_table_text(document)
+                rows = _award_table_text(document) + _roster_table_text(document)
             except Exception:
                 rows = ""
             if rows:
@@ -1178,6 +1230,22 @@ class PageFetcher:
             time.sleep(wait)
         self._last[host] = time.monotonic()
 
+    @contextmanager
+    def _read_slot(self,url):
+        host=urlparse(url).hostname or ''
+        reason=self.dead_hosts.get(host) or self.dead_hosts.get(f'{urlparse(url).scheme}://{host}')
+        if reason:
+            self.failures[url]=f'同一站点刚才{reason}，已跳过';yield False;return
+        left=read_remaining()
+        if left<=0:
+            self.failures[url]='达到本条读取时间上限';yield False;return
+        lock=self._host_lock(host)
+        acquired=lock.acquire() if left==float('inf') else lock.acquire(timeout=left)
+        if not acquired:
+            self.failures[url]='等待同站点读取时达到本条时间上限';yield False;return
+        try:yield True
+        finally:lock.release()
+
     def get_roster(self, url: str, claim) -> str | None:
         from .competitions import competition_for_claim
         from .plan import claim_school, school_domain
@@ -1194,7 +1262,8 @@ class PageFetcher:
         host = urlparse(url).hostname or ""
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
         # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
-        with self._host_lock(host):
+        with self._read_slot(url) as ready:
+            if not ready:return None
             self.failures.pop(url, None)
             dead_reason = self.dead_hosts.get(host) or self.dead_hosts.get(f"{urlparse(url).scheme}://{host}")
             if dead_reason:
@@ -1204,8 +1273,11 @@ class PageFetcher:
                 self.failures[url] = "robots.txt 不允许访问"
                 return None
             self._throttle(host)
-            timeout = httpx.Timeout(self.timeout, connect=self.connect_timeout)
             for attempt in range(self.PAGE_RETRIES + 1):
+                left=read_remaining()
+                if left<=0:
+                    self.failures[url]='达到本条读取时间上限';return None
+                timeout = httpx.Timeout(min(self.timeout,left), connect=min(self.connect_timeout,left))
                 try:
                     r = httpx.get(url, headers={"User-Agent": UA}, timeout=timeout,
                                   follow_redirects=True, verify=_verify_for_url(url))
@@ -1307,7 +1379,7 @@ class PageFetcher:
                     if reason.startswith(("连接超时", "连接失败")):
                         self.dead_hosts[host] = reason
                     return None
-                time.sleep(0.5 * (attempt + 1))
+                time.sleep(min(0.5 * (attempt + 1),read_remaining()))
         return None
 
     def post_public_json(self, url: str, data: dict) -> dict | None:

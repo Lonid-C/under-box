@@ -35,6 +35,16 @@ def _doi(value):
     return value.lower().strip() if re.fullmatch(r"10\.\d{4,9}/\S+", value) else ""
 
 
+def venue_matches(left,right):
+    """Normalize formatting, never collapse a workshop into its main event."""
+    def key(value):
+        value=re.sub(r'\((?:[A-Z][A-Z0-9 -]{1,25})\)','',str(value or ''))
+        value=re.sub(r'\b(?:19|20)\d{2}\b','',value)
+        value=re.sub(r'^\s*(?:proceedings\s+of\s+(?:the\s+)?)?(?:(?:IEEE|ACM)\s+)*','',value,flags=re.I)
+        return compact(value.replace('&','and'))
+    return bool(left and right) and (compact(left)==compact(right) or key(left)==key(right))
+
+
 def _registry(url, doi):
     if not isinstance(url, str): return False
     p = urlparse(url)
@@ -81,9 +91,8 @@ def author_match(claim, record):
     wanted_doi = ent.get("doi")
     if wanted_doi and _doi(wanted_doi) != doi:
         return PersonCheck(False, reason="DOI与本条输入不一致")
-    venue = ent.get("venue") or next((e.partition("=")[2] for e in claim.elements if e.startswith("刊物=")), "")
-    if venue and compact(venue) != compact(record.get("venue")):
-        return PersonCheck(False, reason="同题作品刊物不一致")
+    # Venue is an independently proved element. A mismatch must not erase a
+    # uniquely associated author's exact-title/DOI record.
     aliases = {compact(v) for v in latin_names(name)}
     matches = [r for r in rows if compact(r.get("name")) in aliases or r.get("name") == name]
     if len(matches) != 1:
@@ -127,7 +136,7 @@ def supports_for(claim, record):
         field, _, value = element.partition("="); value = value.strip()
         if field.strip() in {"论文标题", "论文题目", "题目"} and compact(value) == compact(record["title"]):
             result.append(element)
-        elif field.strip() in {"刊物", "期刊", "会议"} and compact(value) == compact(record.get("venue")):
+        elif field.strip() in {"刊物", "期刊", "会议"} and venue_matches(value,record.get("venue")):
             result.append(element)
         elif field.strip() == "DOI" and _doi(value) == record["doi"]:
             result.append(element)
@@ -151,6 +160,9 @@ def from_hit(claim, hit):
     if not checked.allowed:
         return None
     lines = ["论文登记题名：" + hit.title, "DOI：" + doi, "刊物：" + hit.venue, "发表年份：" + hit.year]
+    venue=claim.entities.get('venue') or next((e.partition('=')[2] for e in claim.elements if e.startswith('刊物=')),'')
+    if venue and not venue_matches(venue,hit.venue):
+        lines.append('刊物名称与输入尚未匹配；仅保留已核实要素，会议与Workshop等归属需另行核对。')
     lines += ["公开登记来源：" + url for url in hit.registry_sources]
     lines += ["作者 " + str(r.get("position")) + "：" + r["name"] + "；单位：" + "、".join(r.get("institutions", [])) for r in hit.author_records]
     return Evidence(url=hit.registry_sources[0], title=hit.title, publisher="Crossref / OpenAlex 公开登记",

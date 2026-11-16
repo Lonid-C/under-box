@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 Category = Literal[
     "学历", "校内荣誉", "奖学金", "学生工作", "竞赛",
     "论文", "专利", "会议", "项目", "开源项目", "实习", "任职",
-    "教学活动", "艺术成果", "著作",
+    "教学活动", "艺术成果", "著作", "交流活动",
 ]
 Tier = Literal["A", "B", "C", "D"]
 Status = Literal["ok", "part", "ask", "none", "who"]

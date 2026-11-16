@@ -97,16 +97,30 @@ def for_claim(claim, sources):
     from .identity import matches_school
     parts = _parts(sources)
     campus = _campus_competition(claim)
-    eligible = claim.category in {'学历', '校内荣誉', '奖学金'} or campus
+    eligible = claim.category in {'学历', '校内荣誉', '奖学金', '交流活动'} or campus
     school = claim_school(claim)
     context = (claim.entities or {}).get('candidate_identity_context') or {}
     education_schools = context.get('education_schools', [])
+    if claim.category=='交流活动':
+        eligible=bool(school and any(_institution_key(school)==_institution_key(s) for s in education_schools)
+                      and not any(_institution_key(school)==_institution_key(s) for s in
+                                  [*context.get('current_employers',[]),*parts.get('current_employers',[])]))
+    # A student's explicitly numbered academic grant can use its issuing school
+    # for administrative facts. Actual employers and generic projects stay out.
+    from .retrieval_policy import enabled
+    academic_project=(enabled() and claim.category=='项目' and school
+        and re.search(r'教育教学改革|教学改革|教改|研究生创新|大学生创新|科研立项',claim.raw_text)
+        and re.search(r'(?:项目编号|立项编号|课题编号)\s*[:：]?\s*[A-Za-z0-9][A-Za-z0-9-]{4,}',claim.raw_text)
+        and any(_institution_key(school)==_institution_key(s) for s in education_schools)
+        and not any(_institution_key(school)==_institution_key(s) for s in
+                    [*context.get('current_employers',[]),*parts.get('current_employers',[])]))
+    eligible=eligible or academic_project
     if campus and not school:
         school = campus_school_hint(claim)
     allowed = []
     if eligible and school:
         # 可按整份输入已建立的教育范围定位校内奖项，不能单靠模型猜出学校。
-        in_input = matches_school(school, claim.raw_text) or (claim.category in {'校内荣誉', '奖学金'} or campus) and any(
+        in_input = matches_school(school, claim.raw_text) or (claim.category in {'校内荣誉', '奖学金', '交流活动'} or campus) and any(
             matches_school(school, s) for s in education_schools)
         if in_input:
             allowed = [org for org in parts.get('organizations', []) if _institution_key(school) == _institution_key(org)]

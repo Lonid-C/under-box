@@ -630,6 +630,10 @@ def build_plan(
     `resume_categories` 是**整份简历**出现过的类别集合（流水线里拆分完就都有了）。
     档案匹配要用它，不能只看当前这一条的类别——见 `_matches` 里的说明。
     """
+    from .retrieval_policy import enabled as ict_recall
+    from .retrieval_repairs import exchange_activity,exchange_plan,role_variants
+    if claim.category=='交流活动' or ict_recall() and exchange_activity(claim):
+        return exchange_plan(claim,candidate_name)
     if claim.category == "实习":
         from .internship import company_name
         company = company_name(claim)
@@ -799,6 +803,9 @@ def build_plan(
         # 同一事实的中英文名/括号缩写分开检索。搜索供应商对复杂 OR 查询的支持并不
         # 稳定，两个短而精确的查询比一条长查询更可控；预算排序会保留最重要的变体。
         contexts = [ctx]
+        if ict_recall() and claim.category=='学生工作' and '{role}' in tpl:
+            roles=role_variants(claim)
+            if roles:contexts=[dict(ctx,role=role) for role in roles]
         variant_key = next((k for k in ("name", "contest", "award", "title", "conference")
                             if "{" + k + "}" in tpl and ctx.get(k + "2")), None)
         if variant_key:

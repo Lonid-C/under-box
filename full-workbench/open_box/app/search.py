@@ -1428,6 +1428,10 @@ def build_searcher(provider: str | None = None) -> Searcher:
         # Account binding is exclusive: never borrow another account's Brave key
         # or send the bound Zhipu key to a globally configured custom endpoint.
         return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
+    if os.environ.get('UNDERBOX_ICT_GLM_ONLY') == '1':
+        # Restore the GitHub Zhipu route for ICT; no cross-provider fallback.
+        return (ZhipuSearcher(endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
+                if os.environ.get('SEARCH_API_KEY') else NullSearcher())
     name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
     from .cost_budget import CURRENT,BudgetLimit

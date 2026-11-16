@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.5'
+VERSION='ict-full-20261116.6'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -497,7 +497,8 @@ def install(engine):
             from app.retrieval_policy import enabled
             return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
                                'retrieval':{'expanded':enabled(),'search_ceiling':100,'read_ceiling':40,
-                                            'failed_read_recovery_ceiling':8,'alternate_searches_per_claim':4,
+                                            'failed_read_recovery_ceiling':8,'alternate_searches_per_claim':0 if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 4,
+                                            'search_policy':'zhipu_only' if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 'configured_with_fallback',
                                             'estimated_budget_cny':4,'target_cny':3,'cloud_allowance_cny':.5,
                                             'report_search_safety_limit':1000}})
         if self.path.split('?',1)[0]=='/api/ict/sample':

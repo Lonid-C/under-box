@@ -315,7 +315,9 @@ def _context(claim, candidate_name: str, terms: list[str],
     from .plan import claim_school
     school = claim_school(claim)
     if claim.category == "竞赛" and not school:
+        from .source_guard import campus_school_hint
         school = e.get("school_search_hint") if isinstance(e.get("school_search_hint"), str) else ""
+        school = school or campus_school_hint(claim)
         org = org or school
         org_latin, org_han = _bilingual_org_parts(org)
     # 来源学校仅是检索线索，不能据此认定已获推免资格。
@@ -691,12 +693,21 @@ def build_plan(
     terms = list(cat.get("terms") or [])
     ctx = _context(claim, candidate_name, terms, doc.get("elements_map"))
     competition = competition_for_claim(claim)
-    if competition and not ctx.get("contest"):
+    if competition and (not ctx.get("contest") or competition['id'] == 'imc-prosperity'):
         # 模型漏填 contest 时，已识别的目录名称只补检索上下文，不改简历原文/待证明要素。
         ctx["contest"] = competition["name"]
 
     # 组装候选表单：类别锚点 → 类别取证 → 档案追加
     forms: list[tuple[dict, str]] = []
+    venue = ctx.get('conference') or ctx.get('venue')
+    conference_probe = (claim.category == '论文' and not ctx.get('paper') and not ctx.get('doi')
+                        and venue and candidate_name and re.sub(r'\s+', '', venue).casefold()
+                        in re.sub(r'\s+', '', claim.raw_text).casefold())
+    if conference_probe:
+        for suffix in ('program abstracts', 'accepted papers proceedings'):
+            forms.append(({'tpl':'"{conference}" "{name}" {year} '+suffix,
+                           'round':1,'weight':150,'purpose':'缺题名时按原文会议、作者及年度定位；仍须另核论文题名和作者归属'},
+                          'conference_author:论文'))
     # 官网先用最短的可用查询。学校已经由域名限定，不再重复完整院系组织名。
     # 每条陈述只加一条首选探针，空结果的渐进回退由 collect 在同一预算内处理。
     if ctx.get("school"):
@@ -961,6 +972,8 @@ def build_plan(
     dropped = [q.text for q in queries[cap:]]
     plan = Plan(queries[:cap], head.get("id", "none"), head.get("name", "无匹配"),
                 notes=list(head.get("notes") or []), dropped=dropped, budget=budget)
+    if conference_probe:
+        plan.notes.append('未提供论文题名或DOI，先按会议、作者与年度补查；会议存在或仅列出姓名不能证明论文已收录，请补充题名或录用材料。')
 
     if competition:
         plan.notes.append(publication_note(competition))

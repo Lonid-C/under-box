@@ -250,6 +250,7 @@ def to_presentation(rep) -> dict:
             "date": v.claim.date_label,
             "tier": v.best_tier or "",
             "status": v.status,
+            "retrievalStatus": 'not_started' if ((v.verification_agent or {}).get('sourceAccess', {}).get('queryPlan', {}).get('state') == 'no_queries' and not v.evidence) else 'searched',
             "needsHuman": v.needs_human,
             "rawText": v.claim.raw_text,
             "locator": v.claim.raw_locator,

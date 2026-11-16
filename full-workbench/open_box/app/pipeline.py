@@ -351,6 +351,11 @@ def verify_prepared(
             if not evidences and re.search(r"[A-Za-z]", name) and not re.search(r"[\u3400-\u9fff]", name):
                 vc.source_notes.append("当前只提供英文姓名；中文名单中的同名拼音不能自动认定为本人，可补充中文姓名或参赛队号建立关联。")
         vc.next_step = default_next_step(vc)
+        if not plan.queries and not evidences:
+            vc.needs_human = True
+            vc.next_step = '尚未执行有效查询，请补充论文题名、DOI或具体赛事/机构等检索信息后再核验。'
+            vc.source_notes.append('未执行检索：本条没有生成可用查询，不能解释为已经搜索后未找到。')
+        vc.source_notes.extend(n for n in plan.notes if '缺字段' in n or '未提供论文题名' in n)
         if current_orgs:
             allowed = scope.get('allowed_academic_institutions', []) if isinstance(scope, dict) else []
             if allowed:
@@ -362,7 +367,7 @@ def verify_prepared(
         if any(e.extraction_method == "search_snippet" for e in evidences):
             vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")
         # 6 澄清问题
-        vc.question = None if vc.github_audit or vc.claim_verification else generate_question(vc, llm)
+        vc.question = None if vc.github_audit or vc.claim_verification or not plan.queries and not evidences else generate_question(vc, llm)
         if vc.github_audit:
             vc.next_step = "只补充本条项目的本人账号、贡献链接和角色/指标的可追溯材料；未公开部分保持未知。"
         if workers > 1:

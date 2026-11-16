@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from threading import Lock
+from collections import Counter
 import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import re
@@ -79,6 +80,9 @@ class AgentRun:
         self.agent, self.claim, self.plan, self.budget = agent, claim, plan, budget
         self.events = []
         self.truncated = False
+        self.decisions = []
+        self.decision_counts = Counter()
+        self.decisions_truncated = False
         self._lock = Lock()
         self.status = "running"
         self._elapsed = None
@@ -105,10 +109,22 @@ class AgentRun:
         return {**self.agent.describe(), "reusedAnchors": self.claim.entities.get("verified_identity_anchors", []),
                 "sourceAccess": self.snapshot(), "handoffs": self.plan.handoffs}
 
+    def decision(self, reason, reference='', state='rejected'):
+        with self._lock:
+            self.decision_counts[reason] += 1
+            if len(self.decisions) < 120:
+                self.decisions.append({'state':state,'reason':reason,'reference':safe_reference(reference)})
+            else:self.decisions_truncated = True
+
     def snapshot(self):
         with self._lock:
             events = [dict(e) for e in self.events]
+            decisions = [dict(e) for e in self.decisions]
+            decision_counts = dict(self.decision_counts)
         return {"claimId": self.claim.id, "agentId": self.agent.id, "status": self.status,
+                'queryPlan':{'state':'ready' if self.plan.queries else 'no_queries',
+                             'queryCount':len(self.plan.queries),'notes':list(self.plan.notes)},
+                'decisions':decisions,'decisionCounts':decision_counts,'decisionsTruncated':self.decisions_truncated,
                 "events": events, "truncated": self.truncated,
                 "budget": {"maxSearches": self.budget.max_searches, "searches": self.budget.searches,
                            "maxReads": self.budget.max_page_reads, "reads": self.budget.page_reads,
@@ -118,6 +134,11 @@ class AgentRun:
                                'readRefunds': self.budget.read_refunds, 'robotsSkipped': self.budget.robots_skipped}
                               if getattr(self.budget, 'recovery_enabled', False) else {})},
                 "note": "数据源调用记录只说明查询过程，不构成本人经历证据。"}
+
+
+def record_decision(reason, reference='', state='rejected'):
+    run = _ACTIVE_RUN.get()
+    if run:run.decision(reason,reference,state)
 
 
 def invoke_source(source_id, operation, *, reference="", action="search", category=None, unavailable_reason=None):

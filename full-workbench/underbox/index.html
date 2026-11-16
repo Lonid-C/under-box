@@ -1096,6 +1096,24 @@ function renderOverview() {
   $('rno').textContent = REPORT.reportNo;
 }
 
+function retrievalLabel(c) {
+  return c.manualReview?.kind === 'internship' ? '待人工背调' : c.retrievalStatus === 'not_started' ? '待补充检索信息' : STATUS[c.status].label;
+}
+function retrievalDetails(c) {
+  const access = c.verificationAgent?.sourceAccess;
+  if (!access?.queryPlan) return null;
+  const box = el('div', {class:'dsec'}, el('h4',{text:'检索与来源筛选'}));
+  box.appendChild(el('div',{class:'hint',text:access.queryPlan.state === 'no_queries'
+    ? '未生成可用查询，请先补充检索信息。' : `已生成 ${access.queryPlan.queryCount} 条查询；实际执行与停止原因见来源记录。`}));
+  if (access.decisionCounts && Object.keys(access.decisionCounts).length) {
+    const records = el('details', {}, el('summary',{text:'来源筛选记录'}));
+    Object.entries(access.decisionCounts).forEach(([reason,count])=>records.appendChild(el('div',{class:'hint',text:`${reason}：${count} 条记录`})));
+    (access.decisions || []).forEach(item=>records.appendChild(el('div',{class:'hint',style:'overflow-wrap:anywhere',text:`${item.reason} · ${item.reference}`})));
+    if(access.decisionsTruncated) records.appendChild(el('div',{class:'hint',text:'逐页记录已达显示上限，汇总计数仍包含全部筛选记录。'}));
+    box.appendChild(records);
+  }
+  return box;
+}
 function detailOf(c) {
   const d = el('div', {class:'detail'});
   d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'简历原文（逐字）'}),
@@ -1118,6 +1136,8 @@ function detailOf(c) {
     el('h4', {text:'实习单位资料与联系渠道'}), renderManualReview(c.manualReview)));
   if (c.educationReview) d.appendChild(el('div', {class:'dsec'},
     el('h4', {text:'院校专业官网与人工核验入口'}), renderEducationReview(c.educationReview)));
+  const retrieval = retrievalDetails(c);
+  if (retrieval) d.appendChild(retrieval);
   if (c.sourceNotes && c.sourceNotes.length) {
     const scope = el('div');
     c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
@@ -1168,7 +1188,7 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : '未找到与本人关联的公开记录，可请候选人补充材料。'})));
+      el('div', {class:'empty', text:c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : c.retrievalStatus === 'not_started' ? '尚未执行有效查询，请补充检索信息后再核验。' : '未找到与本人关联的公开记录，可请候选人补充材料。'})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1353,7 +1373,7 @@ function renderClaims() {
     const st = STATUS[c.status];
     const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':c.status},
       el('span', {class:'dot', style:`background:${st.dot}`}),
-      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:c.manualReview?.kind === 'internship' ? '待人工背调' : st.label}),
+      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c)}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
       el('span', {class:'tx'}, summaryOf(c.rawText), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),

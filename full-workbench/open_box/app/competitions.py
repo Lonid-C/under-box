@@ -88,8 +88,10 @@ def competition_for_claim(claim) -> dict | None:
     entities = claim.entities or {}
     labels = [entities.get("contest"), *[e.partition("=")[2] for e in claim.elements
                if e.partition("=")[0].strip() in ("赛事", "比赛", "竞赛")]]
-    if any(_normalize(str(v or "")) == "高教社杯" for v in labels):
-        return find_competition(" ".join([str(v or "") for v in labels] + [claim.raw_text or ""]))
+    # 原文中的具体全称优先于模型抽出的缩写，例如 IMC Prosperity 不能走数学赛。
+    combined = find_competition(" ".join([str(v or "") for v in labels] + [claim.raw_text or ""]))
+    if combined or any(_normalize(str(v or "")) == "高教社杯" for v in labels):
+        return combined
     for label in labels:
         if isinstance(label, str) and label.strip():
             match = find_competition(label)

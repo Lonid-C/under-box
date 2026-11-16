@@ -65,25 +65,51 @@ def claim_sources(claim):
                   employer.get('domains', []), employer.get('organizations', []))
 
 
+def _campus_competition(claim):
+    campus = claim.category == '竞赛' and bool(re.search(r'校内|校级|本校|校赛', claim.raw_text))
+    # 同时写省赛/国赛时不借校内字样放开学校来源。
+    campus = campus and not re.search(r'省赛|省级|省[特一二三]等奖|国赛|国家级|全国(?:赛|总?决赛|奖|[特一二三]等奖)', claim.raw_text)
+    campus = campus and not re.search(r'省赛|省级|国赛|国家级|provincial|national',
+                                     ' '.join(str((claim.entities or {}).get(k) or '') for k in ('level','stage')), re.I)
+    return bool(campus)
+
+
+def _institution_key(value):
+    from .plan import _school_record
+    record = _school_record(value)
+    return re.sub(r'[\s（）()]+', '', record['name'] if record else value).casefold()
+
+
+def campus_school_hint(claim):
+    if not _campus_competition(claim):return ''
+    context = (claim.entities or {}).get('candidate_identity_context') or {}
+    schools = [s for s in context.get('education_schools', []) if isinstance(s,str) and s]
+    known = {_institution_key(s) for s in schools}
+    hint = (claim.entities or {}).get('school_search_hint')
+    if len(known)!=1:return ''
+    if hint and (not isinstance(hint,str) or _institution_key(hint) not in known):return ''
+    return hint or schools[0]  # 无年份时也仅从输入中唯一学校定位，不推定就读年份或参赛归属。
+
+
 def for_claim(claim, sources):
     """本校就读/本校荣誉是用途限定的例外；不放行本校证明别校学历或其他经历。"""
-    from .plan import claim_school, school_domain, _school_record
+    from .plan import claim_school, school_domain
     from .identity import matches_school
     parts = _parts(sources)
-    eligible = claim.category in {'学历', '校内荣誉', '奖学金'} or (
-        claim.category == '竞赛' and bool(re.search(r'校内|校级|本校', claim.raw_text)))
+    campus = _campus_competition(claim)
+    eligible = claim.category in {'学历', '校内荣誉', '奖学金'} or campus
     school = claim_school(claim)
+    context = (claim.entities or {}).get('candidate_identity_context') or {}
+    education_schools = context.get('education_schools', [])
+    if campus and not school:
+        school = campus_school_hint(claim)
     allowed = []
     if eligible and school:
         # 可按整份输入已建立的教育范围定位校内奖项，不能单靠模型猜出学校。
-        context = (claim.entities or {}).get('candidate_identity_context') or {}
-        in_input = matches_school(school, claim.raw_text) or claim.category in {'校内荣誉', '奖学金'} and any(
-            matches_school(school, s) for s in context.get('education_schools', []))
+        in_input = matches_school(school, claim.raw_text) or (claim.category in {'校内荣誉', '奖学金'} or campus) and any(
+            matches_school(school, s) for s in education_schools)
         if in_input:
-            def institution_key(value):
-                record = _school_record(value)
-                return re.sub(r'[\s（）()]+', '', record['name'] if record else value).casefold()
-            allowed = [org for org in parts.get('organizations', []) if institution_key(school) == institution_key(org)]
+            allowed = [org for org in parts.get('organizations', []) if _institution_key(school) == _institution_key(org)]
     blocked_orgs = [org for org in parts.get('organizations', []) if org not in allowed]
     mapping = parts.get('domains_by_org', {})
     allowed_domains = {d for org in allowed for d in mapping.get(org, [school_domain(org)]) if d}
@@ -110,12 +136,20 @@ class SourceGuardSearcher:
 
     def _query(self, query, site):
         if blocked_query(query, site, self.sources):
+            from .data_sources import record_decision
+            record_decision('查询范围处于排除来源',site or '')
             return None
         domains = _parts(self.sources).get('domains', [])
         return query + ''.join(' -site:' + d for d in domains if '-site:' + d not in query)
 
     def _hits(self, hits):
-        return [h for h in hits if not excluded(h.url, self.sources, getattr(h, 'publisher', ''))]
+        from .data_sources import record_decision
+        kept=[]
+        for hit in hits:
+            if excluded(hit.url,self.sources,getattr(hit,'publisher','')):
+                record_decision('搜索结果来源处于排除范围',hit.url)
+            else:kept.append(hit)
+        return kept
 
     def search(self, query, site=None):
         query = self._query(query, site)
@@ -146,6 +180,8 @@ class SourceGuardFetcher:
 
     def _read(self, url, reader, *args, **kwargs):
         if excluded(url, self.sources):
+            from .data_sources import record_decision
+            record_decision('读取来源处于排除范围',url)
             return None
         body = reader(url, *args, **kwargs)
         resolved = getattr(self.inner, "resolved_urls", {}).get(url, url)

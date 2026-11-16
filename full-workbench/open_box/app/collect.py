@@ -38,6 +38,7 @@ from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
                      PageFetcher, rephrase_variants,
                      SearchFiltered, SearchHit, Searcher, SearchUnavailable, url_in_domain)
 from .strategy import WECHAT_HOST, _name_variants, competition_site, publication_site
+from .data_sources import record_decision
 from .retrieval_policy import enabled as recall_enabled
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
@@ -247,11 +248,14 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     """让模型逐字摘录，然后由规则定级和打身份分。模型不参与任何判定。"""
     from .source_guard import excluded, claim_sources
     from .person_scope import check_person, validated_signals
+    def reject(reason):
+        record_decision(reason, hit.url)
+        return None
     claim.entities = {**claim.entities, "candidate_name": candidate_name or claim.entities.get("candidate_name", "")}
     if excluded(hit.url, claim_sources(claim), hit.publisher):
-        return None
+        return reject('来源处于排除范围')
     if claim.category == "竞赛" and competition_page_mismatch(claim, hit.title or ""):
-        return None
+        return reject('赛事或赛级不匹配')
     if claim.category == "论文" and hit.author_records:
         from .paper_identity import from_hit
         evidence = from_hit(claim, hit)
@@ -260,14 +264,14 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         return evidence
     if claim.category == "学历" and not education_school_matches(
             claim, hit.url, page_text, hit.title, school_domains):
-        return None
+        return reject('学校不匹配')
     if not has_candidate_anchor(claim, hit.url, page_text, hit.title, school_domains):
-        return None
+        return reject('正文缺少本人或团队身份锚点')
     if claim.category in AWARD_CATEGORIES:
         target = re.sub(r"[\s\W_]+", "", award_name(claim)).casefold()
         body = re.sub(r"[\s\W_]+", "", f"{hit.title}\n{page_text}").casefold()
         if not target or target not in body:
-            return None  # 纯就读/录取页面不花一次获奖抽取调用。
+            return reject('正文没有对应奖项')  # 纯就读/录取页面不花一次获奖抽取调用。
     claim.entities = {**claim.entities, "candidate_name": candidate_name}
     system = EXTRACT_SYSTEM.format(
         raw_text=claim.raw_text, elements=claim.elements, entities=claim.entities)
@@ -286,9 +290,9 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     try:
         got = llm.complete_json(system, wrap_untrusted(page_text))
     except Exception:
-        return None
+        return reject('模型调用或输出解析失败')
     if not isinstance(got, dict):
-        return None
+        return reject('模型输出格式错误')
 
     snippet = (got.get("snippet") or "").strip()
     # 模型该给数组的地方经常给单个字符串。必须**先收敛再判断**：
@@ -300,47 +304,47 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     contradicts = as_str_list(got.get("contradicts"))
     # 已识别为同名他人或身份不符的材料，不只降低分数，而是完全不进入证据栏。
     if conflicts:
-        return None
+        return reject('身份冲突')
     if not has_candidate_anchor(claim, hit.url, snippet, hit.title, school_domains):
-        return None
+        return reject('摘录缺少本人或团队身份锚点')
     person = check_person(claim, hit.url, snippet, hit.title,
                           published_at=got.get("published_at"), school_domains=school_domains)
     if not person.allowed:
-        return None
+        return reject('未通过本人身份关联')
     if (claim.entities.get("candidate_identity_context") or {}).get("policy") == "person_v2":
         signals = validated_signals(signals, person)
     if claim.category in AWARD_CATEGORIES:
         if (not verbatim_excerpt(snippet, original_page_text)
                 or not award_scope_matches(claim, snippet, hit.title, candidate_name)
                 or claim_school(claim) and not education_school_matches(claim, hit.url, snippet, hit.title, school_domains)):
-            return None
+            return reject('奖项摘录、学校或范围不匹配')
     if claim.category == "学历":
         if (not verbatim_excerpt(snippet, original_page_text)
                 or not own_education_record(snippet, hit.title, candidate_name)
                 or not education_scope_matches(claim, snippet, hit.title)
                 or not education_school_matches(
                 claim, hit.url, snippet, hit.title, school_domains)):
-            return None
+            return reject('学历摘录、学段或本人就读范围不匹配')
     if claim.category=='著作' and not verbatim_excerpt(snippet,original_page_text):
-        return None
+        return reject('著作摘录不是原文')
     # 页面里什么都没摘到，且既不支持也不矛盾 → 不构成证据，直接丢弃
     if not snippet and not supports and not conflicts:
-        return None
+        return reject('未抽取到证据内容')
 
     # supports/contradicts 只认 elements 里的原文，防止模型自造要素
     valid_elements = set(claim.elements)
     supports = [s for s in supports if s in valid_elements]
     if ((claim.entities.get("candidate_identity_context") or {}).get("policy") == "person_v2"
             and not supports and not contradicts):
-        return None
+        return reject('未支持本条任何要素')
     if claim.category in AWARD_CATEGORIES and not any(
             s.partition("=")[0].strip() in {"奖项", "奖学金", "荣誉", "荣誉名称", "奖项名称"}
             for s in supports):
-        return None
+        return reject('未证明对应奖项')
     if claim.category == "学历":
         # 只有就读关系、没有任何本条要素支持或反证的同名材料不进入证据栏。
         if not supports and not contradicts:
-            return None
+            return reject('未证明对应学历要素')
         stage = bool(re.search(r"拟录取|拟推荐|推免|保研|保送|直博|硕博连读|[12]\d{3}级|在读|博士生|硕士生|研究生|"
                                r"\b(?:student|admitted|enrolled)\b", snippet, re.I))
         awarded = bool(re.search(r"(?:获[得]?|授予|取得|毕业)[^。；;\n]{0,25}(?:学位|学士|硕士|博士)|"
@@ -350,16 +354,16 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
             supports = [s for s in supports if s.partition("=")[0].strip()
                         not in {"学位", "毕业时间", "毕业年份", "获得学位时间", "获得学位年份"}]
         if not supports and not contradicts:
-            return None
+            return reject('就读记录不能证明学位授予')
 
     if claim.category == '竞赛':
         if competition_page_mismatch(claim, snippet):
-            return None
+            return reject('摘录中的赛事不匹配')
         # 官网目录不能替代实际页面。已知赛事的摘录必须在本次读取内容中确实出现。
         quoted = re.sub(r"\s+", "", snippet).casefold()
         source_text = re.sub(r"\s+", "", original_page_text).casefold()
         if not quoted or quoted not in source_text:
-            return None
+            return reject('竞赛摘录不是原文')
         target_year = claim_year(claim)
         metadata = result_page_metadata(competition_for_claim(claim), hit.url)
         year_text = re.sub(r"(?<!\d)(?:19|20)\d{2}年?(?:出生|生人)", "", snippet)
@@ -445,7 +449,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     publisher = (got.get("publisher") or hit.publisher or "").strip()
     origin_url = got.get("origin_url") or None
     if excluded(origin_url, claim_sources(claim), publisher) or excluded('', claim_sources(claim), got.get('wechat_verified_subject')):
-        return None
+        return reject('来源发布主体处于排除范围')
 
     # 公众号名称含学校名不等于学校认证。没有原文认证主体时保留为线索，
     # 不凭发布方名称替模型补一个不存在的认证信息。
@@ -478,7 +482,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
         # 兜底：单条证据不合规就丢弃，不让一个脏字段毁掉整份报告。
         # split.py 对 Claim 早就是这么做的，这里原先漏了——
         # 一个字符串类型的 identity_conflicts 就能让整次核验直接失败。
-        return None
+        return reject('证据字段格式不合规')
     ev.supports = academic_supports(claim, ev)
     from .faculty_recall import book_supports
     ev.supports = book_supports(claim,ev)
@@ -776,7 +780,11 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     再逐页交给模型逐字摘录。抓取可以并行，模型抽取仍是串行，保持确定性。"""
     from .source_guard import excluded, claim_sources
     sources = claim_sources(claim)
-    selected = [h for h in selected if not excluded(h.url, sources, h.publisher)]
+    allowed = []
+    for hit in selected:
+        if excluded(hit.url, sources, hit.publisher):record_decision('来源处于排除范围',hit.url)
+        else:allowed.append(hit)
+    selected = allowed
     if not selected:
         return []
     groups: dict[str, list[SearchHit]] = {}
@@ -901,8 +909,10 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             hit = replace(hit, url=resolved)
             seen_urls.add(_url_key(resolved))
         if excluded(hit.url, sources, hit.publisher):
+            record_decision('跳转后来源处于排除范围',hit.url)
             continue
         if budget and budget.elapsed() >= budget.max_seconds:
+            record_decision('读取后达到本条时间上限，尚未完成抽取',hit.url)
             budget.exhausted = True
             break
         text = extract_main_text(html, preserve_tables=claim.category in {"学历", "竞赛", "著作", "教学活动"}) if "<" in html[:2000] else html
@@ -949,6 +959,9 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                     if ev.source_tier == "A":
                         ev.source_tier = "B"
                 evidences.append(ev)
+                record_decision('通过证据抽取与身份范围校验',hit.url,state='retained')
+        else:
+            record_decision('正文缺少本人或团队身份锚点，目录仅跟进附件',hit.url)
         # 栏目 → 当年公告 → 附件，最多两层；赛事可按题目读取多份赛果，共用原读页预算。
         children = []
         for linked in links:
@@ -1109,12 +1122,13 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
          if "=" in e and e.split("=", 1)[0].strip() in ("学校", "机构", "授予单位")), "")
     school = claim_school(claim)
     if claim.category == "竞赛" and not school:
-        school = (claim.entities or {}).get("school_search_hint", "")
+        from .source_guard import campus_school_hint
+        school = (claim.entities or {}).get("school_search_hint", "") or campus_school_hint(claim)
     entities = claim.entities or {}
     contest = (entities.get("contest") or next(
         (e.split("=", 1)[1].strip() for e in claim.elements
          if e.startswith(("赛事=", "比赛=", "竞赛="))), ""))
-    if competition and not contest:
+    if competition and (not contest or competition['id'] == 'imc-prosperity'):
         contest = competition["name"]
     venue = entities.get("venue") or next(
         (e.split("=", 1)[1].strip() for e in claim.elements
@@ -1142,15 +1156,31 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     def add_hits(hits):
         nonlocal total_hits
         from .source_guard import excluded, claim_sources
-        usable = [h for h in hits if h.url.startswith(("https://", "http://")) and not excluded(h.url, sources, h.publisher) and _host_of(h.url) not in {"github.com", "www.github.com", "api.github.com", "raw.githubusercontent.com"}]
+        usable = []
+        for hit in hits:
+            if not hit.url.startswith(('https://','http://')):
+                record_decision('搜索结果不是公开网页协议',hit.url)
+            elif excluded(hit.url,sources,hit.publisher):
+                record_decision('搜索结果来源处于排除范围',hit.url)
+            elif _host_of(hit.url) in {'github.com','www.github.com','api.github.com','raw.githubusercontent.com'}:
+                record_decision('GitHub来源须使用本条主动授权的入口',hit.url)
+            else:usable.append(hit)
         if claim.category == '竞赛':
-            usable = [h for h in usable if not competition_page_mismatch(claim, h.title or "")]
+            matched=[]
+            for hit in usable:
+                if competition_page_mismatch(claim,hit.title or ''):record_decision('搜索结果赛事或赛级不匹配',hit.url)
+                else:matched.append(hit)
+            usable=matched
             year = claim_year(claim)
             def wrong_year(hit):
                 years = {int(y) for y in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)",hit.title or "")}
                 profile = re.search(r"人物|风采|榜样|毕业生|访谈|介绍|事迹|个人主页",hit.title or "")
                 return bool(year and years and year not in years and not profile)
-            usable = [h for h in usable if not wrong_year(h)]
+            matched=[]
+            for hit in usable:
+                if wrong_year(hit):record_decision('搜索结果标题的竞赛年份不匹配',hit.url)
+                else:matched.append(hit)
+            usable=matched
         total_hits += len(usable)
         per_query.append(sorted(usable, key=lambda h: -_relevance(h, candidate_name, claim)))
 
@@ -1333,7 +1363,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 q = replace(q, text=f'"{label}" {q.text}', site=None, source="fallback:school")
         elif q.site == "school" and not site and discovery_attempted:
             q = replace(q, text=f'"{school}" {q.text}', site=None, source="fallback:school")
-        elif q.source.startswith(("organizer:", "publisher:")) and not site:
+        elif (q.source.startswith(("organizer:", "publisher:")) and not site
+              and not (competition and competition['id'] == 'imc-prosperity' and organizer_site)):
             is_contest = q.source.startswith("organizer:")
             label = contest if is_contest else venue
             attempted_discovery = (organizer_discovery_attempted if is_contest

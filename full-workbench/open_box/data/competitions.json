@@ -5950,6 +5950,45 @@
       },
       "school_search_first": true,
       "edition_year_offset": 2019
+    },
+    {
+      "id": "imc-prosperity",
+      "name": "IMC Prosperity 全球量化交易挑战赛",
+      "aliases": [
+        "IMC Prosperity",
+        "Prosperity 4",
+        "Prosperity Trading Challenge",
+        "IMC Global Trading Challenge",
+        "IMC 全球量化交易挑战赛",
+        "IMC 量化交易挑战赛"
+      ],
+      "subjects": [
+        "金融与量化交易"
+      ],
+      "region": "International",
+      "official_urls": [
+        "https://prosperity.imc.com/"
+      ],
+      "official_domains": [
+        "prosperity.imc.com"
+      ],
+      "authority_domains": [
+        "imc.com"
+      ],
+      "result_pages": [
+        {
+          "url": "https://prosperity.imc.com/",
+          "kind": "index",
+          "title": "IMC Prosperity trading challenge"
+        }
+      ],
+      "publication": {
+        "status": "unknown",
+        "checked_at": "2026-11-16",
+        "source_url": "https://prosperity.imc.com/",
+        "note": "排行榜和个人成员是否公开须逐页核实；团队排名不自动证明本人是成员。"
+      },
+      "notes": "与International Mathematics Competition for University Students不同；按队名/队号定位，缺少成员姓名时保留待补证。"
     }
   ]
 }

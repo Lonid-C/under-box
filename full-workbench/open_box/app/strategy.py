@@ -692,6 +692,17 @@ def build_plan(
 
     terms = list(cat.get("terms") or [])
     ctx = _context(claim, candidate_name, terms, doc.get("elements_map"))
+    from .retrieval_policy import enabled as ict_recall
+    targeted_award=ict_recall() and claim.category in {'校内荣誉','奖学金'}
+    if targeted_award:
+        compact=lambda s:re.sub(r'[\W_]+','',s).casefold()
+        original=compact(claim.raw_text)
+        # Search vocabulary must come from this award, never the first category
+        # example (e.g. national scholarship for a university special prize).
+        if compact(ctx['award']) not in original:ctx['award']='';ctx['award2']=''
+        grounded=sorted((t for t in terms if compact(t) in original),key=len,reverse=True)
+        ctx['term']=ctx['award'] or (grounded[0] if grounded else '奖学金' if claim.category=='奖学金' else '荣誉')
+        ctx['terms']='"'+ctx['term']+'"'
     competition = competition_for_claim(claim)
     if competition and (not ctx.get("contest") or competition['id'] == 'imc-prosperity'):
         # 模型漏填 contest 时，已识别的目录名称只补检索上下文，不改简历原文/待证明要素。
@@ -699,6 +710,9 @@ def build_plan(
 
     # 组装候选表单：类别锚点 → 类别取证 → 档案追加
     forms: list[tuple[dict, str]] = []
+    if targeted_award and ctx.get('award') and ctx.get('school'):
+        forms.append(({'tpl':'"{award}" {year} 名单 公示','site':'school','round':1,'weight':105,
+                       'purpose':'对应学校官网按原奖名、原年份查整批名单，随后读取本人行'},'school:award_roster'))
     venue = ctx.get('conference') or ctx.get('venue')
     conference_probe = (claim.category == '论文' and not ctx.get('paper') and not ctx.get('doi')
                         and venue and candidate_name and re.sub(r'\s+', '', venue).casefold()
@@ -755,6 +769,12 @@ def build_plan(
     skipped: list[tuple[str, list[str]]] = []
     for form, source in forms:
         tpl = form.get("tpl", "")
+        if targeted_award:
+            # Literal legacy profile extras must not change the award either.
+            literals=('三好学生','优秀学生','国家奖学金','国家励志奖学金','夏令营','优秀营员')
+            if any(t in tpl and t not in claim.raw_text and not
+                   (t=='优秀营员' and '夏令营' in claim.raw_text and '优秀学员' in claim.raw_text)
+                   for t in literals):continue
         if "{repo}" in tpl or "{github}" in tpl: continue  # 没有项目关联链接不搜索贡献者或其他仓库。
         when_terms = form.get("when_terms") or []
         if when_terms and not any(term in _claim_search_blob(claim) for term in when_terms):

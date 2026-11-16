@@ -78,6 +78,8 @@ class AgentRun:
 
     def __init__(self, agent, claim, plan, budget):
         self.agent, self.claim, self.plan, self.budget = agent, claim, plan, budget
+        from .cost_budget import CURRENT
+        self.cost_budget=CURRENT.get()
         self.events = []
         self.truncated = False
         self.decisions = []
@@ -106,6 +108,7 @@ class AgentRun:
         self.status = verified.status
         if self._elapsed is None:
             self._elapsed = self.budget.elapsed()
+            self._execution=self.snapshot()['execution']
         return {**self.agent.describe(), "reusedAnchors": self.claim.entities.get("verified_identity_anchors", []),
                 "sourceAccess": self.snapshot(), "handoffs": self.plan.handoffs}
 
@@ -121,7 +124,16 @@ class AgentRun:
             events = [dict(e) for e in self.events]
             decisions = [dict(e) for e in self.decisions]
             decision_counts = dict(self.decision_counts)
+        started=bool(self.budget.searches or self.budget.page_reads or any(e.get('action') in ('search','read') for e in events))
+        money=self.cost_budget
+        paused=bool(money and (money.stopped or getattr(money,'search_stopped',False)))
+        elapsed=self._elapsed if self._elapsed is not None else self.budget.elapsed()
+        state=('budget_limited' if started else 'budget_not_started') if paused and self.budget.exhausted else (
+            'time_limited' if self.budget.exhausted and elapsed>=self.budget.max_seconds and started else
+            'no_queries' if not self.plan.queries and not started else 'searched' if started else 'not_started')
         return {"claimId": self.claim.id, "agentId": self.agent.id, "status": self.status,
+                'execution':getattr(self,'_execution',{'state':state,'reason':money.reason if paused else ''}),
+                **({'costAllocation':money.snapshot()} if hasattr(money,'search_ceiling') else {}),
                 'queryPlan':{'state':'ready' if self.plan.queries else 'no_queries',
                              'queryCount':len(self.plan.queries),'notes':list(self.plan.notes)},
                 'decisions':decisions,'decisionCounts':decision_counts,'decisionsTruncated':self.decisions_truncated,

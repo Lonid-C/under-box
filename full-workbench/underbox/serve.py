@@ -224,6 +224,13 @@ def _pipeline_ready() -> bool:
         return False
 
 
+def retrieval_status(verified):
+    access=(verified.verification_agent or {}).get('sourceAccess',{})
+    state=access.get('execution',{}).get('state')
+    if state in {'budget_not_started','budget_limited','time_limited'}:return state
+    return 'not_started' if state in {'no_queries','not_started'} or (access.get('queryPlan',{}).get('state')=='no_queries' and not verified.evidence) else 'searched'
+
+
 def to_presentation(rep) -> dict:
     """把 open_box 的 Report 转成 underbox/index.html 渲染的 REPORT 形状。
 
@@ -250,7 +257,7 @@ def to_presentation(rep) -> dict:
             "date": v.claim.date_label,
             "tier": v.best_tier or "",
             "status": v.status,
-            "retrievalStatus": 'not_started' if ((v.verification_agent or {}).get('sourceAccess', {}).get('queryPlan', {}).get('state') == 'no_queries' and not v.evidence) else 'searched',
+            "retrievalStatus": retrieval_status(v),
             "needsHuman": v.needs_human,
             "rawText": v.claim.raw_text,
             "locator": v.claim.raw_locator,

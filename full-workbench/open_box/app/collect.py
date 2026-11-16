@@ -629,6 +629,12 @@ def _relevance(hit: SearchHit, candidate_name: str, claim: Claim) -> int:
     if claim.category=='教学活动' and '导师' in claim.raw_text and re.search(r'答辩|导师|招生目录|指导教师',hit.title or ''):score+=5
     if any(w in blob for w in ("公示", "名单", "获奖", "通知", "公告", "录取", "授予", "表彰")):
         score += 1
+    if recall_enabled() and claim.category in {'校内荣誉','奖学金'}:
+        target=re.sub(r'[\W_]+','',award_name(claim)).casefold()
+        if target and target in re.sub(r'[\W_]+','',blob).casefold():score+=6
+        if re.search(r'名单|获奖|公示|表彰',hit.title or ''):score+=3
+        if (claim.date_label or '')[:4].isdigit() and claim.date_label[:4] in blob:score+=3
+        if _host_of(hit.url).startswith(('baike.','www.baike.')):score-=8
     if competition_for_claim(claim):
         if competition_page_mismatch(claim, hit.title or ""):
             score -= 40

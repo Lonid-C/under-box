@@ -105,6 +105,81 @@ class CostBudget:
                     'notice':'按公开单价保守估算；含华为云预留，实际费用以各平台账单为准。问答和语音另计。'}
 
 
+class ClaimShare:
+    """One claim's allowance, charged to the original durable report ledger.
+
+    Reaching this allowance pauses only this claim. Search leaves 30% for
+    fetching/extraction; unused funds remain available to later claims.
+    """
+    def __init__(self, root, limit, *, search_fraction=.7):
+        self.root=root;self.limit=max(0,float(limit));self.target=self.limit*.8
+        self.spent=0.;self.search_spent=0.;self.search_ceiling=self.limit*search_fraction
+        self.search_stopped=self.limit<=0;self.local_stopped=self.limit<=0
+        self.local_reason='本条没有剩余费用份额，未执行新增检索。' if self.limit<=0 else ''
+
+    @property
+    def stopped(self):return self.root.stopped or self.local_stopped
+    @property
+    def reason(self):return self.root.reason if self.root.stopped else self.local_reason
+    @property
+    def search_calls(self):return self.root.search_calls
+    @property
+    def search_limit(self):return self.root.search_limit
+
+    def reserve(self, amount, category, *, search=False):
+        with self.root._lock:
+            if not math.isfinite(amount) or amount<0:
+                self.root.stop('无法确认该接口的计费价格，已停止新增请求。')
+                raise BudgetLimit(self.reason)
+            if self.stopped:raise BudgetLimit(self.reason)
+            if search and (self.search_stopped or self.search_spent+amount>self.search_ceiling+1e-9):
+                self.search_stopped=True
+                self.local_reason='本条搜索费用份额已用完，保留后续事项及本条读页、取证的费用。'
+                raise BudgetLimit(self.reason)
+            if self.spent+amount>self.limit+1e-9:
+                self.local_stopped=True
+                self.local_reason='本条费用份额不足，已停止本条新增付费请求，保留后续事项费用。'
+                raise BudgetLimit(self.reason)
+            ticket=self.root.reserve(amount,category,search=search)
+            self.spent+=amount
+            if search:self.search_spent+=amount
+            return ticket
+
+    def settle(self, reservation, actual):
+        if actual is None or not math.isfinite(actual) or actual<0:return
+        with self.root._lock:
+            self.spent=max(0,self.spent-reservation[0]+actual)
+            self.root.settle(reservation,actual)
+            if self.spent>self.limit+1e-9:
+                self.local_stopped=True;self.local_reason='本条返回用量超过费用份额，已停止本条新增付费请求。'
+
+    def stop(self,reason):self.root.stop(reason)
+    def snapshot(self):
+        return {'allocatedCny':round(self.limit,4),'estimatedCny':round(self.spent,4),
+                'searchAllocatedCny':round(self.search_ceiling,4),'searchEstimatedCny':round(self.search_spent,4),
+                'paused':self.stopped or self.search_stopped,'reason':self.reason}
+
+
+class ClaimAllocations:
+    """Protect the share of every unstarted/active claim, across all phases."""
+    def __init__(self, root, claim_ids):
+        self.root=root;self.pending=set(claim_ids);self.active={}
+        self.auxiliary=min(.15,max(0,root.limit-root.spent)*.05)
+
+    @contextmanager
+    def claim(self, ident):
+        with self.root._lock:
+            if ident not in self.pending:raise ValueError('claim_allocation_reused')
+            held=sum(max(0,v.limit-v.spent) for v in self.active.values())
+            available=max(0,self.root.limit-self.root.spent-self.auxiliary-held)
+            share=ClaimShare(self.root,available/len(self.pending))
+            self.pending.remove(ident);self.active[ident]=share
+        try:
+            with bind(share):yield share
+        finally:
+            with self.root._lock:self.active.pop(ident)
+
+
 @contextmanager
 def bind(budget):
     token=CURRENT.set(budget)
@@ -123,7 +198,8 @@ def settle(ticket,actual):
 
 def search_allowed():
     budget=CURRENT.get()
-    return not budget or not budget.stopped and budget.search_calls<budget.search_limit
+    return not budget or (not budget.stopped and not getattr(budget,'search_stopped',False)
+                          and budget.search_calls<budget.search_limit)
 
 
 def alternate_allowed():

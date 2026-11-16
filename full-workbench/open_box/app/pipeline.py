@@ -22,6 +22,7 @@ import os
 import re
 import threading
 import time
+from contextlib import nullcontext
 from .usage import UsageExecutor as ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -216,7 +217,13 @@ def verify_prepared(
     explicit_budget = budget_factory is not None
     budget_factory = budget_factory or Budget
     contextual_claims = with_candidate_identity_context([*prepared.claims, *prepared.skipped], name)
-    sources = employer_policy(contextual_claims, doc, name, searcher, say)
+    from .cost_budget import CURRENT,ClaimShare,ClaimAllocations,bind as bind_cost
+    from .retrieval_policy import enabled as recall_enabled
+    money=CURRENT.get()
+    fair=bool(money and recall_enabled() and not explicit_budget)
+    # Website discovery must not consume the funds intended for all claim phases.
+    setup=ClaimShare(money,min(.1,max(0,money.limit-money.spent)*.05),search_fraction=1) if fair else money
+    with bind_cost(setup):sources = employer_policy(contextual_claims, doc, name, searcher, say)
     current_orgs = sources.get('organizations', []) if isinstance(sources, dict) else []
     if current_orgs:
         # 全文明示的任职可能被拆分遗漏；仍用于第三方来源的同名身份核对。
@@ -250,12 +257,13 @@ def verify_prepared(
     if current_orgs:
         say('从第三方核对经历，排除当前所属机构渠道：' + '、'.join(current_orgs) + '；仅本校就读/本校荣誉按条目允许本校材料')
     total = len(claims)
+    allocations=ClaimAllocations(money,[c.id for c in claims]) if fair else None
     workers = claim_workers(total)
     done = 0
     done_lock = threading.Lock()
     coordinator = VerificationCoordinator()
 
-    def verify_one(i: int, claim):
+    def run_one(i: int, claim):
         scope = for_claim(claim, sources)
         claim_searcher = SourceGuardSearcher(searcher, scope) if scope else searcher
         claim_fetcher = SourceGuardFetcher(fetcher, scope) if scope else fetcher
@@ -326,7 +334,8 @@ def verify_prepared(
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)
         from .cost_budget import CURRENT
         money=CURRENT.get()
-        if money and money.stopped:
+        paused=money and (money.stopped or getattr(money,'search_stopped',False))
+        if paused:
             vc.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
         vc.verification_agent = task.finish(vc)
         if not vc.github_audit:
@@ -355,6 +364,13 @@ def verify_prepared(
             vc.needs_human = True
             vc.next_step = '尚未执行有效查询，请补充论文题名、DOI或具体赛事/机构等检索信息后再核验。'
             vc.source_notes.append('未执行检索：本条没有生成可用查询，不能解释为已经搜索后未找到。')
+        elif paused and budget.exhausted:
+            vc.needs_human=True
+            vc.next_step=('本条只完成部分检索，已为其他事项保留费用；已有证据保留，请补充可追溯材料核对未覆盖部分。'
+                          if budget.searches or budget.page_reads else '本条因费用不足未执行检索；不能作为查无记录的结论，请补充可追溯材料。')
+        elif task.snapshot()['execution']['state']=='time_limited':
+            vc.needs_human=True
+            vc.next_step='本条达到时间限制，检索尚未完成；请核对已有来源并补充未覆盖部分的材料。'
         vc.source_notes.extend(n for n in plan.notes if '缺字段' in n or '未提供论文题名' in n)
         if current_orgs:
             allowed = scope.get('allowed_academic_institutions', []) if isinstance(scope, dict) else []
@@ -367,7 +383,7 @@ def verify_prepared(
         if any(e.extraction_method == "search_snippet" for e in evidences):
             vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")
         # 6 澄清问题
-        vc.question = None if vc.github_audit or vc.claim_verification or not plan.queries and not evidences else generate_question(vc, llm)
+        vc.question = None if vc.github_audit or vc.claim_verification or paused or not plan.queries and not evidences else generate_question(vc, llm)
         if vc.github_audit:
             vc.next_step = "只补充本条项目的本人账号、贡献链接和角色/指标的可追溯材料；未公开部分保持未知。"
         if workers > 1:
@@ -377,6 +393,10 @@ def verify_prepared(
             say(f"    ✓ ({k}/{total}) {claim.id} {claim.category} 完成："
                 f"{STATUS_LABEL.get(vc.status, vc.status)}（{time.monotonic() - started:.0f} 秒）")
         return vc
+
+    def verify_one(i,claim):
+        with allocations.claim(claim.id) if allocations else nullcontext():
+            return run_one(i,claim)
 
     # 先核对本科，再核对硕士/博士就读及入学路径，最后独立核对奖项等条目。
     # 每个阶段内部仍并行，报告维持输入原顺序；本科无公开证据不会阻止独立核对研究生。

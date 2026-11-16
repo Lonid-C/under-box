@@ -1022,9 +1022,11 @@ const STATUS = {
   part: {label:'部分证实',      dot:'#BA7517', bg:'#FAEEDA', fg:'#633806'},
   ask:  {label:'待澄清',        dot:'#D85A30', bg:'#FAECE7', fg:'#712B13'},
   none: {label:'未找到公开记录', dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
-  who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'}
+  who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
+  incomplete:{label:'检索未完成',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
+  unsearched:{label:'待补充检索信息',dot:'#B4B2A9',bg:'#F0EDE6',fg:'#44413A'}
 };
-const ORDER = ['ok','part','ask','none','who'];
+const ORDER = ['ok','part','ask','none','who','incomplete','unsearched'];
 const TIER_NAME = {A:'A 级 · 官方站点上的公示 / 通知 / 名单', B:'B 级 · 认证主体公众号 / 权威媒体', C:'C 级 · 平台元数据（GitHub / Crossref / ORCID）', D:'D 级 · 判不出更高等级'};
 /* 摘要里不要重复日期：原文逐字保留日期，而旁边已经有日期列。
    多数在行首（`2023.05　…`），但也有在行尾的（c01：`…本科在读　2022.09 — 2026.06`），
@@ -1073,7 +1075,7 @@ function renderRisks() {
 function renderOverview() {
   if (!REPORT) return;
   const c = Object.fromEntries(ORDER.map(s => [s, 0]));
-  REPORT.claims.forEach(x => c[x.status]++);
+  REPORT.claims.forEach(x => c[displayStatus(x)]++);
   const total = REPORT.claims.length || 1;
   const bar = $('bar'); bar.innerHTML = '';
   for (const s of ORDER) if (c[s]) bar.appendChild(el('span', {style:`width:${c[s]/total*100}%;background:${STATUS[s].dot}`}));
@@ -1097,7 +1099,13 @@ function renderOverview() {
 }
 
 function retrievalLabel(c) {
-  return c.manualReview?.kind === 'internship' ? '待人工背调' : c.retrievalStatus === 'not_started' ? '待补充检索信息' : STATUS[c.status].label;
+  return c.manualReview?.kind === 'internship' ? '待人工背调' : c.status !== 'none' ? STATUS[c.status].label : ({not_started:'待补充检索信息',budget_not_started:'预算不足，未执行',budget_limited:'检索受预算限制',time_limited:'检索未完成'})[c.retrievalStatus] || STATUS[c.status].label;
+}
+function displayStatus(c) {
+  return c.status !== 'none' ? c.status : ['budget_not_started','budget_limited','time_limited'].includes(c.retrievalStatus) ? 'incomplete' : c.retrievalStatus === 'not_started' ? 'unsearched' : c.status;
+}
+function retrievalEmpty(c) {
+  return c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : ({not_started:'尚未执行有效查询，请补充检索信息后再核验。',budget_not_started:'本条因费用预算不足未执行检索，不能解释为查无公开记录。',budget_limited:'本条只完成部分检索，已为其他事项保留费用；已有证据保留，未核实部分可补充材料。',time_limited:'本条达到时间限制，检索未完成；不能据此认定没有公开记录。'})[c.retrievalStatus] || '未找到与本人关联的公开记录，可请候选人补充材料。';
 }
 function retrievalDetails(c) {
   const access = c.verificationAgent?.sourceAccess;
@@ -1105,6 +1113,8 @@ function retrievalDetails(c) {
   const box = el('div', {class:'dsec'}, el('h4',{text:'检索与来源筛选'}));
   box.appendChild(el('div',{class:'hint',text:access.queryPlan.state === 'no_queries'
     ? '未生成可用查询，请先补充检索信息。' : `已生成 ${access.queryPlan.queryCount} 条查询；实际执行与停止原因见来源记录。`}));
+  if(access.execution?.reason) box.appendChild(el('div',{class:'hint',text:access.execution.reason}));
+  if(access.costAllocation) box.appendChild(el('div',{class:'hint',text:`本条费用份额 ¥${Number(access.costAllocation.allocatedCny).toFixed(2)}；估算使用 ¥${Number(access.costAllocation.estimatedCny).toFixed(2)}。未用份额留给后续事项，实际费用以供应商账单为准。`}));
   if (access.decisionCounts && Object.keys(access.decisionCounts).length) {
     const records = el('details', {}, el('summary',{text:'来源筛选记录'}));
     Object.entries(access.decisionCounts).forEach(([reason,count])=>records.appendChild(el('div',{class:'hint',text:`${reason}：${count} 条记录`})));
@@ -1188,7 +1198,7 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : c.retrievalStatus === 'not_started' ? '尚未执行有效查询，请补充检索信息后再核验。' : '未找到与本人关联的公开记录，可请候选人补充材料。'})));
+      el('div', {class:'empty', text:retrievalEmpty(c)})));
   }
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1370,14 +1380,14 @@ function renderClaims() {
   if (!REPORT) return;
   const ul = $('claims'); ul.innerHTML = '';
   REPORT.claims.forEach((c, i) => {
-    const st = STATUS[c.status];
-    const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':c.status},
+    const st = STATUS[displayStatus(c)];
+    const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':displayStatus(c)},
       el('span', {class:'dot', style:`background:${st.dot}`}),
       el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c)}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
       el('span', {class:'tx'}, summaryOf(c.rawText), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
-      el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
+      el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '尚无可采信来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);
     const setOpen = on => {
@@ -1416,7 +1426,7 @@ function applyFilter() {
 function buildFilters() {
   if (!REPORT) return;
   const box = $('filters'); box.innerHTML = '';
-  const counts = {}; REPORT.claims.forEach(x => counts[x.status] = (counts[x.status]||0)+1);
+  const counts = {}; REPORT.claims.forEach(x => {const s=displayStatus(x);counts[s]=(counts[s]||0)+1;});
   box.appendChild(el('button', {class:'chipf', type:'button', 'data-s':'all', 'aria-pressed':'true', text:`全部 ${REPORT.claims.length}`}));
   ORDER.forEach(s => { if (counts[s]) box.appendChild(el('button', {class:'chipf', type:'button', 'data-s':s, 'aria-pressed':'false'},
     el('i', {style:`background:${STATUS[s].dot}`}), el('span', {text:`${STATUS[s].label} ${counts[s]}`}))); });
@@ -1747,10 +1757,10 @@ function toggleTierPanel() {
   for (const t of ['A', 'B', 'C', 'D', '—']) {
     const list = groups[t];
     if (!list || !list.length) continue;
-    const label = t === '—' ? '未定级（没有检索到来源）' : `${t} 级 · ${(TIER_NAME[t] || '').split('·')[1] || ''}`;
+    const label = t === '—' ? '未定级（尚无可采信来源）' : `${t} 级 · ${(TIER_NAME[t] || '').split('·')[1] || ''}`;
     const g = el('div', { class: 'grp' }, el('b', { text: `${label}　${list.length} 条` }));
     list.forEach(c => {
-      const chip = el('button', { class: 'chip', type: 'button', text: `${c.id} ${STATUS[c.status].label}` });
+      const chip = el('button', { class: 'chip', type: 'button', text: `${c.id} ${retrievalLabel(c)}` });
       chip.addEventListener('click', () => {
         p.hidden = true;
         const li = [...document.querySelectorAll('#claims > li')]

@@ -13,7 +13,7 @@ def expand_budget(budget, search_ceiling, read_ceiling):
         return budget
     # Monetary budget controls the report. These are secondary per-claim rails.
     return {**budget, 'searches': min(100, budget['searches'] * 12),
-            'reads': min(40, budget['reads'] * 4)}
+            'reads': min(40, budget['reads'])}
 
 
 class RecallFallbackSearcher:

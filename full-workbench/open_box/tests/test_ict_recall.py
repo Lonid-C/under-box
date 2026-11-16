@@ -33,7 +33,7 @@ class RecallTests(unittest.TestCase):
 
     def test_larger_plans_still_keep_finite_per_claim_rails(self):
         plan=plan_with_notes(claim('学历'),'合成测试甲',ResumeProfile(identity='student'),['学历'])
-        self.assertEqual(plan.budget['searches'],96);self.assertEqual(plan.budget['reads'],40)
+        self.assertEqual(plan.budget['searches'],96);self.assertEqual(plan.budget['reads'],10)
         self.assertLessEqual(plan.budget['seconds'],180)
 
     def test_blocked_robots_pages_do_not_consume_read_slots(self):

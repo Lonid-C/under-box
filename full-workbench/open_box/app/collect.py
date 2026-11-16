@@ -38,6 +38,7 @@ from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
                      PageFetcher, rephrase_variants,
                      SearchFiltered, SearchHit, Searcher, SearchUnavailable, url_in_domain)
 from .strategy import WECHAT_HOST, _name_variants, competition_site, publication_site
+from .retrieval_policy import enabled as recall_enabled
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
 MAX_PAGE_CHARS = 12000
@@ -108,18 +109,37 @@ class Budget:
     page_reads: int = 0
     started: float = field(default_factory=time.monotonic)
     exhausted: bool = False
+    read_attempts: int = 0
+    failed_reads: int = 0
+    successful_reads: int = 0
+    read_refunds: int = 0
+    robots_skipped: int = 0
+    recovery_enabled: bool = field(default_factory=recall_enabled)
+    _read_lock: object = field(default_factory=threading.Lock, repr=False, compare=False)
+
+    @property
+    def recovery_limit(self):
+        return min(8, max(0, self.max_page_reads // 2)) if self.recovery_enabled else 0
+
+    @property
+    def max_read_attempts(self):
+        return self.max_page_reads + self.recovery_limit
 
     def elapsed(self) -> float:
         return time.monotonic() - self.started
 
     def can_search(self) -> bool:
-        if self.searches >= self.max_searches or self.elapsed() >= self.max_seconds:
+        from .cost_budget import search_allowed
+        if self.searches >= self.max_searches or self.elapsed() >= self.max_seconds or not search_allowed():
             self.exhausted = True
             return False
         return True
 
     def can_read(self) -> bool:
-        if self.page_reads >= self.max_page_reads or self.elapsed() >= self.max_seconds:
+        from .cost_budget import CURRENT
+        money=CURRENT.get()
+        if (self.page_reads >= self.max_page_reads or self.read_attempts >= self.max_read_attempts
+                or self.elapsed() >= self.max_seconds or money and money.stopped):
             self.exhausted = True
             return False
         return True
@@ -128,7 +148,21 @@ class Budget:
         self.searches += 1
 
     def note_read(self) -> None:
-        self.page_reads += 1
+        with self._read_lock:
+            self.page_reads += 1
+            self.read_attempts += 1
+
+    def finish_read(self, successful):
+        with self._read_lock:
+            if self.successful_reads + self.failed_reads >= self.read_attempts:
+                return  # Already-read inline content must not create refundable attempts.
+            if successful:
+                self.successful_reads += 1
+            else:
+                self.failed_reads += 1
+                if self.read_refunds < self.recovery_limit:
+                    self.page_reads = max(0, self.page_reads - 1)
+                    self.read_refunds += 1
 
 
 def _now() -> str:
@@ -146,6 +180,18 @@ def _url_key(url: str) -> str:
              if not k.lower().startswith("utm_")]
     return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path or "/", p.params,
                        urlencode(sorted(query)), ""))
+
+
+def _readable(hit, budget, progress=None):
+    if not budget.recovery_enabled or hit.content:
+        return True
+    from .search import robots_allows
+    if robots_allows(hit.url):
+        return True
+    budget.robots_skipped += 1
+    if progress and budget.robots_skipped <= 3:
+        progress(f'    跳过 robots.txt 禁止的页面：{_host_of(hit.url)}（不消耗读页名额）')
+    return False
 
 
 def _focus_text(text: str, claim: Claim, candidate_name: str) -> str:
@@ -775,6 +821,10 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
         fetched = usable
     # 旧版校园 URL 迁移时，以公告原标题寻找同一机构的新地址；不猜 URL，
     # 不绕过 robots/403/SSL，搜索和回读仍扣本条预算，最多修复两个失效入口。
+    if budget:
+        successful = {hit.url for hit, _ in fetched}
+        for hit in selected:
+            budget.finish_read(hit.url in successful)
     seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
     recovered = []; recovery_attempts = 0
     if searcher and budget and claim.category in {"学历", "著作", "教学活动"}:
@@ -804,12 +854,18 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 book = str((claim.entities or {}).get("title") or "") if claim.category == "著作" else ""
                 if key not in blob and not (book and book in new.title + new.snippet): continue
                 if not budget.can_read(): break
+                if not _readable(new, budget, progress):continue
                 budget.note_read(); seen_urls.add(_url_key(new.url))
                 try: body = fetcher.get(new.url)
                 except Exception: body = None
-                if not body: continue
+                if not body:
+                    budget.finish_read(False)
+                    continue
                 text = extract_main_text(body) if "<" in body[:2000] else body
-                if len(text.strip()) < 200 and re.search(r"Loading|正在加载|enable.*JavaScript", text, re.I): continue
+                if len(text.strip()) < 200 and re.search(r"Loading|正在加载|enable.*JavaScript", text, re.I):
+                    budget.finish_read(False)
+                    continue
+                budget.finish_read(True)
                 recovered.append((new, body))
                 if progress: progress(f"    已回读同校新地址：{new.url}（仍逐项核对本人及经历）")
                 break
@@ -902,6 +958,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             if key in seen_urls:
                 continue
             seen_urls.add(key)
+            if not _readable(linked, follow_budget, progress):continue
             follow_budget.note_read()
             followed += 1
             try:
@@ -909,6 +966,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 roster = reader(linked.url, claim) if callable(reader) else fetcher.get(linked.url)
             except Exception:
                 roster = None
+            follow_budget.finish_read(bool(roster))
             if not roster:
                 failures += 1
                 if progress:
@@ -1030,8 +1088,10 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         if _url_key(url) in seen_urls or not budget.can_read():
             continue
         seen_urls.add(_url_key(url))
+        if not _readable(SearchHit(url=url), budget, say):continue
         budget.note_read()
         html = fetcher.get(url)
+        budget.finish_read(bool(html))
         if not html:
             continue
         text = extract_main_text(html) if "<" in html[:2000] else html
@@ -1119,6 +1179,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 if key in seen_urls:
                     continue
                 seen_urls.add(key)
+                if not _readable(hit, budget, say):continue
                 budget.note_read()
                 selected.append(hit)
         found = _read_and_extract(
@@ -1472,7 +1533,13 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             if fallback and claim.category == "学历" and not fallback.site:
                 # 学历只走学校官网和公众号两类渠道。退到全网后返回的是同名百科、
                 # 招聘、新闻转载，实测 50 条里没有一条能作学历佐证，还占满读页预算。
-                fallback = None
+                from .retrieval_policy import enabled
+                from .plan import school_aliases
+                compact = re.sub(r'\s+', '', fallback.text).casefold()
+                anchored = (any(re.sub(r'\s+', '', a).casefold() in compact for a in school_aliases(school) if len(a) > 2)
+                            and any(re.sub(r'\s+', '', n).casefold() in compact for n in _name_variants(candidate_name) if len(n) > 1))
+                if not enabled() or not anchored:
+                    fallback = None
             if fallback:
                 # 名单补查只由两条原始整批查询触发，不能随放宽引号/全网回退不断升级。
                 fallback = replace(fallback, confirm_empty=False)
@@ -1499,6 +1566,13 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             break
 
     read_batch(max(0, budget.max_page_reads - budget.page_reads))
+    if budget.recovery_enabled:
+        while budget.can_read():
+            before = (budget.read_attempts, budget.robots_skipped)
+            read_batch(max(0, budget.max_page_reads - budget.page_reads))
+            if before == (budget.read_attempts, budget.robots_skipped):break
+        say(f'    读页统计：实际尝试 {budget.read_attempts}/{budget.max_read_attempts}，取得内容 {budget.successful_reads}，'
+            f'失败 {budget.failed_reads}，补回名额 {budget.read_refunds}，robots 跳过 {budget.robots_skipped}')
     say(f"    本条完成：搜索 {budget.searches} 次，返回 {total_hits} 条链接，"
         f"回读 {budget.page_reads} 页，证据 {len(evidences)} 条"
         f"{'（已触及预算）' if budget.exhausted else ''}")

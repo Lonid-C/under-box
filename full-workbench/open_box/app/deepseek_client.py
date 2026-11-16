@@ -47,14 +47,26 @@ class DeepSeekClient:
         return {"Authorization": f"Bearer {self.api_key}"}
 
     def raw_model_post(self, endpoint, body, timeout):
+        from .cost_budget import reserve_model,settle_model
+        ticket=reserve_model('deepseek',body)
         with _LIMITS["model"]:
-            return httpx.post(endpoint, headers=self.headers, json=body, timeout=timeout)
+            response=httpx.post(endpoint, headers=self.headers, json=body, timeout=timeout)
+        if response.status_code<400:
+            try:settle_model(ticket,'deepseek',body,response.json())
+            except (ValueError,TypeError):pass
+        return response
 
     def post(self, path, operation, *, timeout=60, retry=False, **kwargs):
         for attempt in range(2 if retry else 1):
             try:
+                from .cost_budget import reserve,reserve_model,settle_model
+                if operation in ('search','fetch'):reserve(.005,'deepseek_'+operation,search=operation=='search')
+                ticket=reserve_model('deepseek',kwargs.get('json') or {}) if operation=='model' else None
                 with _LIMITS[operation]:
                     response = httpx.post(BASE + path, headers=self.headers, timeout=timeout, **kwargs)
+                if ticket and response.status_code<400:
+                    try:settle_model(ticket,'deepseek',kwargs.get('json') or {},response.json())
+                    except (ValueError,TypeError):pass
                 if response.status_code in (408, 429, 500, 502, 503, 504) and retry and attempt == 0:
                     time.sleep(0.4)
                     continue
@@ -70,6 +82,8 @@ class DeepSeekClient:
 
     @contextmanager
     def upload_file(self, path: Path, kind: str):
+        from .cost_budget import reserve,page_count,CURRENT
+        if CURRENT.get():reserve(.0015*page_count(path.read_bytes(),path.name),'deepseek_file_parse')
         purpose = "user_data" if kind == "text" else "text_recognition"
         # The expiry covers process termination or a lost upload response.
         with path.open("rb") as stream:
@@ -129,6 +143,8 @@ class DeepSeekClient:
         return self.ocr_bytes(path.read_bytes(), "resume" + path.suffix.lower(), timeout=timeout)
 
     def ocr_bytes(self, data: bytes, filename: str, *, timeout=210):
+        from .cost_budget import reserve,page_count,CURRENT
+        if CURRENT.get():reserve(.0015*page_count(data,filename),'deepseek_ocr')
         r = self.post("/v1/tools/ocr", "ocr", timeout=timeout,
                       data={"purpose": "text_recognition"},
                       files={"file": (filename, data)})
@@ -148,8 +164,7 @@ class DeepSeekClient:
         data = r.json()
         if not isinstance(data, dict) or not isinstance(data.get("results"), list):
             raise DeepSeekError("search")
-        if data["results"]:
-            METER.record_tool("search")
+        METER.record_tool("search")
         return data["results"]
 
     def fetch(self, url: str):

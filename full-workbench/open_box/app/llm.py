@@ -206,6 +206,7 @@ class OpenAICompatLLM:
 
     def _post(self, body: dict) -> dict:
         import httpx
+        from .cost_budget import reserve_model,settle_model,BudgetLimit
         last_exc: Exception | None = None
         for attempt in range(self.max_retries):
             try:
@@ -213,12 +214,23 @@ class OpenAICompatLLM:
                     from .deepseek_client import DeepSeekClient
                     r = DeepSeekClient(self.api_key).raw_model_post(self.endpoint, body, self.timeout)
                 else:
+                    from .cost_budget import CURRENT
+                    money=CURRENT.get()
+                    if money and self.endpoint != PROVIDERS.get(self.provider,{}).get('endpoint'):
+                        money.stop('自定义模型端点尚未核对单价，已停止付费调用。')
+                        raise BudgetLimit(money.reason)
+                    ticket=reserve_model(self.provider,body)
                     r = httpx.post(
                         self.endpoint,
                         headers={"Authorization": f"Bearer {self.api_key}",
                                  "Content-Type": "application/json"},
                         json=body, timeout=self.timeout,
                     )
+                    if r.status_code<400:
+                        try:settle_model(ticket,self.provider,body,r.json())
+                        except (ValueError,TypeError):pass
+            except BudgetLimit:
+                raise
             except Exception as exc:                       # 网络层问题，可重试
                 last_exc = exc
                 time.sleep(min(2 ** attempt, 8))

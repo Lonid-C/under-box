@@ -324,6 +324,10 @@ def verify_prepared(
                 csay("排除输入主页或现任机构渠道的材料，只保留独立第三方证据")
         # 5 判定：全部规则
         vc = judge.assess(claim, evidences, search_exhausted=exhausted)
+        from .cost_budget import CURRENT
+        money=CURRENT.get()
+        if money and money.stopped:
+            vc.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
         vc.verification_agent = task.finish(vc)
         if not vc.github_audit:
             vc.source_notes.append("只有姓名或发布时间一致的记录不纳入证据；学校、学段、任职及具体经历须能与本次输入关联。")
@@ -421,6 +425,12 @@ def verify_prepared(
         school_domains, say)
 
     say("[6/6] 汇总报告")
+    from .cost_budget import CURRENT
+    money=CURRENT.get()
+    if money and money.stopped:
+        for item in verified:
+            if not any(note.startswith('费用预算限制：') for note in item.source_notes):
+                item.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
     return Report(
         id=report_id,
         candidate_name=name or "（未标注姓名）",

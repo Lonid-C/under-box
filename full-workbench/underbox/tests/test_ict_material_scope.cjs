@@ -11,3 +11,8 @@ pick.selected.clear();assert.equal(Object.keys(context.window.ictGithubMaterials
 pick.selected.add('c1');pick.token='scope-b';assert.equal(Object.keys(context.window.ictGithubMaterials()).length,0,'new split cannot reuse old materials before render');
 context.renderPick();assert.equal(byId('pickBlocks').children[0].children[2].value,'');assert.equal(Object.keys(context.window.ictGithubMaterials()).length,0,'same c1 id in another resume cannot inherit previous links');
 console.log('ICT GitHub material scope tests passed');
+context.window.ictCostBudget({estimatedCny:1.25,limitCny:4,cloudAllowanceCny:.5,stopped:false});
+assert.equal(byId('ictBudgetStatus').hidden,false);assert.match(byId('ictBudgetStatus').textContent,/1\.25.*4\.00/);assert.match(byId('ictBudgetStatus').textContent,/实际费用以各平台账单为准/);
+context.window.ictCostBudget({estimatedCny:3.99,limitCny:4,cloudAllowanceCny:.5,stopped:true});assert.match(byId('ictBudgetStatus').textContent,/停止新增付费请求/);
+context.window.ictCostBudget(null);assert.equal(byId('ictBudgetStatus').hidden,true,'another report must not inherit a previous budget');
+console.log('ICT cost estimate display and scope reset tests passed');

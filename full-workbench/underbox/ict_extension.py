@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.1'
+VERSION='ict-full-20261116.2'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -32,6 +32,7 @@ def persist_ticket(t):
     path=journal_path(t['scope'])
     if path is None:return
     data={k:t.get(k) for k in ('id','owner','scope','created_at','state','text','cloud_session','done','error','verified','unstarted')}
+    if t.get('cost_budget'):data['cost_budget_id']=t['cost_budget'].id
     holder=t['holder'];rep=holder.get('oby');profile=holder.get('profile')
     if rep is not None:data['raw_report']=rep.model_dump(mode='json')
     if profile is not None:data['profile']=dataclasses.asdict(profile)
@@ -61,6 +62,9 @@ def load_ticket(key):
         data.update(state='interrupted',error='后台任务被服务重启中断，请检查历史记录；不会重新提交。')
     finished=threading.Event();finished.set()
     data.update(created=time.monotonic()-max(0,age),holder=holder,finished=finished,released=True,flow_lock=threading.Lock())
+    if data.get('cost_budget_id'):
+        from app.cost_budget import CostBudget
+        data['cost_budget']=CostBudget.load(data['cost_budget_id'])
     if data['state']=='completed':data['receipt']=receipt_for(data)
     return data
 
@@ -133,7 +137,8 @@ def register(token,ids,materials,events,holder):
         if not ACTIVE.acquire(blocking=False):raise ValueError('已有核验正在运行，请等待完成后再试。')
         rid='wb_'+secrets.token_urlsafe(24)
         flow_lock=threading.Lock();flow_lock.acquire()
-        t={'id':rid,'owner':USER.get(),'scope':key,'created':time.monotonic(),'created_at':time.time(),'state':'awaiting','text':'UNDERBOX-WORKBENCH/1 '+rid+'\n'+text,
+        from app.cost_budget import CURRENT
+        t={'id':rid,'owner':USER.get(),'scope':key,'created':time.monotonic(),'created_at':time.time(),'cost_budget':entry.get('cost_budget') or CURRENT.get(),'state':'awaiting','text':'UNDERBOX-WORKBENCH/1 '+rid+'\n'+text,
            'cloud_session':secrets.token_hex(16),'token':token,'ids':list(ids),'materials':materials,'events':events,'holder':holder,
            'context':contextvars.copy_context(),'finished':threading.Event(),'done':None,'error':None,'released':False,'flow_lock':flow_lock}
         from app.usage import METER
@@ -309,10 +314,14 @@ def verify_selected(token,ids,events,holder,*,materials=None):
         elif ticket['state'] in ('running','completed'):message='正在通过 AgentArts 查询已保留的本轮任务，不重新提交简历。'
         else:message='已确认核验范围，正在请求华为云 AgentArts 编排。'
         events.put({'log':message})
-        info=cloud_roundtrip(ticket)
+        from app.cost_budget import bind
+        with bind(ticket.get('cost_budget')):info=cloud_roundtrip(ticket)
         holder.update(ticket['holder'])
         event=dict(ticket['done']);event['seconds']=round(time.monotonic()-started,1);event['_ict_request']=ticket['id']
         event['report']={**event['report'],'agentarts':info,'edition':'huawei-ict'}
+        if ticket.get('cost_budget'):
+            event['costBudget']=ticket['cost_budget'].snapshot()
+            event['report']['costBudget']=event['costBudget']
         events.put({'log':'AgentArts 已返回与本轮完整报告匹配的回执。'})
         events.put(event)
     except Exception as exc:
@@ -372,8 +381,11 @@ def sse(self,target,args,kind=''):
     try:credentials=ENGINE.account_search_credentials(self.uid())
     except Exception:return self._json({'error':'账户搜索配置不可用。'},503)
     uid=self.uid();generation=self._st()['generation'];holder={};events=queue.Queue()
+    from app.cost_budget import CURRENT,CostBudget,bind as bind_cost
+    from app.retrieval_policy import enabled as recall_enabled
+    ledger=None
     scope=METER.open_scope(owners=2);base=METER.mark(scope)
-    unsubscribe=METER.subscribe(lambda:events.put({'usage':METER.since(base)}),scope)
+    unsubscribe=METER.subscribe(lambda:events.put({'usage':METER.since(base),**({'costBudget':ledger.snapshot()} if ledger else {})}),scope)
     class Tracking:
         completed=False
         def put(q,ev):
@@ -382,7 +394,10 @@ def sse(self,target,args,kind=''):
                 if kind=='split' and ev.get('split',{}).get('token'):
                     with ENGINE._PREPARED_LOCK:
                         entry=ENGINE.PREPARED.get(ev['split']['token'])
-                        if entry is not None:entry['owner']=uid
+                        if entry is not None:
+                            entry['owner']=uid
+                            if ledger:entry['cost_budget']=ledger
+                if ledger:ev.setdefault('costBudget',ledger.snapshot())
                 ev['usage']=METER.since(base);request_id=ev.pop('_ict_request',None)
                 if request_id and kind=='verify' and ev.get('report'):
                     try:record_verified_ticket(request_id,ev,uid,holder)
@@ -400,9 +415,19 @@ def sse(self,target,args,kind=''):
             events.put(ev)
     tracker=Tracking()
     def run():
+        nonlocal ledger
         ident=USER.set(uid)
         try:
-            with bind_search_credentials(credentials):METER.run_in_scope(scope,target,*args,tracker,holder)
+            if recall_enabled() and kind=='split':ledger=CostBudget()
+            elif recall_enabled() and kind=='verify':
+                if args and isinstance(args[0],str):
+                    with ENGINE._PREPARED_LOCK:
+                        entry=ENGINE.PREPARED.get(args[0])
+                        if entry is not None and entry.get('owner')==uid:
+                            ledger=entry.get('cost_budget') or CostBudget();entry['cost_budget']=ledger
+                else:ledger=CostBudget()
+            if ledger:events.put({'costBudget':ledger.snapshot()})
+            with bind_search_credentials(credentials),bind_cost(ledger):METER.run_in_scope(scope,target,*args,tracker,holder)
         except Exception as exc:
             tracker.put({'done':True,'failed':True,'error':'处理失败（'+type(exc).__name__+'）。'});events.put(None)
         finally:USER.reset(ident)
@@ -469,7 +494,12 @@ def install(engine):
     def get(self):
         if worker_guard(self):return
         if self.path.split('?',1)[0] in ('/health','/api/ict/status'):
-            return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured()})
+            from app.retrieval_policy import enabled
+            return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
+                               'retrieval':{'expanded':enabled(),'search_ceiling':100,'read_ceiling':40,
+                                            'failed_read_recovery_ceiling':8,'alternate_searches_per_claim':4,
+                                            'estimated_budget_cny':4,'target_cny':3,'cloud_allowance_cny':.5,
+                                            'report_search_safety_limit':1000}})
         if self.path.split('?',1)[0]=='/api/ict/sample':
             data=json.loads(Path(os.environ['UNDERBOX_ICT_SAMPLE']).read_text())
             return self._json({'text':data.get('text') or '个人简历（脱敏摘录）\n个人信息\n姓名：'+data['candidate']+'\n身份背景：'+data['school']+'\n竞赛经历\n'+'\n'.join(c['raw_text'] for c in data['claims'])})

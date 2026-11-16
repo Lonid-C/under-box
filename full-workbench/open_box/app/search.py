@@ -496,6 +496,9 @@ class ZhipuSearcher:
         self._throttle(urlparse(self.endpoint).hostname or "")
         for attempt in range(MAX_RETRIES + 1):
             try:
+                from .cost_budget import reserve,BudgetLimit,SEARCH_PRICES
+                try:reserve(SEARCH_PRICES.get(engine,float('nan')),'zhipu_'+engine,search=True)
+                except BudgetLimit:return []
                 r = httpx.post(
                     self.endpoint, json=body,
                     headers={"Authorization": f"Bearer {self.api_key}",
@@ -1427,9 +1430,27 @@ def build_searcher(provider: str | None = None) -> Searcher:
         return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
     name = (provider or os.environ.get("SEARCH_PROVIDER") or "zhipu").lower()
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
+    from .cost_budget import CURRENT,BudgetLimit
+    money=CURRENT.get()
+    if money:
+        if name in ('generic','brave') or name=='zhipu' and os.environ.get('SEARCH_ENDPOINT','') not in ('',ZhipuSearcher.DEFAULT_ENDPOINT):
+            money.stop('当前搜索供应商未配置可核对单价，已停止付费调用。')
+            raise BudgetLimit(money.reason)
+        brave_key=None  # Do not use an unpriced third-party backup under a CNY limit.
+    from .retrieval_policy import enabled, RecallFallbackSearcher
+    from .deepseek_search import DeepSeekSearcher, FailureOnlyFallbackSearcher
+    if name == 'deepseek':
+        primary = DeepSeekSearcher()
+        secondary = ZhipuSearcher(endpoint=ZhipuSearcher.DEFAULT_ENDPOINT) if os.environ.get('SEARCH_API_KEY') else None
+        if secondary and enabled():
+            return RecallFallbackSearcher(primary, secondary)
+        return FailureOnlyFallbackSearcher(primary, secondary)
     if name == "brave":
         return BraveSearcher() if brave_key else NullSearcher()
     if not os.environ.get("SEARCH_API_KEY"):
         return BraveSearcher() if brave_key else NullSearcher()
     primary = SEARCH_PROVIDERS.get(name, ZhipuSearcher)()
-    return FallbackSearcher(primary, BraveSearcher()) if brave_key else primary
+    primary = FallbackSearcher(primary, BraveSearcher()) if brave_key else primary
+    if enabled() and name == 'zhipu' and os.environ.get('DEEPSEEK_API_KEY'):
+        return RecallFallbackSearcher(primary, DeepSeekSearcher())
+    return primary

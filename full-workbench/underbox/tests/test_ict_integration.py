@@ -137,6 +137,23 @@ class Tests(unittest.TestCase):
     self.assertEqual(done['usage']['deepseek']['calls'],1)
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1);self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_split_verify_retry_and_restart_share_one_cost_budget(self):
+    from app.cost_budget import CURRENT
+    cookie=self.login();seen=[]
+    def split(data,filename,events,holder):
+      ledger=CURRENT.get();ledger.reserve(.1,'synthetic_parse');seen.append(ledger.id)
+      token=self.prepared();events.put({'done':True,'split':{'token':token,'claims':[]},'seconds':.1});events.put(None)
+    def core(*args,**kwargs):
+      ledger=CURRENT.get();self.assertEqual(ledger.id,seen[0]);ledger.reserve(.2,'synthetic_verify');return fake_core(*args,**kwargs)
+    with patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'1'}),patch.object(serve,'run_split_job',side_effect=split):
+      code,_,raw=self.request('/api/split/stream',b'synthetic',cookie,{'X-Underbox-Consent':'1','Content-Type':'text/plain','X-Filename':'synthetic.txt'})
+    self.assertEqual(code,200)
+    with patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'1'}),patch.object(ict,'ORIGINAL_VERIFY',side_effect=core) as verify,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      done=self.verify_request('prepared-alice',cookie);again=self.verify_request('prepared-alice',cookie)
+      ict.TICKETS.clear();serve.PREPARED.clear();reloaded=self.verify_request('prepared-alice',cookie)
+    self.assertEqual(verify.call_count,1);self.assertEqual(cloud.call_count,1)
+    for event in (done,again,reloaded):self.assertAlmostEqual(event['report']['costBudget']['estimatedCny'],.8)
+    with store.connect(self.db) as conn:self.assertEqual(store.get_user(conn,'alice')['quota_used'],1)
  def verify_request(self,token,cookie):
     code,h,raw=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
     self.assertEqual(code,200)

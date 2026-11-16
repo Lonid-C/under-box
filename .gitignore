@@ -21,6 +21,7 @@ out/
 *.报告.json
 outputs/
 ict-tasks/
+cost-budgets/
 recovery-*.json
 
 # ── 一次性调查脚本 ──────────────────────────────

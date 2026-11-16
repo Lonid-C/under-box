@@ -930,6 +930,8 @@ def build_plan(
     budget["searches"] = max(1, min(budget["searches"], CEILING_SEARCHES))
     budget["reads"] = max(1, min(budget["reads"], CEILING_PAGE_READS))
     budget["seconds"] = max(5.0, min(budget["seconds"], CEILING_SECONDS))
+    from .retrieval_policy import expand_budget
+    budget = expand_budget(budget, CEILING_SEARCHES, CEILING_PAGE_READS)
 
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
     regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))

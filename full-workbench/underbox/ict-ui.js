@@ -2,6 +2,23 @@
 (()=>{
 const byId=id=>document.getElementById(id);
 const api='__ICT_BASE__api/';
+window.ictCostBudget=function(info){
+ const box=byId('ictBudgetStatus');box.hidden=!info;if(!info)return;
+ box.textContent=`本份预算估算 ¥${Number(info.estimatedCny).toFixed(2)} / ¥${Number(info.limitCny).toFixed(2)}（含华为云预留 ¥${Number(info.cloudAllowanceCny).toFixed(2)}）。`
+  +(info.stopped?'已停止新增付费请求，保留已有结果。':'约 ¥3 后减少备用补查。')
+  +'实际费用以各平台账单为准；主动问答和语音另计。';
+};
+window.ictBudgetConfig=function(){
+ if(typeof fetch!=='function')return;
+ return fetch(api+'ict/status').then(r=>r.json()).then(d=>{
+  if(d.retrieval?.expanded && document.body.dataset.stage!=='app')window.ictCostBudget({estimatedCny:0,limitCny:4,cloudAllowanceCny:.5});
+ }).catch(()=>{});
+};
+window.ictBudgetConfig();
+if(typeof applyReport==='function'){
+ const previousApply=applyReport;
+ applyReport=function(report,...args){const result=previousApply(report,...args);window.ictCostBudget(report?.costBudget || null);return result;};
+}
 byId('ictSampleButton').addEventListener('click',async()=>{
  byId('ictSampleButton').disabled=true;byId('ictTextButton').disabled=true;
  try{const r=await fetch(api+'ict/sample');const d=await r.json();if(!r.ok)throw new Error(d.error || '请先登录');byId('ictResumeText').value=d.text;byId('ictTextStatus').textContent=d.mode==='synthetic'?'已载入虚构调试示例，尚未发送给模型。':'已载入授权范围的两条赛事自述，尚未发送给模型。';}

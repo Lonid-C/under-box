@@ -478,7 +478,7 @@ def discover(school: str, domain: str, role: str, fetch, *, deadline: float | No
     linked = {o for o in offices if o not in guessed}
     # 各候选站点是不同的主机，并行探测（同一主机仍由 PageFetcher 串行限流）。
     # 绝大多数猜测的子域根本不存在，串行时每个都要等满连接超时。
-    from concurrent.futures import ThreadPoolExecutor
+    from .usage import UsageExecutor as ThreadPoolExecutor
 
     def probe(url: str) -> str | None:
         html = get(url)

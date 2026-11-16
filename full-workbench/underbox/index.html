@@ -841,6 +841,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
         </div>
         <p class="ub-upload-note"><span aria-hidden="true">⌁</span>上传后选择需要核验的条目。</p>
         <details class="ict-text-intake"><summary>粘贴脱敏文字 / 队员示例</summary><textarea id="ictResumeText" aria-label="脱敏文字摘录" placeholder="粘贴已获授权的简历摘录，保留姓名、章节和经历原文。"></textarea><div><button class="ghost" id="ictSampleButton" type="button">载入队员脱敏示例</button><button class="btn" id="ictTextButton" type="button">整理摘录</button></div><p id="ictTextStatus" role="status"></p></details><div class="hint" id="fileProcessingNotice">文件交由服务器现有 DeepSeek 解析；选中事项经 AgentArts 编排核验。</div>
+        <p class="hint" id="ictBudgetStatus" role="status" hidden></p>
         <input type="file" id="file" accept=".pdf,.doc,.docx,.md,.txt" hidden>
 
         <div class="fileline" id="fileline">
@@ -2761,6 +2762,7 @@ async function sseRequest(url, init, onEv) {
         if (ev.ping) continue;
         if (ev.sourceCache) { $('spTitle').textContent = '整理公开资料'; $('spFoot').textContent = `公开来源缓存 · 整理于 ${ev.sourceCache.cachedAt}`; }
         if (ev.usage) Usage.live(ev.usage);
+        if (ev.costBudget) window.ictCostBudget?.(ev.costBudget);
         if (ev.usage && !ev.done) continue;           // 纯用量事件，不进业务回调
         onEv(ev);
       }
@@ -2934,6 +2936,7 @@ function showPick() {
 
 /** 换一份简历时，上一份的结论不能留在概览和台账里冒充这一份的。 */
 function clearReportView() {
+  window.ictCostBudget?.(null);
   REPORT = null;
   activeStatus = null;
   document.body.dataset.noreport = '1';
@@ -3154,6 +3157,7 @@ window.fetch = async function(input, init = {}) {
 
 async function activateAccount(user, gate = true) {
   ACCOUNT = user || null;
+  if (ACCOUNT) window.ictBudgetConfig?.();
   const debug = !!ACCOUNT?.debug;
   $('ictSampleButton').textContent = debug ? '载入虚构调试示例' : '载入队员脱敏示例';
   $('logoutBtn').textContent = debug ? '重置调试' : '用户登出';

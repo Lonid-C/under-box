@@ -112,7 +112,11 @@ class AgentRun:
                 "events": events, "truncated": self.truncated,
                 "budget": {"maxSearches": self.budget.max_searches, "searches": self.budget.searches,
                            "maxReads": self.budget.max_page_reads, "reads": self.budget.page_reads,
-                           "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": self.budget.max_seconds},
+                           "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": self.budget.max_seconds,
+                           **({'readAttempts': self.budget.read_attempts, 'maxReadAttempts': self.budget.max_read_attempts,
+                               'readSuccesses': self.budget.successful_reads, 'readFailures': self.budget.failed_reads,
+                               'readRefunds': self.budget.read_refunds, 'robotsSkipped': self.budget.robots_skipped}
+                              if getattr(self.budget, 'recovery_enabled', False) else {})},
                 "note": "数据源调用记录只说明查询过程，不构成本人经历证据。"}
 
 

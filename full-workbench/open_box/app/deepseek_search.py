@@ -24,6 +24,7 @@ class DeepSeekSearcher:
         if not query:
             return []
         from .deepseek_client import DeepSeekClient, DeepSeekError
+        from .cost_budget import BudgetLimit
         try:
             items = DeepSeekClient(self.api_key).search(query)
             hits = []
@@ -39,6 +40,8 @@ class DeepSeekSearcher:
                                       snippet=str(item.get("snippet") or ""),
                                       publisher=str(item.get("site_name") or "")))
             return hits
+        except BudgetLimit:
+            return []
         except (DeepSeekError, httpx.HTTPError, ValueError, TypeError) as exc:
             raise SearchUnavailable("DeepSeek search unavailable") from exc
 

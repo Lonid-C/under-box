@@ -10,7 +10,7 @@ ENDPOINT = 'https://defaultgw-gnrdembxhe.cn-southwest-2.huaweicloud-agentarts.co
 def configured():
     return bool(os.environ.get('HUAWEICLOUD_SDK_AK') and os.environ.get('HUAWEICLOUD_SDK_SK'))
 
-def invoke(query, session_id=None):
+def invoke(query, session_id=None, *, timeout=480):
     if not configured():
         raise RuntimeError('iam_not_configured')
     headers={'Content-Type':'application/json', 'Accept':'text/event-stream',
@@ -21,4 +21,4 @@ def invoke(query, session_id=None):
     sig.Key=os.environ['HUAWEICLOUD_SDK_AK']; sig.Secret=os.environ['HUAWEICLOUD_SDK_SK']
     req=signer.HttpRequest('POST',ENDPOINT,headers,body); sig.Sign(req)
     request=urllib.request.Request(ENDPOINT,data=req.body,headers=req.headers,method='POST')
-    return urllib.request.urlopen(request,timeout=480)
+    return urllib.request.urlopen(request,timeout=timeout)

@@ -2608,6 +2608,14 @@ const StatusDock = {
     this.el('spFoot').textContent = msg;
     this.el('spPillTxt').textContent = '核验失败';
   },
+  pending(msg) {
+    clearInterval(this.timer);
+    this.el('statusDock').classList.remove('done', 'failed');
+    this.el('spTitle').textContent = '等待本轮结果';
+    this.el('spTime').textContent = '';
+    this.el('spFoot').textContent = msg;
+    this.el('spPillTxt').textContent = '等待本轮结果';
+  },
 };
 
 /* ══ 状态窗口可拖动 ═══════════════════════════════
@@ -3091,14 +3099,17 @@ async function runVerify() {
     bringIntoView($('toolbar'));
   } catch (err) {
     if (epoch !== QUERY_EPOCH) return;
-    StatusDock.fail(err.message);
+    const retained = /已保留|仍在核验|核验已完成/.test(err.message);
+    retained ? StatusDock.pending(err.message) : StatusDock.fail(err.message);
     $('pending').hidden = false;
-    $('pending').textContent = `核验失败：${err.message}`;
+    $('pending').textContent = `${retained ? '等待本轮结果' : '核验失败'}：${err.message}`;
     $('pending').style.color = '#712B13';
     if (/过期/.test(err.message)) return;
-    // 没过期就回到分拣台，勾选还在，可以直接重试；失败原因写在导语里
-    $('pickLead').textContent = `核验失败：${err.message}。勾选还在，可以直接再点一次。`;
+    // 服务器复用本轮任务；保留选择，避免把“核验完成但回执未到”误写成核验失败。
+    $('pickLead').textContent = `${retained ? '等待本轮结果' : '本轮未完成'}：${err.message}`;
+    if (!retained) $('pickLead').append(' 已保留勾选，可检查原因后重试。');
     showPick();
+    if (retained) $('pickGo').textContent = '取回本轮结果';
   }
 }
 

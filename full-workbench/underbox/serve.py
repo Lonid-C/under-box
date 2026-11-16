@@ -966,11 +966,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "缺少 token：先上传简历拆分条目"}, 400)
             if not ids:
                 return self._json({"error": "没有勾选要核验的条目"}, 400)
+            materials = payload.get('githubMaterials') or {}
             with _PREPARED_LOCK:
                 entry = PREPARED.get(token)
             if entry is None or entry.get('owner', 'local') != self.uid():
+                if os.environ.get('UNDERBOX_ICT_ENABLE') == '1':
+                    from ict_extension import resumable_scope
+                    if resumable_scope(self.uid(), token, ids, materials):
+                        from functools import partial
+                        return self._sse(partial(run_verify_selected_job, materials=materials), (token, ids), kind='verify')
                 return self._json({'error':'拆分结果已过期或不属于当前账户，请重新上传'}, 404)
-            materials = payload.get('githubMaterials') or {}
             if entry.get('snapshot') is not None:
                 valid = {v.claim.id for v in entry['snapshot']['report'].claims}
                 if materials:

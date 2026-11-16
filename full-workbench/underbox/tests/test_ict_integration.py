@@ -1,5 +1,5 @@
 """Behavioral migration checks. Temporary accounts, fake providers, loopback only."""
-import contextlib,http.client,io,json,os,queue,socket,sys,tempfile,threading,time,unittest
+import contextlib,http.client,io,json,os,queue,shutil,socket,sys,tempfile,threading,time,unittest,urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -23,11 +23,15 @@ def fake_core(token,ids,events,holder,*,materials=None):
 
 class Stream(io.BytesIO):status=200
 
-def cloud_ok(query,session_id):
+def cloud_ok(query,session_id,**kwargs):
     data=json.loads(query.split('\n',1)[1]);assert session_id
-    assert set(data)=={'action','resume_text','consent'}
-    request_id=data['resume_text'].splitlines()[0].split(' ',1)[1]
-    ict.tool_action(data);result=ict.tool_action({'action':'status','job_id':request_id})
+    if data['action']=='submit':
+      assert set(data)=={'action','resume_text','consent'}
+      request_id=data['resume_text'].splitlines()[0].split(' ',1)[1]
+      ict.tool_action(data);result=ict.tool_action({'action':'status','job_id':request_id})
+    else:
+      assert set(data)=={'action','job_id'} and data['action']=='status'
+      result=ict.tool_action(data)
     return Stream(('data: '+json.dumps({'event':'summary_response','content':result['result_json']})+'\n\ndata: {"event":"done"}\n').encode())
 
 class Tests(unittest.TestCase):
@@ -55,6 +59,7 @@ class Tests(unittest.TestCase):
     serve._STATES.clear();serve.PREPARED.clear();self.acc.attempts.clear()
     for t in list(ict.TICKETS.values()):ict.release(t)
     ict.TICKETS.clear()
+    shutil.rmtree(self.db.parent/'ict-tasks',ignore_errors=True)
  def request(self,path,body=None,cookie='',extra=None,method=None,worker=False):
     h={'Host':'127.0.0.1:'+str(self.gateway.server_port),'X-Forwarded-Proto':'https','X-Forwarded-Prefix':'/ict-test/'}
     if cookie:h['Cookie']=cookie
@@ -132,6 +137,133 @@ class Tests(unittest.TestCase):
     self.assertEqual(done['usage']['deepseek']['calls'],1)
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1);self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def verify_request(self,token,cookie):
+    code,h,raw=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
+    self.assertEqual(code,200)
+    return next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+ def test_long_job_stream_end_recovers_by_status_only(self):
+    token=self.prepared();cookie=self.login();actions=[];sessions=[]
+    def slow_core(*args,**kwargs):time.sleep(.15);return fake_core(*args,**kwargs)
+    def early_end(query,session,**kwargs):
+      data=json.loads(query.split('\n',1)[1]);actions.append(data['action']);sessions.append(session)
+      if len(actions)==1:
+        ict.tool_action(data)
+        return Stream(b'data: {"event":"done"}\n')
+      return cloud_ok(query,session)
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=slow_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=early_end):
+      done=self.verify_request(token,cookie)
+    self.assertNotIn('failed',done);self.assertEqual(actions,['submit','status']);self.assertEqual(len(set(sessions)),1);self.assertEqual(core.call_count,1)
+    self.assertEqual(done['report']['agentarts']['status_recoveries'],1);self.assertNotIn('_ict_request',done)
+ def test_disconnect_after_submit_recovers_without_new_submit(self):
+    token=self.prepared();cookie=self.login();actions=[]
+    def disconnect(query,session,**kwargs):
+      data=json.loads(query.split('\n',1)[1]);actions.append(data['action'])
+      if len(actions)==1:ict.tool_action(data);raise urllib.error.URLError('synthetic_disconnect')
+      return cloud_ok(query,session)
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=disconnect):
+      done=self.verify_request(token,cookie)
+    self.assertNotIn('failed',done);self.assertEqual(actions,['submit','status']);self.assertEqual(core.call_count,1)
+ def missing_receipt(self,query,session,**kwargs):
+    data=json.loads(query.split('\n',1)[1]);result=ict.tool_action(data)
+    if data['action']=='submit':ict.tool_action({'action':'status','job_id':result['job_id']})
+    return Stream(b'data: {"event":"summary_response","content":"SYNTHETIC_PRIVATE_MODEL_NARRATIVE"}\n')
+ def test_pending_receipt_retry_reuses_report_and_qa_context(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core:
+      with patch.object(ict.runtime_client,'invoke',side_effect=self.missing_receipt) as cloud:first=self.verify_request(token,cookie)
+      self.assertTrue(first['failed']);self.assertIn('核验已完成',first['error']);self.assertNotIn('SYNTHETIC_PRIVATE_MODEL_NARRATIVE',json.dumps(first));self.assertEqual(cloud.call_count,4)
+      with store.connect(self.db) as c:self.assertEqual(store.get_user(c,'alice')['quota_used'],0);self.assertEqual(store.list_reports(c,'alice'),[])
+      with patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:done=self.verify_request(token,cookie)
+      self.assertNotIn('failed',done);self.assertEqual(core.call_count,1);self.assertEqual(json.loads(cloud.call_args.args[0].split('\n',1)[1])['action'],'status')
+    with store.connect(self.db) as c:
+      self.assertEqual(store.get_user(c,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(c.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+      self.assertEqual(c.execute('SELECT SUM(ds_calls) FROM usage_log').fetchone()[0],1)
+ def test_repeated_success_does_not_repeat_cloud_core_history_or_quota(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      first=self.verify_request(token,cookie);second=self.verify_request(token,cookie)
+    self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1);self.assertEqual(first['report'],second['report'])
+    with store.connect(self.db) as c:
+      self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1);self.assertEqual(c.execute('SELECT COUNT(*) FROM usage_log WHERE ok=1').fetchone()[0],1)
+ def test_unstarted_cloud_failure_cannot_shadow_successful_replacement(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=[urllib.error.HTTPError('https://example.invalid',503,'synthetic_unavailable',{},None)]):
+      first=self.verify_request(token,cookie)
+    self.assertTrue(first['failed']);core.assert_not_called()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      second=self.verify_request(token,cookie);third=self.verify_request(token,cookie)
+    self.assertNotIn('failed',second);self.assertEqual(second['report'],third['report']);self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1);self.assertEqual(len(ict.TICKETS),1)
+    with store.connect(self.db) as c:self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1)
+ def test_private_journal_recovers_completed_task_after_worker_restart(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core:
+      with patch.object(ict.runtime_client,'invoke',side_effect=self.missing_receipt):self.assertTrue(self.verify_request(token,cookie)['failed'])
+      files=list((self.db.parent/'ict-tasks').glob('*.json'));self.assertEqual(len(files),1);self.assertEqual(files[0].stat().st_mode&0o777,0o600)
+      self.assertEqual(files[0].parent.stat().st_mode&0o777,0o700)
+      ict.TICKETS.clear();serve.PREPARED.clear()
+      with patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):done=self.verify_request(token,cookie)
+    self.assertNotIn('failed',done);self.assertEqual(core.call_count,1)
+    with store.connect(self.db) as c:rid=store.list_reports(c,'alice')[0]['id']
+    self.assertEqual(self.request('/api/history/'+str(rid)+'/activate',{},cookie)[0],200);self.assertEqual(serve.user_state('alice')['oby'].candidate_name,'合成测试甲')
+ def test_verified_journal_replay_is_idempotent_after_restart(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      first=self.verify_request(token,cookie);ict.TICKETS.clear();serve.PREPARED.clear();second=self.verify_request(token,cookie)
+    self.assertNotIn('failed',second);self.assertEqual(first['report'],second['report']);self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    with store.connect(self.db) as c:self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1)
+ def test_journal_cannot_be_replayed_under_another_owner(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):self.verify_request(token,cookie)
+    u=ict.USER.set('bob')
+    try:self.assertRaises(ValueError,ict.register,token,[REPORT.claims[0].claim.id],{},queue.Queue(),{})
+    finally:ict.USER.reset(u)
+ def test_backend_failure_retains_error_without_retry_or_quota(self):
+    token=self.prepared();cookie=self.login()
+    def fail_core(token,ids,events,holder,**kwargs):events.put({'done':True,'failed':True,'error':'合成检索不可用'});events.put(None)
+    def fail_cloud(query,session,**kwargs):
+      data=json.loads(query.split('\n',1)[1]);result=ict.tool_action(data);ict.tool_action({'action':'status','job_id':result['job_id']});return Stream(b'data: {"event":"done"}\n')
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fail_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=fail_cloud) as cloud:
+      first=self.verify_request(token,cookie);second=self.verify_request(token,cookie)
+    self.assertIn('合成检索不可用',first['error']);self.assertEqual(second['error'],first['error']);self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    with store.connect(self.db) as c:self.assertEqual(store.get_user(c,'alice')['quota_used'],0)
+ def test_running_journal_after_restart_never_resubmits(self):
+    u=ict.USER.set('alice')
+    try:
+      t=ict.register(self.prepared(),[REPORT.claims[0].claim.id],{},queue.Queue(),{});t['state']='running';ict.persist_ticket(t);ict.release(t);t['flow_lock'].release();ict.TICKETS.clear();serve.PREPARED.clear()
+    finally:ict.USER.reset(u)
+    with patch.object(ict,'ORIGINAL_VERIFY') as core,patch.object(ict.runtime_client,'invoke') as cloud:done=self.verify_request('prepared-alice',self.login())
+    self.assertTrue(done['failed']);self.assertIn('服务重启',done['error']);core.assert_not_called();cloud.assert_not_called()
+ def test_history_write_failure_rolls_back_and_retry_uses_existing_result(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      with patch.object(store,'save_report',side_effect=RuntimeError('synthetic_database_error')):first=self.verify_request(token,cookie)
+      self.assertTrue(first['failed']);self.assertIn('已保留',first['error'])
+      with store.connect(self.db) as c:self.assertEqual(len(store.list_reports(c,'alice')),0);self.assertEqual(store.get_user(c,'alice')['quota_used'],0)
+      done=self.verify_request(token,cookie)
+    self.assertNotIn('failed',done);self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    with store.connect(self.db) as c:
+      self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1);self.assertEqual(c.execute('SELECT SUM(ds_calls) FROM usage_log').fetchone()[0],1)
+ def test_inflight_same_scope_cannot_start_second_orchestration(self):
+    u=ict.USER.set('alice')
+    try:
+      token=self.prepared();ids=[REPORT.claims[0].claim.id];t=ict.register(token,ids,{},queue.Queue(),{});t['state']='running'
+      self.assertRaises(ValueError,ict.register,token,ids,{},queue.Queue(),{})
+      self.assertEqual(len(ict.TICKETS),1)
+      t['state']='failed';t['flow_lock'].release()
+    finally:ict.USER.reset(u)
+ def test_changed_materials_cannot_recover_a_different_scope_after_restart(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):self.verify_request(token,cookie)
+    ict.TICKETS.clear();serve.PREPARED.clear()
+    with patch.object(ict,'ORIGINAL_VERIFY') as core,patch.object(ict.runtime_client,'invoke') as cloud:
+      code,_,_=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id],'githubMaterials':{'changed':True}},cookie,{'X-Underbox-Consent':'1'})
+    self.assertEqual(code,404);core.assert_not_called();cloud.assert_not_called()
+ def test_expired_completed_journal_is_not_reused(self):
+    token=self.prepared();cookie=self.login()
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):self.verify_request(token,cookie)
+    path=next((self.db.parent/'ict-tasks').glob('*.json'));data=json.loads(path.read_text());data['created_at']=time.time()-ict.TASK_TTL-1;path.write_text(json.dumps(data));ict.TICKETS.clear();serve.PREPARED.clear()
+    code,_,_=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
+    self.assertEqual(code,404);self.assertFalse(path.exists())
  def test_no_tool_execution_cannot_become_complete(self):
     u=ict.USER.set('alice');q=queue.Queue()
     try:

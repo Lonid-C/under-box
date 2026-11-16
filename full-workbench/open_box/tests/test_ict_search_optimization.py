@@ -129,6 +129,15 @@ class OptimizationTests(unittest.TestCase):
         self.assertTrue(all(c['retrievalStatus']=='budget_not_started' for c in output['claims']))
         self.assertTrue(all('未执行检索' in c['nextStep'] for c in output['claims']))
 
+    def test_disabled_monetary_budget_bypasses_claim_shares_in_full_pipeline(self):
+        with patch.dict(os.environ,{'UNDERBOX_ICT_COST_BUDGET':'0'}):
+            ledger=CostBudget();report,calls=self.run_fifteen(ledger)
+        accesses=[c.verification_agent['sourceAccess'] for c in report.claims]
+        self.assertEqual(len(accesses),15);self.assertTrue(all(a['budget']['searches']>0 for a in accesses))
+        self.assertTrue(all('costAllocation' not in a for a in accesses))
+        self.assertGreater(ledger.spent,4);self.assertEqual(calls,ledger.search_calls)
+        self.assertFalse(ledger.stopped)
+
     def test_execution_record_is_not_rewritten_by_later_global_stop(self):
         c=item();ledger=CostBudget();budget=Budget();budget.searches=1
         with bind(ledger):run=AgentRun(agent_for(c),c,build_plan(c,'合成测试甲'),budget)

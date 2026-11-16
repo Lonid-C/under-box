@@ -158,6 +158,22 @@ class Tests(unittest.TestCase):
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1)
       self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_disabled_money_limit_keeps_cloud_receipt_history_and_quota(self):
+    from app.cost_budget import CURRENT
+    cookie=self.login();token=self.prepared()
+    def charged(*args,**kwargs):
+      CURRENT.get().reserve(5,'synthetic_verify');return fake_core(*args,**kwargs)
+    with patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'1','UNDERBOX_ICT_COST_BUDGET':'0'}),patch.object(ict,'ORIGINAL_VERIFY',side_effect=charged) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      code,_,raw=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
+      done=next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+      _,_,status_raw=self.request('/api/ict/status',cookie=cookie)
+    self.assertEqual(code,200);self.assertFalse(done.get('failed'));self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    self.assertFalse(done['report']['costBudget']['enforced']);self.assertIsNone(done['report']['costBudget']['limitCny'])
+    self.assertAlmostEqual(done['report']['costBudget']['estimatedCny'],5.5)
+    status=json.loads(status_raw)['retrieval'];self.assertFalse(status['cost_budget_enforced']);self.assertIsNone(status['estimated_budget_cny'])
+    with store.connect(self.db) as db:
+      self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1)
+      self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
  def test_unlimited_count_still_rejects_empty_and_invalid_selected_ids(self):
     u=ict.USER.set('alice')
     try:

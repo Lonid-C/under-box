@@ -15,4 +15,11 @@ context.window.ictCostBudget({estimatedCny:1.25,limitCny:4,cloudAllowanceCny:.5,
 assert.equal(byId('ictBudgetStatus').hidden,false);assert.match(byId('ictBudgetStatus').textContent,/1\.25.*4\.00/);assert.match(byId('ictBudgetStatus').textContent,/实际费用以各平台账单为准/);
 context.window.ictCostBudget({estimatedCny:3.99,limitCny:4,cloudAllowanceCny:.5,stopped:true});assert.match(byId('ictBudgetStatus').textContent,/停止新增付费请求/);
 context.window.ictCostBudget(null);assert.equal(byId('ictBudgetStatus').hidden,true,'another report must not inherit a previous budget');
+context.window.ictCostBudget({enforced:false,estimatedCny:5.5,limitCny:null,cloudAllowanceCny:.5,stopped:false});
+assert.match(byId('ictBudgetStatus').textContent,/金额预算限制已关闭/);
+assert.match(byId('ictBudgetStatus').textContent,/5\.50/);
+assert.doesNotMatch(byId('ictBudgetStatus').textContent,/约 ¥3|\/ ¥0\.00|停止新增付费请求/);
+context.document.body={dataset:{}};
+context.fetch=async()=>({json:async()=>({retrieval:{expanded:true,cost_budget_enforced:false,estimated_budget_cny:null,cloud_allowance_cny:.5}})});
+(async()=>{await context.window.ictBudgetConfig();assert.match(byId('ictBudgetStatus').textContent,/金额预算限制已关闭/);assert.match(byId('ictBudgetStatus').textContent,/处理材料后显示费用估算/);assert.doesNotMatch(byId('ictBudgetStatus').textContent,/¥0\.00/);console.log('ICT disabled monetary budget and status bootstrap passed');})().catch(e=>{console.error(e);process.exitCode=1;});
 console.log('ICT cost estimate display and scope reset tests passed');

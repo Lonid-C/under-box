@@ -216,7 +216,7 @@ class OpenAICompatLLM:
                 else:
                     from .cost_budget import CURRENT
                     money=CURRENT.get()
-                    if money and self.endpoint != PROVIDERS.get(self.provider,{}).get('endpoint'):
+                    if money and getattr(money,'enforced',True) and self.endpoint != PROVIDERS.get(self.provider,{}).get('endpoint'):
                         money.stop('自定义模型端点尚未核对单价，已停止付费调用。')
                         raise BudgetLimit(money.reason)
                     ticket=reserve_model(self.provider,body)

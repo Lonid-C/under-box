@@ -1436,7 +1436,7 @@ def build_searcher(provider: str | None = None) -> Searcher:
     brave_key = os.environ.get("BRAVE_SEARCH_API_KEY")
     from .cost_budget import CURRENT,BudgetLimit
     money=CURRENT.get()
-    if money:
+    if money and getattr(money,'enforced',True):
         if name in ('generic','brave') or name=='zhipu' and os.environ.get('SEARCH_ENDPOINT','') not in ('',ZhipuSearcher.DEFAULT_ENDPOINT):
             money.stop('当前搜索供应商未配置可核对单价，已停止付费调用。')
             raise BudgetLimit(money.reason)

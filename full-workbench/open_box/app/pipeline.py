@@ -220,7 +220,7 @@ def verify_prepared(
     from .cost_budget import CURRENT,ClaimShare,ClaimAllocations,bind as bind_cost
     from .retrieval_policy import enabled as recall_enabled
     money=CURRENT.get()
-    fair=bool(money and recall_enabled() and not explicit_budget)
+    fair=bool(money and getattr(money,'enforced',True) and recall_enabled() and not explicit_budget)
     # Website discovery must not consume the funds intended for all claim phases.
     setup=ClaimShare(money,min(.1,max(0,money.limit-money.spent)*.05),search_fraction=1) if fair else money
     with bind_cost(setup):sources = employer_policy(contextual_claims, doc, name, searcher, say)

@@ -4,6 +4,15 @@ const byId=id=>document.getElementById(id);
 const api='__ICT_BASE__api/';
 window.ictCostBudget=function(info){
  const box=byId('ictBudgetStatus');box.hidden=!info;if(!info)return;
+ if(info.enforced===false){
+  box.textContent='金额预算限制已关闭；'+(info.estimatedCny==null?'处理材料后显示费用估算。':
+   '当前已计价部分估算 ¥'+Number(info.estimatedCny).toFixed(2)
+   +'（含华为云预留 ¥'+Number(info.cloudAllowanceCny).toFixed(2)+'）。')
+   +(info.estimateIncomplete?'部分调用未计入估算。':'')
+   +(info.stopped?'已达到搜索安全上限，停止新增请求。':'不再因整份或逐条金额额度停止调用。')
+   +'实际费用以各平台账单为准；主动问答和语音另计。';
+  return;
+ }
  box.textContent=`本份预算估算 ¥${Number(info.estimatedCny).toFixed(2)} / ¥${Number(info.limitCny).toFixed(2)}（含华为云预留 ¥${Number(info.cloudAllowanceCny).toFixed(2)}）。`
   +(info.stopped?'已停止新增付费请求，保留已有结果。':'约 ¥3 后减少备用补查。')
   +'实际费用以各平台账单为准；主动问答和语音另计。';
@@ -11,7 +20,9 @@ window.ictCostBudget=function(info){
 window.ictBudgetConfig=function(){
  if(typeof fetch!=='function')return;
  return fetch(api+'ict/status').then(r=>r.json()).then(d=>{
-  if(d.retrieval?.expanded && document.body.dataset.stage!=='app')window.ictCostBudget({estimatedCny:0,limitCny:4,cloudAllowanceCny:.5});
+  if(d.retrieval?.expanded && document.body.dataset.stage!=='app')window.ictCostBudget({
+   enforced:d.retrieval.cost_budget_enforced!==false,estimatedCny:null,
+   limitCny:d.retrieval.estimated_budget_cny,cloudAllowanceCny:d.retrieval.cloud_allowance_cny});
  }).catch(()=>{});
 };
 window.ictBudgetConfig();

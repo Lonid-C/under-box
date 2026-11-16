@@ -11,6 +11,12 @@ from pathlib import Path
 
 CURRENT = ContextVar('underbox_report_cost_budget', default=None)
 SEARCH_PRICES = {'search_std': .01, 'search_pro': .03, 'search_pro_sogou': .05, 'search_pro_quark': .05}
+SEARCH_LIMIT_REASON = '达到整份简历的搜索安全上限，已停止新增搜索。'
+
+
+def enforced():
+    """Keep accounting and retrieval independent of the monetary stop switch."""
+    return os.environ.get('UNDERBOX_ICT_COST_BUDGET', '1') != '0'
 
 
 class BudgetLimit(ValueError):
@@ -30,9 +36,22 @@ class CostBudget:
         self.stopped = False
         self.reason = ''
         self.created = time.time()
+        self.enforced = enforced()
+        self.unpriced_requests = 0
         if state:
             for key in ('id','limit','target','spent','cloud_allowance','categories','search_calls','search_limit','stopped','reason','created'):
                 setattr(self, key, state[key])
+            self.unpriced_requests = state.get('unpriced_requests', 0)
+            # An old monetary stop must not block a new run after opting out.
+            # The independent search-count stop remains effective.
+            if not self.enforced and self.reason in (
+                    '估算费用预算不足，已停止新增付费请求；已有证据仍保留。',
+                    '供应商用量超过预估，已停止新增付费请求。',
+                    '无法确认该接口的计费价格，已停止新增请求。',
+                    '当前模型未配置可核对单价，已停止付费调用。',
+                    '当前搜索供应商未配置可核对单价，已停止付费调用。',
+                    '自定义模型端点尚未核对单价，已停止付费调用。'):
+                self.stopped=False;self.reason=''
         if not re.fullmatch('[0-9a-f]{32}', self.id):raise ValueError('invalid_budget_id')
         if not (0 <= self.spent and 0 < self.target <= self.limit <= 4):raise ValueError('invalid_budget_limits')
         self._persist()
@@ -54,7 +73,7 @@ class CostBudget:
     def _persist(self):
         path = self.path(self.id)
         if path is None:return
-        keys = ('id','limit','target','spent','cloud_allowance','categories','search_calls','search_limit','stopped','reason','created')
+        keys = ('id','limit','target','spent','cloud_allowance','categories','search_calls','search_limit','stopped','reason','created','enforced','unpriced_requests')
         temp = path.with_suffix('.'+secrets.token_hex(8)+'.tmp')
         try:
             fd = os.open(temp, os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o600)
@@ -65,14 +84,17 @@ class CostBudget:
         finally:temp.unlink(missing_ok=True)
 
     def reserve(self, amount, category, *, search=False):
-        if not math.isfinite(amount) or amount < 0:
-            self.stop('无法确认该接口的计费价格，已停止新增请求。')
-            raise BudgetLimit(self.reason)
         with self._lock:
-            if (self.stopped or self.spent+amount>self.limit+1e-9
+            if not math.isfinite(amount) or amount < 0:
+                if self.enforced or amount < 0:
+                    self.stop('无法确认该接口的计费价格，已停止新增请求。')
+                    raise BudgetLimit(self.reason)
+                self.unpriced_requests+=1
+                amount=0.  # Unpriced calls are labelled, never presented as free.
+            if (self.stopped or self.enforced and self.spent+amount>self.limit+1e-9
                     or search and self.search_calls>=self.search_limit):
                 self.stopped=True
-                self.reason=('达到整份简历的搜索安全上限，已停止新增搜索。' if search and self.search_calls>=self.search_limit
+                self.reason=(SEARCH_LIMIT_REASON if search and self.search_calls>=self.search_limit
                              else '估算费用预算不足，已停止新增付费请求；已有证据仍保留。')
                 self._persist()
                 raise BudgetLimit(self.reason)
@@ -92,13 +114,15 @@ class CostBudget:
         with self._lock:
             self.spent = max(0,self.spent-amount+actual)
             self.categories[category] = max(0,self.categories.get(category,0)-amount+actual)
-            if self.spent>self.limit:self.stopped=True;self.reason='供应商用量超过预估，已停止新增付费请求。'
+            if self.enforced and self.spent>self.limit:self.stopped=True;self.reason='供应商用量超过预估，已停止新增付费请求。'
             self._persist()
 
     def snapshot(self):
         with self._lock:
-            return {'limitCny':self.limit,'targetCny':self.target,'estimatedCny':round(self.spent,4),
-                    'remainingCny':round(max(0,self.limit-self.spent),4),'stopped':self.stopped,'reason':self.reason,
+            return {'enforced':self.enforced,'limitCny':self.limit if self.enforced else None,
+                    'targetCny':self.target if self.enforced else None,'estimatedCny':round(self.spent,4),
+                    'remainingCny':round(max(0,self.limit-self.spent),4) if self.enforced else None,
+                    'estimateIncomplete':bool(self.unpriced_requests),'stopped':self.stopped,'reason':self.reason,
                     'cloudAllowanceCny':self.cloud_allowance,'cloudEstimateOnly':True,
                     'searchRequests':self.search_calls,'searchSafetyLimit':self.search_limit,
                     'byCategory':{key:round(value,4) for key,value in self.categories.items()},
@@ -204,7 +228,7 @@ def search_allowed():
 
 def alternate_allowed():
     budget=CURRENT.get()
-    return not budget or not budget.stopped and budget.spent<budget.target
+    return not budget or not budget.stopped and (not getattr(budget,'enforced',True) or budget.spent<budget.target)
 
 
 def model_prices(provider,model):
@@ -226,6 +250,7 @@ def reserve_model(provider,body):
     if CURRENT.get() is None:return None
     try:prices=model_prices(provider,body.get('model',''))
     except BudgetLimit as exc:
+        if not getattr(CURRENT.get(),'enforced',True):return reserve(float('nan'),provider+'_model')
         CURRENT.get().stop(str(exc));raise
     # UTF-8 bytes exceed the text token count; add request-format overhead.
     messages=body.get('messages') or []
@@ -240,7 +265,10 @@ def settle_model(ticket,provider,body,payload):
     if not ticket:return
     usage=payload.get('usage') if isinstance(payload,dict) else None
     if not isinstance(usage,dict) or 'prompt_tokens' not in usage or 'completion_tokens' not in usage:return
-    p_in,p_hit,p_out=model_prices(provider,body.get('model',''))
+    try:p_in,p_hit,p_out=model_prices(provider,body.get('model',''))
+    except BudgetLimit:
+        if not getattr(ticket[0],'enforced',True):return
+        raise
     prompt=max(0,int(usage['prompt_tokens']));output=max(0,int(usage['completion_tokens']))
     cached=min(prompt,max(0,int(usage.get('prompt_cache_hit_tokens') or (usage.get('prompt_tokens_details') or {}).get('cached_tokens') or 0)))
     settle(ticket,((prompt-cached)*p_in+cached*p_hit+output*p_out)/1e6)

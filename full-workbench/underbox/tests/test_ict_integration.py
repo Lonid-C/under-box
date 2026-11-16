@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path[:0]=[str(ROOT/'underbox'),str(ROOT/'open_box')]
 os.environ.update(UNDERBOX_ICT_ENABLE='1',HUAWEICLOUD_SDK_AK='synthetic-ak',HUAWEICLOUD_SDK_SK='synthetic-sk')
 import serve,accounts,store,ict_extension as ict
-from app.schema import Report,Claim
+from app.schema import Report,Claim,VerifiedClaim
 from app.strategy import ResumeProfile
 from app.usage import METER
 REPORT=Report.model_validate(json.loads((ROOT/'open_box/fixtures/report_lin.json').read_text()))
@@ -137,6 +137,42 @@ class Tests(unittest.TestCase):
     self.assertEqual(done['usage']['deepseek']['calls'],1)
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1);self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_fourteen_selected_items_share_budget_and_resume_without_rerun(self):
+    from app.cost_budget import CURRENT
+    many=REPORT.model_copy(deep=True)
+    many.claims=[VerifiedClaim(claim=Claim(id='synthetic-'+str(i),category='项目',raw_text='虚构项目事项'+str(i),raw_locator='合成测试',date_label='',elements=[],entities={}),status='none') for i in range(14)]
+    ids=[v.claim.id for v in many.claims];cookie=self.login()
+    def charged(*args,**kwargs):
+      CURRENT.get().reserve(.2,'synthetic_verify');return fake_core(*args,**kwargs)
+    def request():
+      code,_,raw=self.request('/api/verify/stream',{'token':token,'claimIds':ids},cookie,{'X-Underbox-Consent':'1'})
+      self.assertEqual(code,200)
+      return next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+    with patch(__name__+'.REPORT',many),patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'1'}),patch.object(ict,'ORIGINAL_VERIFY',side_effect=charged) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      token=self.prepared();serve.PREPARED[token]['prepared'].claims=[v.claim for v in many.claims]
+      first=request();second=request();ict.TICKETS.clear();serve.PREPARED.clear();restored=request()
+    self.assertFalse(first.get('failed'));self.assertEqual([c['id'] for c in first['report']['claims']],ids)
+    self.assertEqual(first['report']['costBudget'],second['report']['costBudget']);self.assertEqual(first['report']['costBudget'],restored['report']['costBudget'])
+    self.assertAlmostEqual(first['report']['costBudget']['estimatedCny'],.7)
+    self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    with store.connect(self.db) as db:
+      self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1)
+      self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_unlimited_count_still_rejects_empty_and_invalid_selected_ids(self):
+    u=ict.USER.set('alice')
+    try:
+      token=self.prepared()
+      self.assertRaises(ValueError,ict.register,token,[],{},queue.Queue(),{})
+      self.assertFalse(ict.resumable_scope('alice',token,[],{}))
+      self.assertRaises(ValueError,ict.register,token,[REPORT.claims[0].claim.id]+['forged-'+str(i) for i in range(14)],{},queue.Queue(),{})
+      self.assertFalse(ict.TICKETS)
+    finally:ict.USER.reset(u)
+ def test_unlimited_count_preserves_cloud_text_size_guard(self):
+    token=self.prepared();base=REPORT.claims[0].claim
+    items=[base.model_copy(update={'id':'synthetic-'+str(i),'raw_text':'虚构材料'*1100}) for i in range(9)]
+    serve.PREPARED[token]['prepared'].claims=items;u=ict.USER.set('alice')
+    try:self.assertRaisesRegex(ValueError,'32768',ict.register,token,[c.id for c in items],{},queue.Queue(),{})
+    finally:ict.USER.reset(u)
  def test_split_verify_retry_and_restart_share_one_cost_budget(self):
     from app.cost_budget import CURRENT
     cookie=self.login();seen=[]

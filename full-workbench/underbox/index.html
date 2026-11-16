@@ -3076,7 +3076,6 @@ async function runVerify() {
   const epoch = QUERY_EPOCH;
   const ids = PICK.claims.map(c => c.id).filter(id => PICK.selected.has(id));   // 按简历原顺序
   if (!ids.length || !PICK.token) return;
-  if(ids.length>8){alert('每轮最多核验8项，请缩小选择范围。');return;}
   delete document.body.dataset.picking;
   $('pick').hidden = true;
   $('pending').hidden = false;

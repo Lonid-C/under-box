@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.4'
+VERSION='ict-full-20261116.5'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -70,7 +70,7 @@ def load_ticket(key):
 
 def resumable_scope(owner,token,ids,materials):
     """Allow a completed private journal to survive loss of the in-memory split."""
-    if not 1<=len(set(ids))<=8:return False
+    if not ids:return False
     ident=USER.set(owner)
     try:
         key=scope_key(token,ids,materials)
@@ -104,7 +104,7 @@ def cleanup():
             if saved.stem not in active and time.time()-saved.stat().st_mtime>TASK_TTL:saved.unlink(missing_ok=True)
 
 def register(token,ids,materials,events,holder):
-    if not 1<=len(set(ids))<=8:raise ValueError('每轮请选择1–8项，可分轮核验。')
+    if not ids:raise ValueError('请至少选择1项。')
     key=scope_key(token,ids,materials)
     with LOCK:
         cleanup()

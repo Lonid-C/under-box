@@ -168,7 +168,7 @@ def test_01_offline_demo_runs_and_is_interactive():
 # ══════════════════════════════════════════════════════════════════════
 
 def test_02_fixture_statuses_match_spec():
-    """fixture 的 11 条状态与第 9 节表格完全一致，且能由规则重新算出来。"""
+    """历史演示结论保留；当前规则剔除冲突来源，不把旧结论冒充新取证。"""
     report = load_report()
     assert len(report.claims) == 11
 
@@ -177,11 +177,14 @@ def test_02_fixture_statuses_match_spec():
         assert vc.status == want_status, f"{vc.claim.id} 存档状态 {vc.status}，应为 {want_status}"
         assert vc.best_tier == want_tier, f"{vc.claim.id} 来源等级 {vc.best_tier}，应为 {want_tier}"
 
-        # 用规则重算一遍，确认 fixture 不是手写死的
+        # 当前规则不再把同名异校材料保留为本人证据。
         recomputed = judge.assess(vc.claim, list(vc.evidence))
-        assert recomputed.status == want_status, \
+        current_status,current_tier=('none',None) if vc.claim.id=='c09' else (want_status,want_tier)
+        assert recomputed.status == current_status, \
             f"{vc.claim.id} 规则重算得到 {recomputed.status}，与存档 {want_status} 不一致"
-        assert recomputed.best_tier == want_tier
+        assert recomputed.best_tier == current_tier
+        if vc.claim.id=='c09':
+            assert recomputed.evidence==[] and recomputed.proved==[]
 
     assert report.counts() == EXPECTED_COUNTS, f"统计 {report.counts()} 应为 {EXPECTED_COUNTS}"
 
@@ -200,7 +203,8 @@ def test_03_same_name_different_school_is_who():
     status = judge.decide(claim, [ev])
     assert status == "who", f"得到 {status}，应为 who"
     assert status not in ("ok", "part")
-    assert judge.assess(claim, [ev]).needs_human is True
+    assessed=judge.assess(claim,[ev])
+    assert assessed.status=='none' and assessed.evidence==[] and assessed.proved==[]
 
     # 就算堆满身份信号，只要有一条冲突，照样不认
     strong = mk_ev(tier="A", signals=list(judge.WEIGHTS), conflicts=["学校不同：某师范大学"],
@@ -639,13 +643,15 @@ def test_18_full_live_pipeline_over_deepseek_wire():
         # 每次调用都包着 untrusted_data
         assert "<untrusted_data>" in sent
 
-    # 实习默认不进入核验（SKIP_CATEGORIES）：拆出来了，但只记在 skipped_claims 里，不检索
-    assert len(report.claims) == 1, f"核验 {len(report.claims)} 条，应为 1 条（实习跳过）"
-    assert [c.id for c in report.skipped_claims] == ["c02"]
+    # 实习默认进入人工背调，不自动证明本人经历；显式跳过另有独立测试。
+    assert len(report.claims) == 2
+    assert report.skipped_claims==[]
+    internship=report.claims[1]
+    assert internship.manual_review and internship.evidence==[] and internship.proved==[]
     assert report.mode == "live"
     # 没有检索到任何公开来源 → 老实说未找到，不猜
     assert all(v.status == "none" for v in report.claims)
-    assert all(v.question for v in report.claims), "ask/part/none/who 都应带澄清问题"
+    assert report.claims[0].question, "未核实荣誉应带澄清问题"
     assert report.claims[0].question == "方便提供这项荣誉的公示链接吗？"
     # 报告顶部照样要如实展示这处输入风险（这里应该出现，是给人看的）
     assert report.input_risks
@@ -1047,12 +1053,12 @@ def test_30_model_string_instead_of_list_is_recovered_not_crashed():
     # 端到端：模型全程不守 schema，证据仍应被采信
     class FakeFetcher:
         def get(self, url):
-            return "二等奖　某候选人　某大学　赛事获奖名单。"
+            return "2024 某省赛 二等奖　某候选人　某大学　赛事获奖名单。"
 
     claim = mk_claim(["赛事=某省赛", "奖项=二等奖"])
     claim.entities = {"org": "某大学", "provided_urls": ["https://x.edu/a.html"]}
     llm = StubLLM([{
-        "snippet": "二等奖　某候选人　某大学　赛事获奖名单。",
+        "snippet": "2024 某省赛 二等奖　某候选人　某大学　赛事获奖名单。",
         "identity_signals": "学校一致",        # ← 该给数组，给了字符串
         "identity_conflicts": "",              # ← 该给数组，给了空字符串
         "supports": "赛事=某省赛",             # ← 该给数组，给了字符串
@@ -1125,7 +1131,7 @@ def test_31_content_filtered_query_is_skipped_not_fatal():
     logs = []
     found, _ = collect_for_claim(
         mk_claim(["赛事=某赛事", "奖项=一等奖"]), "某候选人", FlakySearcher(), StubLLM([{
-            "snippet": "某候选人　某赛事　一等奖",
+            "snippet": "某候选人　某大学　某赛事　一等奖",
             "supports": ["赛事=某赛事", "奖项=一等奖"],
             "identity_signals": ["学校一致"], "publisher": "某大学"}]),
         fetcher=Fetcher(), queries=[Query('"某赛事" "某候选人"')],

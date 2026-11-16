@@ -171,18 +171,26 @@ class SkipInternshipTests(unittest.TestCase):
             prepared = pipeline.prepare_resume(RESUME, llm=object(), progress=logs.append)
         return prepared, logs
 
-    def test_internships_are_split_but_not_verified_by_default(self):
+    def test_internships_default_to_manual_contacts_without_person_evidence(self):
         os.environ.pop("SKIP_CATEGORIES", None)
         prepared, logs = self._prepare({})
-        self.assertEqual([c.id for c in prepared.claims], ["c01", "c03"])
-        self.assertEqual([c.id for c in prepared.skipped], ["c02"])
-        self.assertTrue(any("实习 1 条按设置不核验" in line for line in logs), logs)
+        self.assertEqual([c.id for c in prepared.claims], ["c01", "c02", "c03"])
+        self.assertEqual(prepared.skipped, [])
 
         with patch.object(pipeline, "collect_for_claim", lambda *a, **k: ([], False)), \
              patch.object(pipeline, "generate_question", lambda vc, l: "问题"):
             report = pipeline.verify_prepared(prepared, searcher=object(), fetcher=object())
-        self.assertEqual([v.claim.id for v in report.claims], ["c01", "c03"])
-        self.assertEqual([c.id for c in report.skipped_claims], ["c02"])
+        self.assertEqual([v.claim.id for v in report.claims], ["c01", "c02", "c03"])
+        self.assertEqual(report.skipped_claims, [])
+        self.assertTrue(report.claims[1].manual_review)
+        self.assertEqual(report.claims[1].evidence, [])
+        self.assertEqual(report.claims[1].proved, [])
+
+    def test_explicit_skip_still_preserves_internship_as_unverified(self):
+        prepared, logs = self._prepare({"SKIP_CATEGORIES":"实习"})
+        self.assertEqual([c.id for c in prepared.claims], ["c01", "c03"])
+        self.assertEqual([c.id for c in prepared.skipped], ["c02"])
+        self.assertTrue(any("实习 1 条按设置不核验" in line for line in logs))
 
     def test_skip_list_can_be_turned_off(self):
         prepared, _ = self._prepare({"SKIP_CATEGORIES": "-"})

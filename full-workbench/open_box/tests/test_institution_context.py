@@ -1,5 +1,6 @@
 """Synthetic institutions only; no candidate data or paid APIs."""
 import unittest
+import os
 from unittest.mock import patch
 from pathlib import Path
 import sys
@@ -275,7 +276,8 @@ class ContextAPITests(unittest.TestCase):
         def answer(material, question, context):
             self.assertEqual(context["sources"][0]["id"], "W1")
             yield {"delta": "补充背景 [W1]"}
-        with patch("serve.account_search_credentials", return_value=credentials), \
+        with patch.dict(os.environ,{'DEEPSEEK_QA_NATIVE':'0'}), \
+             patch("serve.account_search_credentials", return_value=credentials), \
              patch("app.qa_search.search_question", side_effect=web), \
              patch("serve.stream_answer", side_effect=answer):
             status, events = self.post({"question": "企业主营业务", "webSearch": True})
@@ -287,7 +289,8 @@ class ContextAPITests(unittest.TestCase):
         self.assertIsNone(search_credentials())
 
     def test_web_failure_is_visible_and_answer_still_streams(self):
-        with patch("app.qa_search.search_question", side_effect=RuntimeError("private detail")), \
+        with patch.dict(os.environ,{'DEEPSEEK_QA_NATIVE':'0'}), \
+             patch("app.qa_search.search_question", side_effect=RuntimeError("private detail")), \
              patch("serve.stream_answer", return_value=iter([{"delta": "未取得资料"}])):
             status, events = self.post({"question": "企业主营业务", "webSearch": True})
         self.assertEqual(status, 200)
@@ -299,6 +302,37 @@ class ContextAPITests(unittest.TestCase):
         for value in ([], {"question": 123}, {"question": ""}, {"question": "x"*2001}):
             status, _ = self.post(value)
             self.assertEqual(status, 400)
+
+    def test_native_web_uses_model_tools_and_keeps_report_immutable(self):
+        from app.api_config import SearchCredentials,search_credentials
+        credentials=SearchCredentials('synthetic-account-key');before=self.rep.model_dump_json()
+        def answer(material,question,context):
+            self.assertEqual(context,{'_native':True})
+            self.assertIs(search_credentials(),credentials)
+            self.assertNotIn(credentials.api_key,material)
+            yield {'search':{'status':'complete','sources':[{'id':'W1','url':FIRM}],'limitations':[]}}
+            yield {'delta':'补充背景 [W1]'}
+        with patch.dict(os.environ,{'DEEPSEEK_QA_NATIVE':'1'}),patch('serve.account_search_credentials',return_value=credentials),patch('app.qa_search.search_question') as legacy,patch('serve.stream_answer',side_effect=answer):
+            status,events=self.post({'question':'企业主营业务','webSearch':True})
+        self.assertEqual(status,200);legacy.assert_not_called()
+        self.assertEqual(events[0]['search']['status'],'searching')
+        self.assertEqual(events[1]['search']['sources'][0]['id'],'W1')
+        self.assertEqual(events[2]['delta'],'补充背景 [W1]');self.assertTrue(events[-1]['done'])
+        self.assertEqual(self.rep.model_dump_json(),before);self.assertIsNone(search_credentials())
+
+    def test_native_failure_uses_safe_fallback_without_rewriting_report(self):
+        before=self.rep.model_dump_json()
+        def answer(material,question,context):
+            if context.get('_native'):
+                yield {'error':'模拟模型工具不可用'}
+            else:
+                self.assertEqual(context['sources'],[])
+                yield {'delta':'根据报告回答，未取得额外来源。'}
+        with patch.dict(os.environ,{'DEEPSEEK_QA_NATIVE':'1'}),patch('app.qa_search.search_question',side_effect=RuntimeError('synthetic-private-error')),patch('serve.stream_answer',side_effect=answer):
+            status,events=self.post({'question':'企业主营业务','webSearch':True})
+        self.assertEqual(status,200);self.assertEqual(events[1]['search']['sources'],[])
+        self.assertIn('根据报告回答',events[2]['delta']);self.assertTrue(events[-1]['done'])
+        self.assertNotIn('synthetic-private-error',str(events));self.assertEqual(self.rep.model_dump_json(),before)
 
 
 class BackgroundIndexTests(unittest.TestCase):

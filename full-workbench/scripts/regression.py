@@ -24,21 +24,9 @@ from datetime import datetime, timezone
 
 ROOT = Path(os.environ.get('ICT_REGRESSION_ROOT', Path(__file__).resolve().parents[1]))
 
-# These exact assertions also failed in the complete pre-change deployment copy.
-# Do not add failures here merely to make a later change appear to pass.
-KNOWN = {
-    # c02/c11 honor rosters are fixed. The next assertion is c09: its same-name
-    # conflicting-school evidence already yielded none in the pre-fix snapshot.
-    "test_02_fixture_statuses_match_spec": (
-        "c09 规则重算得到 none，与存档 who 不一致", "assert recomputed.status == want_status,"),
-    "test_03_same_name_different_school_is_who": (
-        "", "assert judge.assess(claim, [ev]).needs_human is True"),
-    "test_08_search_budget_stops_the_pipeline": ("", "assert exhausted2 is True"),
-    "test_30_model_string_instead_of_list_is_recovered_not_crashed": (
-        "字符串形式的 supports 不能被逐字符迭代吃掉", 'assert got.supports == ["赛事=某省赛"],'),
-    "test_31_content_filtered_query_is_skipped_not_fatal": (
-        "改述通过后应正常取到证据", 'assert found, "改述通过后应正常取到证据"'),
-}
+# The five legacy signatures were resolved on 2026-11-16. Future failures
+# must be reported as failures, never silently classified under an old baseline.
+KNOWN = {}
 
 
 def worker(name: str, destination: Path) -> int:

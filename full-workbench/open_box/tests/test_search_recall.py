@@ -5,7 +5,7 @@ from unittest.mock import patch
 from app.collect import Budget, collect_for_claim, extract_evidence
 from app.plan import Query, school_domain
 from app.schema import Claim
-from app.search import SearchHit, SearchUnavailable, ZhipuSearcher
+from app.search import SearchHit, SearchUnavailable, ZhipuSearcher, FixtureSearcher
 from app.strategy import ResumeProfile, build_plan
 
 
@@ -34,6 +34,19 @@ class Fetcher:
 
 
 class RecallTests(unittest.TestCase):
+    def test_zero_read_budget_marks_unread_hits_without_fetching(self):
+        fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
+        search=FixtureSearcher(table={'合成查询':[SearchHit('https://school.example/unread')]})
+        found,exhausted=collect_for_claim(claim(),'张三',search,Extractor(),fetcher=fetcher,
+            queries=[Query('合成查询')],budget=budget)
+        self.assertEqual(found,[]);self.assertTrue(exhausted);self.assertEqual(fetcher.calls,[])
+
+    def test_zero_read_budget_with_no_hits_does_not_invent_unread_pages(self):
+        fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
+        found,exhausted=collect_for_claim(claim(),'张三',FixtureSearcher(table={}),Extractor(),fetcher=fetcher,
+            queries=[Query('合成查询')],budget=budget)
+        self.assertEqual(found,[]);self.assertFalse(exhausted);self.assertEqual(fetcher.calls,[])
+
     def test_results_are_read_before_later_slow_queries(self):
         budget = Budget(max_searches=4, max_page_reads=4, max_seconds=10)
         reads = []
@@ -55,14 +68,15 @@ class RecallTests(unittest.TestCase):
         self.assertTrue(found, "后续慢查询不应抹掉已经取回的证据")
         self.assertIn("https://school.example/first", reads)
 
-    def test_structured_content_does_not_require_display_page(self):
+    def test_inferred_repo_does_not_start_github_api_for_unrelated_award(self):
         fetcher = Fetcher()
         hit = SearchHit("https://github.com/example/demo", content="张三获一等奖")
-        with patch("app.collect.github_hits", return_value=[hit]):
+        with patch("app.collect.github_hits", return_value=[hit]) as github:
             found, _ = collect_for_claim(
                 claim(repo="example/demo"), "张三", object(), Extractor(), queries=[],
                 fetcher=fetcher, budget=Budget(max_searches=0, max_page_reads=2))
-        self.assertEqual(len(found), 1)
+        self.assertEqual(found, [])
+        github.assert_not_called()
         self.assertEqual(fetcher.calls, [])
 
     def test_long_notice_keeps_candidate_at_the_end(self):
@@ -140,10 +154,15 @@ class RecallTests(unittest.TestCase):
             def search(self, q, site=None):
                 raise AssertionError("论文陈述不该消耗搜索额度")
 
+        c = Claim(id="paper", raw_text="张三发表 Some paper", raw_locator="合成测试", category="论文",
+                  date_label="", elements=["论文标题=Some paper"], entities={"title":"Some paper"})
+        class PaperExtractor:
+            def complete_json(self, *a, **k):
+                return {"snippet":"张三发表 Some paper", "supports":c.elements}
         with patch("app.collect.paper_hits", return_value=[SearchHit(
-                "https://doi.org/test", content="张三获一等奖")]) as api:
+                "https://doi.org/test", title="Some paper", content="张三发表 Some paper")]) as api:
             found, _ = collect_for_claim(
-                claim(), "张三", NoSearch(), Extractor(), fetcher=Fetcher(),
+                c, "张三", NoSearch(), PaperExtractor(), fetcher=Fetcher(),
                 queries=[Query("Some paper", kind="crossref")])
         api.assert_called_once()
         self.assertTrue(found)

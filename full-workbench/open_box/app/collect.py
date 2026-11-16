@@ -1610,6 +1610,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             if before == (budget.read_attempts, budget.robots_skipped):break
         say(f'    读页统计：实际尝试 {budget.read_attempts}/{budget.max_read_attempts}，取得内容 {budget.successful_reads}，'
             f'失败 {budget.failed_reads}，补回名额 {budget.read_refunds}，robots 跳过 {budget.robots_skipped}')
+    if budget.page_reads>=budget.max_page_reads and any(
+            _url_key(hit.url) not in seen_urls for bucket in per_query for hit in bucket):
+        budget.exhausted=True
     say(f"    本条完成：搜索 {budget.searches} 次，返回 {total_hits} 条链接，"
         f"回读 {budget.page_reads} 页，证据 {len(evidences)} 条"
         f"{'（已触及预算）' if budget.exhausted else ''}")

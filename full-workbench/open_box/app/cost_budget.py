@@ -9,6 +9,8 @@ from contextvars import ContextVar
 import json,math,os,re,secrets,threading,time
 from pathlib import Path
 
+from .quota_policy import unlimited
+
 CURRENT = ContextVar('underbox_report_cost_budget', default=None)
 SEARCH_PRICES = {'search_std': .01, 'search_pro': .03, 'search_pro_sogou': .05, 'search_pro_quark': .05}
 SEARCH_LIMIT_REASON = '达到整份简历的搜索安全上限，已停止新增搜索。'
@@ -16,7 +18,7 @@ SEARCH_LIMIT_REASON = '达到整份简历的搜索安全上限，已停止新增
 
 def enforced():
     """Keep accounting and retrieval independent of the monetary stop switch."""
-    return os.environ.get('UNDERBOX_ICT_COST_BUDGET', '1') != '0'
+    return not unlimited() and os.environ.get('UNDERBOX_ICT_COST_BUDGET', '1') != '0'
 
 
 class BudgetLimit(ValueError):
@@ -52,6 +54,12 @@ class CostBudget:
                     '当前搜索供应商未配置可核对单价，已停止付费调用。',
                     '自定义模型端点尚未核对单价，已停止付费调用。'):
                 self.stopped=False;self.reason=''
+        if unlimited():
+            self.search_limit = None
+            if self.reason == SEARCH_LIMIT_REASON:
+                self.stopped = False;self.reason = ''
+        elif self.search_limit is None:
+            self.search_limit = 1000
         if not re.fullmatch('[0-9a-f]{32}', self.id):raise ValueError('invalid_budget_id')
         if not (0 <= self.spent and 0 < self.target <= self.limit <= 4):raise ValueError('invalid_budget_limits')
         self._persist()
@@ -92,9 +100,9 @@ class CostBudget:
                 self.unpriced_requests+=1
                 amount=0.  # Unpriced calls are labelled, never presented as free.
             if (self.stopped or self.enforced and self.spent+amount>self.limit+1e-9
-                    or search and self.search_calls>=self.search_limit):
+                    or search and self.search_limit is not None and self.search_calls>=self.search_limit):
                 self.stopped=True
-                self.reason=(SEARCH_LIMIT_REASON if search and self.search_calls>=self.search_limit
+                self.reason=(SEARCH_LIMIT_REASON if search and self.search_limit is not None and self.search_calls>=self.search_limit
                              else '估算费用预算不足，已停止新增付费请求；已有证据仍保留。')
                 self._persist()
                 raise BudgetLimit(self.reason)
@@ -124,7 +132,7 @@ class CostBudget:
                     'remainingCny':round(max(0,self.limit-self.spent),4) if self.enforced else None,
                     'estimateIncomplete':bool(self.unpriced_requests),'stopped':self.stopped,'reason':self.reason,
                     'cloudAllowanceCny':self.cloud_allowance,'cloudEstimateOnly':True,
-                    'searchRequests':self.search_calls,'searchSafetyLimit':self.search_limit,
+                    'quotaLimitsDisabled':unlimited(),'searchRequests':self.search_calls,'searchSafetyLimit':self.search_limit,
                     'byCategory':{key:round(value,4) for key,value in self.categories.items()},
                     'notice':'按公开单价保守估算；含华为云预留，实际费用以各平台账单为准。问答和语音另计。'}
 
@@ -136,7 +144,7 @@ class ClaimShare:
     fetching/extraction; unused funds remain available to later claims.
     """
     def __init__(self, root, limit, *, search_fraction=.7):
-        self.root=root;self.limit=max(0,float(limit));self.target=self.limit*.8
+        self.root=root;self.enforced=root.enforced;self.limit=float("inf") if unlimited() else max(0,float(limit));self.target=self.limit*.8
         self.spent=0.;self.search_spent=0.;self.search_ceiling=self.limit*search_fraction
         self.search_stopped=self.limit<=0;self.local_stopped=self.limit<=0
         self.local_reason='本条没有剩余费用份额，未执行新增检索。' if self.limit<=0 else ''
@@ -152,7 +160,7 @@ class ClaimShare:
 
     def reserve(self, amount, category, *, search=False):
         with self.root._lock:
-            if not math.isfinite(amount) or amount<0:
+            if (not math.isfinite(amount) or amount<0) and not unlimited():
                 self.root.stop('无法确认该接口的计费价格，已停止新增请求。')
                 raise BudgetLimit(self.reason)
             if self.stopped:raise BudgetLimit(self.reason)
@@ -165,8 +173,8 @@ class ClaimShare:
                 self.local_reason='本条费用份额不足，已停止本条新增付费请求，保留后续事项费用。'
                 raise BudgetLimit(self.reason)
             ticket=self.root.reserve(amount,category,search=search)
-            self.spent+=amount
-            if search:self.search_spent+=amount
+            self.spent+=ticket[0]
+            if search:self.search_spent+=ticket[0]
             return ticket
 
     def settle(self, reservation, actual):
@@ -179,8 +187,8 @@ class ClaimShare:
 
     def stop(self,reason):self.root.stop(reason)
     def snapshot(self):
-        return {'allocatedCny':round(self.limit,4),'estimatedCny':round(self.spent,4),
-                'searchAllocatedCny':round(self.search_ceiling,4),'searchEstimatedCny':round(self.search_spent,4),
+        return {'allocatedCny':None if unlimited() else round(self.limit,4),'estimatedCny':round(self.spent,4),
+                'searchAllocatedCny':None if unlimited() else round(self.search_ceiling,4),'searchEstimatedCny':round(self.search_spent,4),
                 'paused':self.stopped or self.search_stopped,'reason':self.reason}
 
 
@@ -223,7 +231,7 @@ def settle(ticket,actual):
 def search_allowed():
     budget=CURRENT.get()
     return not budget or (not budget.stopped and not getattr(budget,'search_stopped',False)
-                          and budget.search_calls<budget.search_limit)
+                          and (budget.search_limit is None or budget.search_calls<budget.search_limit))
 
 
 def alternate_allowed():

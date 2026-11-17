@@ -7,6 +7,7 @@ import json,re,time
 from urllib.parse import urlsplit,quote
 import httpx
 from .schema import Evidence
+from .quota_policy import unlimited
 
 URL_RE=re.compile(r'https?://(?:www\.)?github\.com/[^\s<>"\u3000，。；（）)\],;]+',re.I)
 ACCOUNT_RE=re.compile(r'(?im)^\s*(?:(?:我的|本人|个人)\s*)?GitHub\s*(?:账号|账户|个人主页|主页)?\s*[:：]\s*(https?://(?:www\.)?github\.com/[A-Za-z0-9-]+/?)\s*(?:$|[，,；;])')
@@ -92,6 +93,7 @@ class Unavailable(Exception): pass
 
 class GitHubClient:
     def __init__(self, transport=None, max_requests=LIMIT_REQUESTS, max_seconds=75):
+        if unlimited():max_requests=max_seconds=float("inf")
         self.calls=0;self.max_requests=max_requests;self.deadline=time.monotonic()+max_seconds
         self.warnings=[];self.truncated=False;self.blocked=False
         self.client=httpx.Client(transport=transport,timeout=10,follow_redirects=False,headers={'Accept':'application/vnd.github+json','User-Agent':'Underbox-public-claim-verifier','X-GitHub-Api-Version':'2022-11-28'})
@@ -115,10 +117,17 @@ class GitHubClient:
         return data,r.links.get('next') is not None
     def pages(self,path,params=None,max_pages=3):
         out=[]
-        for page in range(1,max_pages+1):
+        page=0;seen=set()
+        while unlimited() or page<max_pages:
+            page+=1
             data,nxt=self.get(path,{**(params or {}),'per_page':100,'page':page})
             values=data.get('files',[]) if isinstance(data,dict) else data
             if not isinstance(values,list): raise Unavailable('GitHub 列表格式不符')
+            fingerprint=json.dumps(values,sort_keys=True)
+            if unlimited() and nxt and (not values or fingerprint in seen):
+                self.truncated=True
+                raise Unavailable('GitHub 分页未前进，已停止重复读取')
+            seen.add(fingerprint)
             out.extend(values)
             if not nxt: return out,False
         self.truncated=True
@@ -204,7 +213,7 @@ def record_conflicts(claim, rec):
 def audit_claim(claim, links, llm=None, client=None, progress=None, budget=None):
     owned=client is None;client=client or GitHubClient(max_requests=min(LIMIT_REQUESTS,max(0,budget.max_page_reads-budget.page_reads)) if budget else LIMIT_REQUESTS,max_seconds=max(0,budget.max_seconds-budget.elapsed()) if budget else 75);say=progress or (lambda s:None)
     audit={'triggered':True,'scope':[p['url'] for p in links],'identityConfirmed':False,'identityBasis':'候选人须主动标明本人账号；不按姓名或仓库 owner 猜测','repositories':[], 'records':[], 'warnings':[], 'truncated':False,
-           'limitations':['只核验本条提供的公开仓库与链接；分页/请求上限之外的记录未检查。','PR 数、commit 数、Stars、行数仅作上下文，不等于主导、核心、独立、自研或个人能力。','协作、squash、私有开发、代码迁移均可能导致公开记录不完整；文档贡献是正常且有价值的贡献。']}
+           'limitations':[('只核验本条提供的公开仓库与链接；请求次数、分页和任务时长不限，访问失败仍如实记录。' if unlimited() else '只核验本条提供的公开仓库与链接；分页/请求上限之外的记录未检查。'),'PR 数、commit 数、Stars、行数仅作上下文，不等于主导、核心、独立、自研或个人能力。','协作、squash、私有开发、代码迁移均可能导致公开记录不完整；文档贡献是正常且有价值的贡献。']}
     evidence=[]
     accounts=(claim.entities or {}).get('github_accounts',[])
     accounts=[a for a in accounts if isinstance(a,str) and re.fullmatch(r'[A-Za-z0-9-]{1,39}',a)] if isinstance(accounts,list) else []

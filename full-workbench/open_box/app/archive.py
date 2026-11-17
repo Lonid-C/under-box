@@ -338,7 +338,8 @@ def locate_notices(archive: dict, intake_year: int, fetch, *, max_pages: int = 1
         nonlocal total, used
         if page in cache:
             return cache[page]
-        if used >= max_pages or (deadline is not None and time.monotonic() >= deadline):
+        from .quota_policy import unlimited
+        if (not unlimited() and used >= max_pages) or (deadline is not None and time.monotonic() >= deadline):
             return None
         if page > 1 and reverse and not total:
             return None

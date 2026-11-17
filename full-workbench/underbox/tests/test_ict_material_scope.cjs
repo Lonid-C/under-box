@@ -21,5 +21,21 @@ assert.match(byId('ictBudgetStatus').textContent,/5\.50/);
 assert.doesNotMatch(byId('ictBudgetStatus').textContent,/约 ¥3|\/ ¥0\.00|停止新增付费请求/);
 context.document.body={dataset:{}};
 context.fetch=async()=>({json:async()=>({retrieval:{expanded:true,cost_budget_enforced:false,estimated_budget_cny:null,cloud_allowance_cny:.5}})});
-(async()=>{await context.window.ictBudgetConfig();assert.match(byId('ictBudgetStatus').textContent,/金额预算限制已关闭/);assert.match(byId('ictBudgetStatus').textContent,/处理材料后显示费用估算/);assert.doesNotMatch(byId('ictBudgetStatus').textContent,/¥0\.00/);console.log('ICT disabled monetary budget and status bootstrap passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+const oldBootstrap=(async()=>{await context.window.ictBudgetConfig();assert.match(byId('ictBudgetStatus').textContent,/金额预算限制已关闭/);assert.match(byId('ictBudgetStatus').textContent,/处理材料后显示费用估算/);assert.doesNotMatch(byId('ictBudgetStatus').textContent,/¥0\.00/);console.log('ICT disabled monetary budget and status bootstrap passed');})().catch(e=>{console.error(e);process.exitCode=1;});
 console.log('ICT cost estimate display and scope reset tests passed');
+
+(async()=>{
+ await oldBootstrap;
+
+context.window.ictCostBudget({quotaLimitsDisabled:true,enforced:false,estimatedCny:11,cloudAllowanceCny:.5});
+assert.match(byId('ictBudgetStatus').textContent,/不限金额、搜索次数、读页次数和执行时长/);
+assert.match(byId('ictBudgetStatus').textContent,/11\.00/);
+ context.document.body.dataset.stage='app';
+ context.fetch=async()=>({json:async()=>({retrieval:{expanded:true,unlimited:true}})});
+ await context.window.ictBudgetConfig();
+ assert.equal(byId('ictCurrentLimits').hidden,false);assert.match(byId('ictCurrentLimits').textContent,/核验次数.*均不限/);
+ context.window.ictCostBudget({enforced:true,estimatedCny:3.99,limitCny:4,cloudAllowanceCny:.5,stopped:true});
+ assert.match(byId('ictBudgetStatus').textContent,/停止新增付费请求/);
+ assert.match(byId('ictCurrentLimits').textContent,/历史报告保留当时的执行记录/);
+ console.log('Current unlimited configuration and unchanged historical budget display passed');
+})().catch(e=>{console.error(e);process.exitCode=1;});

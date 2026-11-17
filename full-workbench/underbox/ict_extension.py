@@ -5,12 +5,12 @@ this server; AgentArts must invoke RunUnderbox and return its digest
 receipt before the browser receives a completed report. No cloud bypass fallback.
 """
 from __future__ import annotations
-import contextvars,dataclasses,hashlib,hmac,http.client,json,os,queue,re,secrets,threading,time,urllib.error
+import contextvars,dataclasses,hashlib,hmac,http.client,json,os,queue,re,secrets,threading,time
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.11'
+VERSION='ict-full-20261117.1'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -31,7 +31,8 @@ def persist_ticket(t):
     """Private crash recovery; never place resume/report content in process logs."""
     path=journal_path(t['scope'])
     if path is None:return
-    data={k:t.get(k) for k in ('id','owner','scope','created_at','state','text','cloud_session','done','error','verified','unstarted','usage','seconds')}
+    if t['state'] not in ('running','awaiting'):t.setdefault('finished_at',time.time())
+    data={k:t.get(k) for k in ('finished_at','id','owner','scope','created_at','state','text','cloud_session','done','error','verified','unstarted','usage','seconds')}
     if t.get('cost_budget'):data['cost_budget_id']=t['cost_budget'].id
     holder=t['holder'];rep=holder.get('oby');profile=holder.get('profile')
     if rep is not None:data['raw_report']=rep.model_dump(mode='json')
@@ -50,7 +51,7 @@ def load_ticket(key):
     data=json.loads(path.read_text())
     if data.get('scope')!=key or data.get('owner')!=USER.get():raise ValueError('核验任务不属于当前账户。')
     age=time.time()-data['created_at']
-    if age>TASK_TTL:
+    if data['state'] != 'running' and time.time()-(data.get('finished_at') or data['created_at'])>TASK_TTL:
         path.unlink();return None
     from app.schema import Report
     from app.strategy import ResumeProfile
@@ -93,7 +94,8 @@ def cleanup():
     now=time.monotonic()
     for key in list(TICKETS):
         t=TICKETS[key]
-        if now-t['created']>TASK_TTL and t['state'] not in ('running',) and not t['flow_lock'].locked():
+        expired=time.time()-t['finished_at']>TASK_TTL if t.get('finished_at') else now-t['created']>TASK_TTL
+        if expired and t['state'] not in ('running',) and not t['flow_lock'].locked():
             TICKETS.pop(key,None)
             path=journal_path(t['scope'])
             if path:path.unlink(missing_ok=True)
@@ -407,7 +409,7 @@ def sse(self,target,args,kind=''):
     try:credentials=ENGINE.account_search_credentials(self.uid())
     except Exception:return self._json({'error':'账户搜索配置不可用。'},503)
     uid=self.uid();generation=self._st()['generation'];holder={};events=queue.Queue()
-    from app.cost_budget import CURRENT,CostBudget,bind as bind_cost
+    from app.cost_budget import CostBudget,bind as bind_cost
     from app.retrieval_policy import enabled as recall_enabled
     ledger=None
     scope=METER.open_scope(owners=2);base=METER.mark(scope)
@@ -527,15 +529,18 @@ def install(engine):
         if self.path.split('?',1)[0] in ('/health','/api/ict/status'):
             from app.retrieval_policy import enabled
             from app.cost_budget import enforced
+            from app.quota_policy import unlimited
             return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
                                'retrieval':{'expanded':enabled(),'page_reader':'native' if enabled() else 'configured',
-                                            'search_ceiling':100,'read_ceiling':40,
-                                            'failed_read_recovery_ceiling':8,'alternate_searches_per_claim':0 if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 4,
+                                            'unlimited':unlimited(),'account_quota_enforced':not unlimited(),
+                                            'search_ceiling':None if unlimited() else 100,'read_ceiling':None if unlimited() else 40,
+                                            'time_ceiling_seconds':None if unlimited() else 'strategy',
+                                            'failed_read_recovery_ceiling':None if unlimited() else 8,'alternate_searches_per_claim':0 if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else (None if unlimited() else 4),
                                             'search_policy':'zhipu_only' if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 'configured_with_fallback',
                                             'cost_budget_enforced':enforced(),
                                             'estimated_budget_cny':4 if enforced() else None,
                                             'target_cny':3 if enforced() else None,'cloud_allowance_cny':.5,
-                                            'report_search_safety_limit':1000}})
+                                            'report_search_safety_limit':None if unlimited() else 1000}})
         if self.path.split('?',1)[0]=='/api/ict/sample':
             data=json.loads(Path(os.environ['UNDERBOX_ICT_SAMPLE']).read_text())
             return self._json({'text':data.get('text') or '个人简历（脱敏摘录）\n个人信息\n姓名：'+data['candidate']+'\n身份背景：'+data['school']+'\n竞赛经历\n'+'\n'.join(c['raw_text'] for c in data['claims'])})

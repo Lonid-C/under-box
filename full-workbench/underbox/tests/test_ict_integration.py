@@ -174,6 +174,46 @@ class Tests(unittest.TestCase):
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1)
       self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_all_quotas_disabled_for_existing_zero_quota_account(self):
+    cookie=self.login('bob');token=self.prepared('bob')
+    def charged(*args,**kwargs):
+      from app.cost_budget import CURRENT
+      from app.collect import Budget
+      budget=Budget(max_searches=1,max_page_reads=1,max_seconds=1);budget.started-=100000
+      self.assertTrue(budget.can_read());self.assertTrue(budget.can_search())
+      ledger=CURRENT.get();ledger.search_calls=1001;ledger.reserve(9,'synthetic_verify',search=True)
+      return fake_core(*args,**kwargs)
+    with patch.dict(os.environ,{'UNDERBOX_ICT_UNLIMITED':'1','UNDERBOX_ICT_RECALL':'1'}),patch.object(ict,'ORIGINAL_VERIFY',side_effect=charged) as core,patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+      status=json.loads(self.request('/api/ict/status',cookie=cookie)[2])['retrieval']
+      self.assertTrue(status['unlimited']);self.assertFalse(status['account_quota_enforced'])
+      for key in ('estimated_budget_cny','report_search_safety_limit','search_ceiling','read_ceiling','time_ceiling_seconds','failed_read_recovery_ceiling'):self.assertIsNone(status[key])
+      self.assertTrue(json.loads(self.request('/api/session',cookie=cookie)[2])['user']['quota']['unlimited'])
+      self.assertEqual(self.request('/api/split/stream',{},cookie)[0],403)
+      raw=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})[2]
+      done=next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+      self.assertFalse(done.get('failed'),done);self.assertTrue(done['report']['costBudget']['quotaLimitsDisabled'])
+      self.assertGreater(done['report']['costBudget']['estimatedCny'],4)
+      # Retrieving the existing receipt must not charge usage a second time.
+      self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
+    self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1)
+    with store.connect(self.db) as db:
+      user=store.get_user(db,'bob');self.assertEqual(user['quota_total'],0);self.assertEqual(user['quota_used'],1)
+      self.assertEqual(len(store.list_reports(db,'bob')),1)
+ def test_new_debug_session_has_unlimited_quota(self):
+    import ict_debug
+    with patch.dict(os.environ,{'UNDERBOX_ICT_UNLIMITED':'1','UNDERBOX_ICT_DEBUG_GUEST':'1'}):
+      ict_debug.initialize(self.db);user,token=ict_debug.create(self.acc,'synthetic-debug-ip','synthetic-browser')
+      self.assertEqual(user['quota_total'],-1);self.assertTrue(token)
+ def test_long_completed_job_keeps_recovery_window_after_completion(self):
+    ident=ict.USER.set('alice')
+    try:
+      t=ict.register(self.prepared(),[REPORT.claims[0].claim.id],{},queue.Queue(),{})
+      t.update(state='completed',done={'report':{'claims':[]}},created=time.monotonic()-ict.TASK_TTL-10,created_at=time.time()-ict.TASK_TTL-10)
+      t['flow_lock'].release();ict.release(t)
+      ict.persist_ticket(t);ict.cleanup();self.assertIn(t['id'],ict.TICKETS)
+      restored=ict.load_ticket(t['scope']);self.assertIsNotNone(restored);self.assertEqual(restored['state'],'completed')
+      t['finished_at']=time.time()-ict.TASK_TTL-1;ict.persist_ticket(t);ict.cleanup();self.assertNotIn(t['id'],ict.TICKETS)
+    finally:ict.USER.reset(ident)
  def test_unlimited_count_still_rejects_empty_and_invalid_selected_ids(self):
     u=ict.USER.set('alice')
     try:
@@ -330,7 +370,7 @@ class Tests(unittest.TestCase):
  def test_expired_completed_journal_is_not_reused(self):
     token=self.prepared();cookie=self.login()
     with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):self.verify_request(token,cookie)
-    path=next((self.db.parent/'ict-tasks').glob('*.json'));data=json.loads(path.read_text());data['created_at']=time.time()-ict.TASK_TTL-1;path.write_text(json.dumps(data));ict.TICKETS.clear();serve.PREPARED.clear()
+    path=next((self.db.parent/'ict-tasks').glob('*.json'));data=json.loads(path.read_text());data['created_at']=data['finished_at']=time.time()-ict.TASK_TTL-1;path.write_text(json.dumps(data));ict.TICKETS.clear();serve.PREPARED.clear()
     code,_,_=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
     self.assertEqual(code,404);self.assertFalse(path.exists())
  def test_no_tool_execution_cannot_become_complete(self):

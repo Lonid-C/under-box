@@ -412,6 +412,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
         def _public(self, user: dict) -> dict:
             """交给前端的账号信息。不含密码哈希，只带该角色该看的字段。"""
             total, used = int(user.get("quota_total") or 0), int(user.get("quota_used") or 0)
+            if ict_debug.quotas_unlimited():total = -1
             return {
                 "id": user["id"], "name": user["name"], "role": user.get("role", "user"),
                 "debug": bool(user.get("_ict_debug")),
@@ -667,7 +668,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
                     data = {
                         "access": store.access_summary(conn, days=14),
                         "usage": store.usage_daily(conn, days=14),
-                        "users": store.usage_by_user(conn, days=30),
+                        "users": [{**u, "quota_total": -1} if ict_debug.quotas_unlimited() else u for u in store.usage_by_user(conn, days=30)],
                         "pending": store.pending_count(conn),
                         "requests": store.list_requests(conn, "pending"),
                     }
@@ -738,6 +739,7 @@ def account_handler(base, accounts: Accounts, worker_port: int, workers: "Worker
 
         # -- 转发到该用户的工作进程 -----------------------------------------
         def _quota_left(self, user: dict) -> bool:
+            if ict_debug.quotas_unlimited():return True
             if user.get("role") == "admin":
                 return True
             total = int(user.get("quota_total") or 0)

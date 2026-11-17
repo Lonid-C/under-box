@@ -730,7 +730,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-migration11">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-unlimited17">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -781,6 +781,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 
 <main class="grid">
   <aside class="col-left">
+    <p class="hint" id="ictCurrentLimits" role="status" hidden></p>
     <section class="card" id="gateCard">
       <div class="card-h">
         <h2>用户登录</h2>
@@ -1005,8 +1006,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="__ICT_BASE__boxy-drag.js?v=ict-migration11"></script>
-<script src="__ICT_BASE__ui.js?v=ict-migration11"></script>
+<script src="__ICT_BASE__boxy-drag.js?v=ict-unlimited17"></script>
+<script src="__ICT_BASE__ui.js?v=ict-unlimited17"></script>
 <script>
 function contextLink(url, label) {
   try {
@@ -1933,7 +1934,7 @@ async function loadClaimPlan(claimId, out, btn) {
     if (d.error) throw new Error(d.error);
     out.innerHTML = '';
     out.appendChild(el('div', { class: 'hint',
-      text: `策略档案 ${d.strategy.name}（${d.strategy.id}）　预算 ${d.budget.searches} 次检索 / ${d.budget.reads} 次读页` }));
+      text: `策略档案 ${d.strategy.name}（${d.strategy.id}）　预算 ${d.budget.searches==null?'不限':d.budget.searches} 次检索 / ${d.budget.reads==null?'不限':d.budget.reads} 次读页` }));
     const ROUND = { 1: '定锚', 2: '取证', 3: '补漏' };
     let cur = 0;
     d.queries.forEach(q => {

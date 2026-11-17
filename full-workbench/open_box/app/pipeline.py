@@ -16,6 +16,7 @@
 搜索 API 由 search.py 统一错峰，学校官网仍按单域串行、间隔 1 秒，不会因为并行而加压。
 """
 from __future__ import annotations
+from .quota_policy import unlimited
 
 import json
 import os
@@ -283,10 +284,10 @@ def verify_prepared(
         csay(specialist.name + "：按本条目的核对，已核实线索仅用于定位")
         if workers > 1:
             csay(f"开始：{claim.category} · {plan.profile_id} · {len(plan.queries)} 条查询"
-                 f" / 预算 {plan.budget.get('searches')} 次")
+                 f" / 预算 {'不限' if unlimited() else plan.budget.get('searches')} 次")
         else:
             say(f"[3-5/6] ({i}/{total}) {claim.id} {claim.category}"
-                f" · {plan.profile_id} · {len(plan.queries)} 条查询 / 预算 {plan.budget.get('searches')} 次")
+                f" · {plan.profile_id} · {len(plan.queries)} 条查询 / 预算 {'不限' if unlimited() else plan.budget.get('searches')} 次")
         # 4 检索与页面读取
         if explicit_budget:
             budget = budget_factory()

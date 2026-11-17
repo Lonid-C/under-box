@@ -47,3 +47,27 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 原项目独立基线为 615/619，原有四项 legacy 签名仍存在：test_03、test_08、test_30、test_31。原项目没有为此次迁移修改；ICT 版使用完整原仓库契约并保留已修正的用例，四项在 ICT 版均通过。
 
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
+# 2026-11-17: ICT quota override
+
+`UNDERBOX_ICT_UNLIMITED=1` requires ICT mode. It disables monetary and account
+verification quotas, search/read/recovery counts, per-claim duration, report-wide
+search limits, and query-plan truncation by budget. GitHub request and pagination
+quotas are disabled within the explicitly authorized project scope.
+
+Stored account quotas are retained; the effective quota is unlimited. Usage,
+cost estimates, cloud receipts, history and account isolation remain active.
+Infinite limits serialize as JSON `null` with an unlimited marker. The UI keeps
+current configuration separate from historical execution records. Private task
+recovery expires one hour after completion, including for long-running jobs.
+
+Provider balances/rate limits, per-request HTTP timeouts, file/context sizes,
+authorized project boundaries, robots and evidence requirements still apply.
+Finite query plans stop naturally when relevant work is complete; no repeated
+queries are generated just to consume more calls. AgentArts foreground timeouts
+do not cancel retained backend tasks; status recovery avoids duplicate billing.
+
+Validation: 838/838 Python cases and 5 frontend suites passed; adapter 17/17.
+Original baseline remains 615/619 with its 4 existing failures; original source
+is unchanged. Tests use temporary databases and synthetic/mock services only.
+No paid calls or real-resume reruns. Deployment/browser audit artifacts:
+`outputs/regression/ict-unlimited-20261117/`.

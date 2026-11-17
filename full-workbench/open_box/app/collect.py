@@ -40,6 +40,7 @@ from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
 from .strategy import WECHAT_HOST, _name_variants, competition_site, publication_site
 from .data_sources import record_decision
 from .retrieval_policy import enabled as recall_enabled
+from .quota_policy import unlimited, label as limit_label
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
 MAX_PAGE_CHARS = 12000
@@ -118,8 +119,16 @@ class Budget:
     recovery_enabled: bool = field(default_factory=recall_enabled)
     _read_lock: object = field(default_factory=threading.Lock, repr=False, compare=False)
 
+    unlimited: bool = field(default_factory=unlimited)
+
+    def __post_init__(self):
+        if self.unlimited:
+            self.max_searches = self.max_page_reads = self.max_seconds = float('inf')
+
     @property
     def recovery_limit(self):
+        if self.unlimited:
+            return float('inf')
         return min(8, max(0, self.max_page_reads // 2)) if self.recovery_enabled else 0
 
     @property
@@ -809,7 +818,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 break
             try:
                 from .search import READ_DEADLINE
-                token=READ_DEADLINE.set(budget.started+budget.max_seconds if budget and recall_enabled() else None)
+                token=READ_DEADLINE.set(budget.started+budget.max_seconds if budget and recall_enabled() and not budget.unlimited else None)
                 try:
                     reader = getattr(fetcher, "get_roster", None)
                     html = hit.content or (reader(hit.url, claim) if callable(reader) else fetcher.get(hit.url))
@@ -1489,7 +1498,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         budget.note_search()
         if site:
             hits = [h for h in hits if url_in_domain(h.url, site)]
-        say(f"    检索 {budget.searches}/{budget.max_searches}：{q.text}"
+        say(f"    检索 {budget.searches}/{limit_label(budget.max_searches)}：{q.text}"
             f"{(' · ' + site) if site else ''} → {len(hits)} 条，"
             f"{time.monotonic() - started:.1f} 秒")
         if discovery:
@@ -1633,7 +1642,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             before = (budget.read_attempts, budget.robots_skipped)
             read_batch(max(0, budget.max_page_reads - budget.page_reads))
             if before == (budget.read_attempts, budget.robots_skipped):break
-        say(f'    读页统计：实际尝试 {budget.read_attempts}/{budget.max_read_attempts}，取得内容 {budget.successful_reads}，'
+        say(f'    读页统计：实际尝试 {budget.read_attempts}/{limit_label(budget.max_read_attempts)}，取得内容 {budget.successful_reads}，'
             f'失败 {budget.failed_reads}，补回名额 {budget.read_refunds}，robots 跳过 {budget.robots_skipped}')
     if budget.page_reads>=budget.max_page_reads and any(
             _url_key(hit.url) not in seen_urls for bucket in per_query for hit in bucket):

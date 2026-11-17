@@ -995,7 +995,8 @@ def build_plan(
     queries.sort(key=lambda q: (q.variant, priority(q), q.round,
                                 -q.weight, 0 if q.site else 1, q.text))
 
-    cap = budget["searches"]
+    from .quota_policy import unlimited
+    cap = len(queries) if unlimited() else budget["searches"]
     dropped = [q.text for q in queries[cap:]]
     plan = Plan(queries[:cap], head.get("id", "none"), head.get("name", "无匹配"),
                 notes=list(head.get("notes") or []), dropped=dropped, budget=budget)

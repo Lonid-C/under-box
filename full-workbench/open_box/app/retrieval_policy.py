@@ -2,6 +2,7 @@
 import os
 import threading
 import time
+from .quota_policy import unlimited
 
 
 def enabled():
@@ -50,7 +51,7 @@ class RecallFallbackSearcher:
         with scope_lock:
             if key in self._cache:
                 return list(self._cache[key])
-            if self._counts.get(scope, 0) >= self.limit:
+            if not unlimited() and self._counts.get(scope, 0) >= self.limit:
                 if error:
                     raise error
                 return []

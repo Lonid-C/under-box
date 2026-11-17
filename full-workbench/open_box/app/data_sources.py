@@ -4,6 +4,7 @@ Catalogs locate sources; only fetched, identity-checked records can be evidence.
 Existing search credentials and public API adapters remain the actual transport.
 """
 from __future__ import annotations
+from .quota_policy import public_limit, public_plan_budget
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -136,7 +137,7 @@ class AgentRun:
         return {**self.agent.describe(), "reusedAnchors": self.claim.entities.get("verified_identity_anchors", []),
                  "sourceAccess": stats, "handoffs": self.plan.handoffs,
                  "runtimePlan": {"strategy": {"id": self.plan.profile_id, "name": self.plan.profile_name},
-                    "budget": dict(self.plan.budget), "queries": [asdict(q) for q in self.plan.queries],
+                    "budget": public_plan_budget(self.plan.budget), "queries": [asdict(q) for q in self.plan.queries],
                     "droppedByBudget": list(self.plan.dropped), "notes": list(self.plan.notes)}}
 
     def decision(self, reason, reference='', state='rejected'):
@@ -168,10 +169,10 @@ class AgentRun:
                              'queryCount':len(self.plan.queries),'notes':list(self.plan.notes)},
                 'decisions':decisions,'decisionCounts':decision_counts,'decisionsTruncated':self.decisions_truncated,
                 "events": events, "truncated": self.truncated, "counts": counts,
-                "budget": {"maxSearches": self.budget.max_searches, "searches": self.budget.searches,
-                           "maxReads": self.budget.max_page_reads, "reads": self.budget.page_reads,
-                           "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": self.budget.max_seconds,
-                           **({'readAttempts': self.budget.read_attempts, 'maxReadAttempts': self.budget.max_read_attempts,
+                "budget": {"unlimited": getattr(self.budget, "unlimited", False), "maxSearches": public_limit(self.budget.max_searches), "searches": self.budget.searches,
+                           "maxReads": public_limit(self.budget.max_page_reads), "reads": self.budget.page_reads,
+                           "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": public_limit(self.budget.max_seconds),
+                           **({'readAttempts': self.budget.read_attempts, 'maxReadAttempts': public_limit(self.budget.max_read_attempts),
                                'readSuccesses': self.budget.successful_reads, 'readFailures': self.budget.failed_reads,
                                'readRefunds': self.budget.read_refunds, 'robotsSkipped': self.budget.robots_skipped}
                               if getattr(self.budget, 'recovery_enabled', False) else {})},

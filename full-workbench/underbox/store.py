@@ -352,9 +352,11 @@ def consume_quota(conn, user_id: str) -> bool:
     用条件更新一条语句完成"检查并扣减"，避免两个请求同时读到余量。
     返回 False 表示额度已用尽（不限额账号永远 True）。
     """
+    from ict_debug import quotas_unlimited
+    condition = '' if quotas_unlimited() else ' AND (quota_total < 0 OR quota_used < quota_total)'
     cur = conn.execute(
         """UPDATE users SET quota_used = quota_used + 1
-            WHERE id = ? AND (quota_total < 0 OR quota_used < quota_total)""", (user_id,))
+            WHERE id = ?""" + condition, (user_id,))
     return cur.rowcount == 1
 
 

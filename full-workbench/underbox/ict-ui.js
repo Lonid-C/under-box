@@ -15,6 +15,11 @@ if(editionFetch)window.fetch=async function(input,init={}){
 };
 window.ictCostBudget=function(info){
  const box=byId('ictBudgetStatus');box.hidden=!info;if(!info)return;
+ if(info.quotaLimitsDisabled===true){
+  box.textContent='本次核验不限金额、搜索次数、读页次数和执行时长。'
+   +(info.estimatedCny==null?'':'当前已计价部分估算 ¥'+Number(info.estimatedCny).toFixed(2)+'。')
+   +(info.estimateIncomplete?'部分调用未计入估算。':'')+'实际费用以各平台账单为准；用量持续记录。';return;
+ }
  if(info.enforced===false){
   box.textContent='金额预算限制已关闭；'+(info.estimatedCny==null?'处理材料后显示费用估算。':
    '当前已计价部分估算 ¥'+Number(info.estimatedCny).toFixed(2)
@@ -31,7 +36,11 @@ window.ictCostBudget=function(info){
 window.ictBudgetConfig=function(){
  if(typeof fetch!=='function')return;
  return fetch(api+'ict/status').then(r=>r.json()).then(d=>{
+  const current=byId('ictCurrentLimits');
+  if(current){current.hidden=!d.retrieval?.unlimited;current.textContent=d.retrieval?.unlimited?
+   '当前配置：金额、核验次数、事项数量、搜索次数、读页次数及执行时长均不限。历史报告保留当时的执行记录。':'';}
   if(d.retrieval?.expanded && document.body.dataset.stage!=='app')window.ictCostBudget({
+   quotaLimitsDisabled:d.retrieval.unlimited===true,
    enforced:d.retrieval.cost_budget_enforced!==false,estimatedCny:null,
    limitCny:d.retrieval.estimated_budget_cny,cloudAllowanceCny:d.retrieval.cloud_allowance_cny});
  }).catch(()=>{});

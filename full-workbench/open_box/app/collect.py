@@ -938,7 +938,7 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             record_decision('读取后达到本条时间上限，尚未完成抽取',hit.url)
             budget.exhausted = True
             break
-        text = extract_main_text(html, preserve_tables=claim.category in {"学历", "竞赛", "著作", "教学活动"}) if "<" in html[:2000] else html
+        text = extract_main_text(html, preserve_tables=claim.category in {"学历", "竞赛", "著作", "教学活动", "项目", "奖学金", "校内荣誉", "学生工作"}) if "<" in html[:2000] else html
         if hit.title.startswith("[赛事目录入口]"):
             # 目录的入口说明不能冒充网页原始标题，否则首页会被错误分级为获奖名单。
             from bs4 import BeautifulSoup
@@ -949,6 +949,9 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 title += " · 初稿/拟授奖（目录已有官方说明）"
             hit = replace(hit, title=title)
         links = _official_roster_links(html, hit, claim, school_domains) if depth < 2 else []
+        if recall_enabled() and depth < 2:
+            from .retrieval_recovery import school_record_links
+            links += school_record_links(html, hit, claim, school_domains)
         if claim.category == "竞赛" and depth < 2:
             links = [SearchHit(**p) for p in roster_links(html, hit, claim, school_domains=school_domains)]
             if "<" in html[:2000]:
@@ -1345,10 +1348,12 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                     read_batch(min(2, budget.max_page_reads - budget.page_reads))
 
     while pending and budget.can_search():
-        if competition and judge.decide(claim, evidences) == "ok":
-            say("    官网证据已覆盖全部要素及本人身份，停止后续搜索")
+        if (competition or recall_enabled()) and judge.decide(claim, evidences) == "ok":
+            say("    有效证据已覆盖全部要素及本人身份，停止后续搜索")
             break
         q = pending.popleft()
+        if q.source.startswith('recovery:'):
+            say(f"    补查路线 {q.source.removeprefix('recovery:')}：{q.purpose}")
         site = ({"school": school_site, "source_school": source_site, "organizer": organizer_site,
                  "publisher": publisher_site}.get(q.site) if q.site in
                 ("school", "source_school", "organizer", "publisher") else q.site)
@@ -1539,6 +1544,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             for hit in hits:
                 host = _official_host(hit.official_url)
                 actual = re.sub(r"\W", "", hit.title).lower()
+                if (recall_enabled() and actual and wanted != actual
+                        and SequenceMatcher(None, wanted, actual).ratio() >= 0.82):
+                    record_decision('论文登记题名与输入不同，需核对题名或版本；不能自动视为同一成果',hit.url)
                 if not host or not actual or SequenceMatcher(None, wanted, actual).ratio() < 0.82:
                     continue
                 archive = publication_site(venue)
@@ -1548,8 +1556,13 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 if candidate_name and hit.authors:
                     author_blob = re.sub(r"[^a-z0-9\u3400-\u9fff]", "",
                                          " ".join(hit.authors).lower())
-                    variants = [re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", v.lower())
-                                for v in _name_variants(candidate_name)]
+                    names = _name_variants(candidate_name)
+                    if recall_enabled():
+                        from .paper_identity import latin_names
+                        names += latin_names(candidate_name)
+                    # This only follows the registry-supplied publisher URL.
+                    # Evidence extraction retains its stricter identity checks.
+                    variants = [re.findall(r"[a-z0-9]+|[\u3400-\u9fff]+", v.lower()) for v in names]
                     if not any(parts and all(len(part) >= 2 and part in author_blob
                                              for part in parts) for parts in variants):
                         continue
@@ -1565,6 +1578,19 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                     pending.appendleft(Query(text=f'"{q.text}" "{candidate_name}"',
                                              site=publisher_site, source="publisher:论文",
                                              purpose="期刊/出版社官网按题名及作者复查"))
+        if recall_enabled() and q.source == 'recovery:identifier':
+            from .retrieval_recovery import identifier_feedback
+            raw_hits = hits
+            hits, followups = identifier_feedback(claim, q, hits)
+            for rejected in raw_hits:
+                if rejected not in hits:
+                    record_decision('搜索结果未包含原文唯一编号，不能把模糊编号结果当成对应项目或专利',rejected.url)
+            for followup in reversed(followups):
+                if ((followup.text, followup.site, followup.kind) not in attempted
+                        and not any((p.text,p.site,p.kind)==(followup.text,followup.site,followup.kind) for p in pending)):
+                    pending.appendleft(followup)
+            if followups:
+                say('    编号搜索未返回对应编号：剔除模糊结果，改用项目主题与英文资助语境补查')
         add_hits(hits)
         new_queries += 1
         if q.site == "school" and not school_site:

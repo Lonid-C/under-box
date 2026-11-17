@@ -49,6 +49,24 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
 # 2026-11-17: DeepSeek saved-record diagnosis
 
+`ict-full-20261117.4` adds a discovery recovery layer to the category agents:
+verbatim project/patent identifiers, short paper-title anchors, full Latin names
+for publisher discovery, and person/school roster searches. Extraction comments
+are removed from query text only. Official project/award/student-work notices
+can lead to their same-school public attachments; table boundaries are retained.
+The collector logs each recovery route and stops after all elements and identity
+are proved. Different paper titles are explicitly recorded for version review.
+Transport connection failures use a 30-second, origin-specific circuit breaker
+instead of blocking a host for the entire report; SSL errors stay strict.
+
+`UNDERBOX_ICT_DOC_READER` can point to a dedicated antiword executable for public
+legacy DOC attachments. It is used only with ICT recall enabled, within the
+existing byte/output/time limits. No model fetch is needed for that parser.
+See [the recovery design](docs/RETRIEVAL_RECOVERY.md) for failure-specific routes
+and proof boundaries. These are discovery changes; title equivalence, full-name
+identity, coauthors, personal affiliations, award year, captaincy and funding/
+completion facts still require their existing independent proof checks.
+
 `ict-full-20261117.3` adds an explicit per-claim DeepSeek diagnosis action. It
 reuses authenticated report QA, consent, SSE streaming and usage accounting. The
 diagnostic request excludes raw resumes, other claims and private contacts;

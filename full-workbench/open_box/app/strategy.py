@@ -314,6 +314,10 @@ def _context(claim, candidate_name: str, terms: list[str],
     org_latin, org_han = _bilingual_org_parts(org)
     from .plan import claim_school
     school = claim_school(claim)
+    from .retrieval_policy import enabled as ict_recall
+    if ict_recall():
+        from .retrieval_recovery import clean_anchor
+        school = clean_anchor(school)
     if claim.category == "竞赛" and not school:
         from .source_guard import campus_school_hint
         school = e.get("school_search_hint") if isinstance(e.get("school_search_hint"), str) else ""
@@ -947,6 +951,10 @@ def build_plan(
                 if q.kind == "web" and scope not in q.text:
                     q.text += " " + scope
 
+    if ict_recall():
+        from .retrieval_recovery import refine_queries
+        queries = refine_queries(claim, candidate_name, ctx, queries)
+
     # 预算：档案说了算，但被硬天花板夹住；collect 的默认值只作兜底
     pb = head.get("budget") or {}
     budget = {
@@ -974,6 +982,8 @@ def build_plan(
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
     regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))
     def priority(q: Query) -> int:
+        if q.source.startswith('recovery:'):
+            return 0
         if q.source.startswith('faculty_fact:'):
             return 0
         if q.source.startswith("education_route:"):
@@ -1000,6 +1010,8 @@ def build_plan(
     dropped = [q.text for q in queries[cap:]]
     plan = Plan(queries[:cap], head.get("id", "none"), head.get("name", "无匹配"),
                 notes=list(head.get("notes") or []), dropped=dropped, budget=budget)
+    if ict_recall() and any(q.source.startswith('recovery:') for q in plan.queries):
+        plan.notes.append('补查流程：原文编号优先 → 短题名/完整英文姓名发现 → 官网公告及附件本人行 → 身份、年份、位次逐项核实；发现线索不等于核验通过，题名或版本差异保留待确认。')
     if conference_probe:
         plan.notes.append('未提供论文题名或DOI，先按会议、作者与年度补查；会议存在或仅列出姓名不能证明论文已收录，请补充题名或录用材料。')
 

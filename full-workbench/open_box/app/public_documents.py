@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -40,7 +41,8 @@ def legacy_office_text(data: bytes) -> str | None:
             book.release_resources()
     except Exception:
         pass
-    reader = shutil.which("antiword")
+    from .retrieval_policy import enabled as ict_recall
+    reader = (os.environ.get('UNDERBOX_ICT_DOC_READER') if ict_recall() else None) or shutil.which("antiword")
     if not reader:
         return None
     try:

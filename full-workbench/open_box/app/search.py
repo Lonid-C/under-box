@@ -1231,6 +1231,7 @@ class PageFetcher:
     """
 
     PAGE_RETRIES = 1
+    TRANSIENT_BACKOFF_SECONDS = 30.0
 
     def __init__(self, timeout: float = 12.0, connect_timeout: float = 5.0):
         self.timeout = timeout
@@ -1244,6 +1245,27 @@ class PageFetcher:
         # 连不上的站点（连接超时/拒绝）本次核验内不再重试：同一学院站点往往一次
         # 搜出好几条链接，每条都等满连接超时，两三个站点就能吃掉整条陈述的时间。
         self.dead_hosts: dict[str, str] = {}
+        self._dead_until: dict[str, float] = {}
+
+    def _dead_reason(self, url):
+        host = urlparse(url).hostname or ''
+        origin = f'{urlparse(url).scheme}://{urlparse(url).netloc}'
+        # Legacy explicit host blocks remain supported. Automatically recorded
+        # transport failures are origin-specific and expire; a failed HTTPS
+        # connection must not poison HTTP or all later claims in a long run.
+        for key in (host, origin):
+            deadline = self._dead_until.get(key)
+            if deadline is not None and time.monotonic() >= deadline:
+                self.dead_hosts.pop(key, None); self._dead_until.pop(key, None)
+            reason = self.dead_hosts.get(key)
+            if reason:
+                return reason
+        return ''
+
+    def _mark_transient_failure(self, url, reason):
+        origin = f'{urlparse(url).scheme}://{urlparse(url).netloc}'
+        self.dead_hosts[origin] = reason
+        self._dead_until[origin] = time.monotonic() + self.TRANSIENT_BACKOFF_SECONDS
 
     def _host_lock(self, host: str) -> threading.Lock:
         with self._locks_guard:
@@ -1258,7 +1280,7 @@ class PageFetcher:
     @contextmanager
     def _read_slot(self,url):
         host=urlparse(url).hostname or ''
-        reason=self.dead_hosts.get(host) or self.dead_hosts.get(f'{urlparse(url).scheme}://{host}')
+        reason=self._dead_reason(url)
         if reason:
             self.failures[url]=f'同一站点刚才{reason}，已跳过';yield False;return
         left=read_remaining()
@@ -1290,7 +1312,7 @@ class PageFetcher:
         with self._read_slot(url) as ready:
             if not ready:return None
             self.failures.pop(url, None)
-            dead_reason = self.dead_hosts.get(host) or self.dead_hosts.get(f"{urlparse(url).scheme}://{host}")
+            dead_reason = self._dead_reason(url)
             if dead_reason:
                 self.failures[url] = f"同一站点刚才{dead_reason}，已跳过"
                 return None
@@ -1407,7 +1429,9 @@ class PageFetcher:
                 if attempt >= self.PAGE_RETRIES:
                     self.failures[url] = reason
                     if reason.startswith(("连接超时", "连接失败")):
-                        self.dead_hosts[host] = reason
+                        from .retrieval_policy import enabled as ict_recall
+                        if ict_recall(): self._mark_transient_failure(url, reason)
+                        else: self.dead_hosts[host] = reason
                     return None
                 time.sleep(min(0.5 * (attempt + 1),read_remaining()))
         return None

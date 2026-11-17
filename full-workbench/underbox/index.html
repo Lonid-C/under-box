@@ -730,7 +730,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-query-reasons17">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-ds-diagnosis17">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -1006,8 +1006,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="__ICT_BASE__boxy-drag.js?v=ict-query-reasons17"></script>
-<script src="__ICT_BASE__ui.js?v=ict-query-reasons17"></script>
+<script src="__ICT_BASE__boxy-drag.js?v=ict-ds-diagnosis17"></script>
+<script src="__ICT_BASE__ui.js?v=ict-ds-diagnosis17"></script>
 <script>
 function contextLink(url, label) {
   try {
@@ -1314,6 +1314,10 @@ function retrievalDetails(c) {
   const access=c.verificationAgent?.sourceAccess || {}, issues=retrievalProblems(c);
   if(!access.queryPlan && !issues.length)return null;
   const box=el('div',{class:'dsec'},el('h4',{text:'查询结果与来源问题'}));
+  const diagnose=el('button',{class:'ghost',type:'button',text:'让 DeepSeek 分析本条查询'});
+  diagnose.addEventListener('click',()=>window.__diagnoseClaim?.(c.id));
+  box.appendChild(diagnose);
+  box.appendChild(el('p',{class:'hint',text:(access.searchSamples?.length?'分析已保存的公开搜索摘要和错误记录。':'本报告没有保存搜索摘要，将只分析已有查询、错误和筛选记录。')+'不重新搜索、不修改结论；按现有 DeepSeek 用量计费。'}));
   if(access.queryPlan)box.appendChild(el('div',{class:'hint',text:access.queryPlan.state==='no_queries'?'未生成可用查询，请补充检索信息。':`已生成 ${access.queryPlan.queryCount} 条查询。`}));
   const counts=access.counts || {}, b=access.budget || {};
   const reads=b.readSuccesses ?? counts.read?.returned, failed=b.readFailures ?? ((counts.read?.failed||0)+(counts.read?.blocked||0));
@@ -2114,7 +2118,7 @@ Usage.done = Usage.blank();
 const Chat = {
   ctrl: null,
   /** 返回完整回答文本；onDelta(已累计文本) 逐段回调。 */
-  async askStream(question, onDelta, onDone, onSearch) {
+  async askStream(question, onDelta, onDone, onSearch, options={}) {
     const epoch = QUERY_EPOCH;
     const usageTask = Usage.start();
     try {
@@ -2122,7 +2126,7 @@ const Chat = {
     const res = await fetch('__ICT_BASE__api/ask/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, webSearch:$('chatWeb').checked }),
+      body: JSON.stringify({ question, webSearch:options.diagnoseClaimId?false:$('chatWeb').checked, ...(options.diagnoseClaimId?{diagnoseClaimId:options.diagnoseClaimId}:{}) }),
       signal: this.ctrl.signal,
     });
     // 错误发生在建连阶段时，服务端回的是 JSON 而不是事件流
@@ -2309,7 +2313,7 @@ function initChat() {
         : el('div', { class: 'bub', text }));
   }
 
-  async function send_(question) {
+  async function send_(question,options={}) {
     const epoch = QUERY_EPOCH;
     const q = (question ?? input.value).trim();
     if (!q || busy) return;
@@ -2326,7 +2330,7 @@ function initChat() {
     const sources = el('div', {class:'web-sources'});
     answer.appendChild(sources);body.appendChild(answer);
     const painter = new InkStream(bub, scrollChat);
-    painter.status('boxy 正在查阅报告…'); scrollChat();
+    painter.status(options.diagnoseClaimId?'DeepSeek 正在分析已保存的查询记录…':'boxy 正在查阅报告…'); scrollChat();
     $('chatStTxt').textContent = '正在查阅报告';
     activePainter = painter;
     let acc = '';
@@ -2346,7 +2350,7 @@ function initChat() {
           }
           (result.limitations || []).forEach(note => sources.appendChild(el('div',{class:'hint',text:note})));
           scrollChat();
-        });
+        },options);
       await painter.finish();
       if (painter.closed) throw new DOMException('已停止生成','AbortError');
       if (epoch !== QUERY_EPOCH) return;
@@ -2475,6 +2479,12 @@ function initChat() {
   const setChatStatus = txt => { $('chatStTxt').textContent = txt; };
   setChatStatus('上传后就能提问');
   window.__chatStatus = setChatStatus;
+  window.__diagnoseClaim = claimId => {
+    if(!REPORT?.claims.some(c=>c.id===claimId) || busy)return;
+    $('chatWeb').checked=false;updateWebNote();setOpen(true);
+    $('chatNote').textContent='DeepSeek 辅助诊断：只分析已保存的查询样本和错误记录，不重新搜索，不修改核验结论；按现有 API 用量计费。';
+    return send_(`请分析 ${claimId} 查询遇到的问题，区分已记录事实与推测，并给出下一步建议。`,{diagnoseClaimId:claimId});
+  };
   window.__chatReset = () => {
     Chat.abort(); InkStream.cancelAll(); delete document.body.dataset.bocyBusy;
     body.querySelectorAll('.msg').forEach(message => message.remove());

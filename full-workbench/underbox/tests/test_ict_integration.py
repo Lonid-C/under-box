@@ -399,6 +399,40 @@ class Tests(unittest.TestCase):
     ict.save_context(rid,{'oby':REPORT,'profile':PROFILE});cookie=self.login()
     self.assertEqual(self.request('/api/history/'+str(rid)+'/activate',{},cookie)[0],200);self.assertEqual(serve.user_state('alice')['oby'].candidate_name,'合成测试甲')
     self.assertEqual(self.request('/api/history/'+str(rid)+'/activate',{},self.login('bob'))[0],404)
+ def test_diagnostic_qa_uses_selected_saved_records_and_no_search(self):
+    state=serve.user_state('alice');state.update(oby=REPORT.model_copy(deep=True),presentation=serve.to_presentation(REPORT));before=state['oby'].model_dump_json()
+    def response(material,question,web):
+      self.assertEqual(web,{'_diagnosis':True});self.assertNotIn(REPORT.claims[0].claim.raw_text,material)
+      self.assertIn('没有保存逐条搜索摘要',material);METER.record_llm('deepseek',{'prompt_tokens':20,'completion_tokens':10})
+      yield {'delta':'DeepSeek 辅助分析：根据已保存日志，原因仍需进一步确认。'}
+    with patch.object(serve,'stream_answer',side_effect=response) as model,patch('app.qa_search.search_question') as search:
+      code,h,raw=self.request('/api/ask/stream',{'question':'分析查询问题','webSearch':False,'diagnoseClaimId':REPORT.claims[0].claim.id},self.login(),{'X-Underbox-Consent':'1'})
+    self.assertEqual(code,200);self.assertIn('DeepSeek 辅助分析',raw.decode());self.assertIn('savedRecordsOnly',raw.decode());self.assertEqual(model.call_count,1);search.assert_not_called()
+    events=[json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ')];done=next(e for e in events if e.get('done'));self.assertEqual(done['usage']['deepseek']['calls'],1)
+    self.assertEqual(before,state['oby'].model_dump_json())
+ def test_diagnostic_qa_rejects_missing_claim_or_enabled_web_search(self):
+    serve.user_state('alice')['oby']=REPORT;cookie=self.login()
+    with patch.object(serve,'stream_answer') as model:
+      for ident,web,expected in [('unknown',False,404),('',False,400),(True,False,400),(REPORT.claims[0].claim.id,True,400)]:
+        self.assertEqual(self.request('/api/ask/stream',{'question':'分析','webSearch':web,'diagnoseClaimId':ident},cookie,{'X-Underbox-Consent':'1'})[0],expected)
+    model.assert_not_called()
+ def test_diagnostic_qa_preserves_consent_and_account_isolation(self):
+    serve.user_state('alice')['oby']=REPORT
+    body={'question':'分析','diagnoseClaimId':REPORT.claims[0].claim.id}
+    self.assertEqual(self.request('/api/ask/stream',body,self.login())[0],403)
+    self.assertEqual(self.request('/api/ask/stream',body,self.login('bob'),{'X-Underbox-Consent':'1'})[0],409)
+ def test_diagnostic_stream_uses_deepseek_and_a_diagnostic_system_prompt(self):
+    from app.llm import OpenAICompatLLM
+    llm=OpenAICompatLLM(endpoint='https://api.deepseek.com/chat/completions',api_key='synthetic',model='synthetic',provider='deepseek')
+    with patch('app.llm.build_llm',return_value=llm) as builder,patch.object(llm,'stream_text',return_value=iter([{'delta':'合成诊断'}])) as stream:
+      self.assertEqual(list(serve.stream_answer('合成记录','分析',{'_diagnosis':True})),[{'delta':'合成诊断'}])
+    builder.assert_called_once_with('deepseek');self.assertIn('可能原因',stream.call_args.args[0]);self.assertEqual(stream.call_args.kwargs['max_tokens'],2048)
+ def test_diagnostic_mode_does_not_forward_a_key_to_other_provider_endpoint(self):
+    from app.llm import OpenAICompatLLM
+    wrong=OpenAICompatLLM(endpoint='https://other.example/chat',api_key='synthetic-other',model='other',provider='zhipu')
+    with patch.dict(os.environ,{'LLM_PROVIDER':'zhipu','LLM_ENDPOINT':'https://other.example/chat','DEEPSEEK_API_KEY':'synthetic-ds-only'}),patch('app.llm.build_llm',return_value=wrong),patch.object(OpenAICompatLLM,'stream_text',autospec=True,return_value=iter([{'delta':'合成诊断'}])) as stream:
+      list(serve.stream_answer('合成记录','分析',{'_diagnosis':True}))
+    used=stream.call_args.args[0];self.assertEqual(used.endpoint,'https://api.deepseek.com/chat/completions');self.assertEqual(used.api_key,'synthetic-ds-only');self.assertEqual(used.provider,'deepseek')
  def test_report_qa_stream_and_no_report_mutation(self):
     state=serve.user_state('alice');state.update(oby=REPORT,presentation=serve.to_presentation(REPORT));before=json.dumps(state['presentation'],sort_keys=True)
     with patch.object(serve,'stream_answer',return_value=iter([{'delta':'仅供人工复核'}])):

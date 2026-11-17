@@ -584,17 +584,28 @@ def stream_answer(material: str, question: str, web_context: dict | None = None)
     from app.deepseek_client import DeepSeekClient, DeepSeekError
     from app.deepseek_fetch import _public_url
     from app.usage import METER
+    diagnosis=bool(web_context and web_context.get('_diagnosis'))
     native = bool(web_context and web_context.get("_native"))
-    prompt = build_prompt(material, question, None if native else web_context)
+    prompt = build_prompt(material, question, None if native or diagnosis else web_context)
     if native:
         prompt = prompt.replace("只依据下面材料回答。没有联网资料时直接说明材料缺失，不要假称搜索过网络。",
                                 "根据报告和本轮真实联网结果回答；没有检索结果时如实说明。")
     if not native:
         from app.llm import build_llm,OpenAICompatLLM
-        llm=build_llm()
+        llm=build_llm('deepseek') if diagnosis else build_llm()
+        if diagnosis and (os.environ.get('LLM_PROVIDER') or 'deepseek').lower()!='deepseek':
+            from app.llm import PROVIDERS
+            key=os.environ.get('DEEPSEEK_API_KEY')
+            if not key:
+                yield {'error':'未配置专用 DeepSeek 密钥，未调用其他模型供应商。'};return
+            preset=PROVIDERS['deepseek']
+            llm=OpenAICompatLLM(endpoint=preset['endpoint'],api_key=key,model=preset['model'],provider='deepseek',thinking='disabled')
         if not isinstance(llm,OpenAICompatLLM):
             yield {"error":"未配置模型供应商密钥"};return
-        yield from llm.stream_text(QA_POLICY,prompt)
+        if diagnosis:
+            from app.retrieval_diagnosis import DIAGNOSIS_POLICY
+            yield from llm.stream_text(DIAGNOSIS_POLICY,prompt,max_tokens=2048)
+        else:yield from llm.stream_text(QA_POLICY,prompt)
         return
     body = {
         "model": "deepseek-flash",
@@ -1421,11 +1432,18 @@ class Handler(BaseHTTPRequestHandler):
         if not question or len(question) > 2000:
             return self._json({"error": "问题不能为空且不能超过 2000 字"}, 400)
         online = payload.get("webSearch") is True
+        diagnosis=payload.get('diagnoseClaimId')
+        if diagnosis is not None and (not isinstance(diagnosis,str) or not diagnosis or online):
+            return self._json({'error':'查询诊断需要有效条目编号，并且只分析已保存记录，不执行联网搜索。'},400)
         report = self._st()["oby"]
         if report is None:
             return self._json({"error": "还没有核验任何简历——先上传一份，问答才有材料"}, 409)
         try:
-            material = render_material(report)
+            if diagnosis is not None:
+                from app.retrieval_diagnosis import diagnostic_material
+                try:material,diagnostic_availability=diagnostic_material(report,diagnosis)
+                except LookupError:return self._json({'error':'当前报告中没有该事项。'},404)
+            else:material = render_material(report)
             credentials = account_search_credentials(self.uid()) if online else None
         except Exception:
             return self._json({"error": "整理报告材料或账户搜索配置失败，请稍后重试"}, 503)
@@ -1449,7 +1467,8 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             with METER.bind(scope), bind_search_credentials(credentials):
-                web = None
+                web = {'_diagnosis':True} if diagnosis is not None else None
+                if diagnosis is not None:push({'diagnosis':{'claimId':diagnosis,'provider':'deepseek','savedRecordsOnly':True,**diagnostic_availability}})
                 if online:
                     push({"search": {"status": "searching", "sources": []}})
                     if os.environ.get("DEEPSEEK_QA_NATIVE", "1") == "1":

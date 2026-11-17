@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
-class Node{constructor(text=''){this.text=String(text);this.children=[];}appendChild(n){this.children.push(n);return n;}get textContent(){return this.text+this.children.map(n=>n.textContent).join('');}set textContent(v){this.text=String(v);this.children=[];}set innerHTML(v){if(v===''){this.text='';this.children=[];}else throw Error('untrusted markup');}}
-const ctx={STATUS:{none:{label:'未找到公开记录'},part:{label:'部分证实'},incomplete:{label:'查询遇到问题'},unsearched:{label:'待补充检索信息'}},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.forEach(c=>n.appendChild(c));return n;}};
+class Node{constructor(text=''){this.text=String(text);this.children=[];this.handlers={};}addEventListener(k,f){this.handlers[k]=f;}appendChild(n){this.children.push(n);return n;}get textContent(){return this.text+this.children.map(n=>n.textContent).join('');}set textContent(v){this.text=String(v);this.children=[];}set innerHTML(v){if(v===''){this.text='';this.children=[];}else throw Error('untrusted markup');}}
+const ctx={window:{},STATUS:{none:{label:'未找到公开记录'},part:{label:'部分证实'},incomplete:{label:'查询遇到问题'},unsearched:{label:'待补充检索信息'}},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.forEach(c=>n.appendChild(c));return n;}};
 vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('function retrievalProblems('),html.indexOf('function detailOf(')),ctx);
 assert.equal(ctx.retrievalLabel({status:'none',retrievalStatus:'not_started'}),'待补充检索信息');
 assert.equal(ctx.retrievalLabel({status:'none'}),'未找到公开记录');

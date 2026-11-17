@@ -89,6 +89,9 @@ class AgentRun:
         self.status = "running"
         self._elapsed = None
         self.counts = Counter()
+        self.search_samples = []
+        self.search_samples_truncated = False
+        self._sample_queries = set()
         self.failure_groups = {}
         self.failure_groups_truncated = False
 
@@ -120,6 +123,20 @@ class AgentRun:
                 self.events.append(event)
             else:
                 self.truncated = True
+
+    def record_search_sample(self, query, site, hits):
+        from .retrieval_policy import enabled
+        if not enabled() or not isinstance(hits,list):return
+        key=(query,site)
+        with self._lock:
+            if key in self._sample_queries:return
+            self._sample_queries.add(key)
+            if len(self.search_samples)>=12 or not hits and sum(not row['returnedCount'] for row in self.search_samples)>=3:
+                self.search_samples_truncated=True;return
+            values=[]
+            for hit in hits[:3]:
+                values.append({k:safe_reference(v)[:500] for k in ('url','title','snippet') if isinstance((v:=getattr(hit,k,'')),str)})
+            self.search_samples.append({'query':safe_reference(query),'site':site or '', 'returnedCount':len(hits),'hits':values})
 
     def finish(self, verified):
         self.status = verified.status
@@ -171,6 +188,7 @@ class AgentRun:
             decisions = [dict(e) for e in self.decisions]
             decision_counts = dict(self.decision_counts)
             failures=[{**g,'references':list(g['references'])} for g in self.failure_groups.values()]
+            samples=[{**v,'hits':[dict(h) for h in v['hits']]} for v in self.search_samples]
         started=bool(self.budget.searches or self.budget.page_reads or any(e.get('action') in ('search','read') for e in events))
         money=self.cost_budget
         paused=bool(money and (money.stopped or getattr(money,'search_stopped',False)))
@@ -186,6 +204,7 @@ class AgentRun:
                 'decisions':decisions,'decisionCounts':decision_counts,'decisionsTruncated':self.decisions_truncated,
                 "events": events, "truncated": self.truncated, "counts": counts,
                 "failureGroups": failures, "failureGroupsTruncated": self.failure_groups_truncated,
+                "searchSamples": samples, "searchSamplesTruncated": self.search_samples_truncated,
                 "budget": {"unlimited": getattr(self.budget, "unlimited", False), "maxSearches": public_limit(self.budget.max_searches), "searches": self.budget.searches,
                            "maxReads": public_limit(self.budget.max_page_reads), "reads": self.budget.page_reads,
                            "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": public_limit(self.budget.max_seconds),
@@ -270,8 +289,10 @@ class SourceSearcher:
     def _call(self, method, query, site=None, **kwargs):
         planned = next((q for q in self.run.plan.queries if q.text == query or query.startswith(q.text + " -site:")), None)
         source = source_for_query(self.run.claim, planned, site)
-        return invoke_source(source, lambda: method(query, site=site, **kwargs), reference=query,
+        hits=invoke_source(source, lambda: method(query, site=site, **kwargs), reference=query,
                              action="search", category=self.run.claim.category)
+        self.run.record_search_sample(query,site,hits)
+        return hits
 
     def search(self, query, site=None):
         return self._call(self.inner.search, query, site)

@@ -47,6 +47,32 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 原项目独立基线为 615/619，原有四项 legacy 签名仍存在：test_03、test_08、test_30、test_31。原项目没有为此次迁移修改；ICT 版使用完整原仓库契约并保留已修正的用例，四项在 ICT 版均通过。
 
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
+# 2026-11-17: DeepSeek saved-record diagnosis
+
+`ict-full-20261117.3` adds an explicit per-claim DeepSeek diagnosis action. It
+reuses authenticated report QA, consent, SSE streaming and usage accounting. The
+diagnostic request excludes raw resumes, other claims and private contacts;
+only the selected verification scope, saved query samples, source failures and
+screening counts are sent. Names are removed while boolean markers preserve
+whether the original query/snippet contained the candidate name. Findings are
+advisory and never rewrite evidence, proof states, receipts or reports.
+
+The action forces web search off on both client and server. Ordinary QA retains
+its existing optional search. DeepSeek is selected explicitly; a different
+provider's endpoint or generic key is not reused for diagnosis. Repeated clicks
+while the current answer is pending do not submit extra requests.
+
+ICT query wrappers retain up to 12 query samples and 3 result summaries each,
+with explicit truncation metadata. This sampling affects diagnostic context
+only, and does not cap search execution. Older reports without saved summaries
+can diagnose logs only; the UI and model instructions state that limitation.
+
+Validation: 860 Python cases, 6 frontend suites, 17 adapter cases, synthetic
+browser flows and separate user-requested manual DeepSeek diagnostics. Automated
+regression remains offline and synthetic. Manual diagnosis reads an existing
+report without new search or report mutation. Original-site baseline retains
+its 4 existing failures. Artifacts: `outputs/regression/ict-ds-diagnosis-20261117/`.
+
 # 2026-11-17: concrete source failure descriptions
 
 `ict-full-20261117.2` replaces the ambiguous unfinished-search wording with

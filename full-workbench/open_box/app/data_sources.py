@@ -89,6 +89,8 @@ class AgentRun:
         self.status = "running"
         self._elapsed = None
         self.counts = Counter()
+        self.failure_groups = {}
+        self.failure_groups_truncated = False
 
     @contextmanager
     def bind(self):
@@ -101,6 +103,19 @@ class AgentRun:
     def add(self, event):
         with self._lock:
             self.counts[(event.get("action", ""), event.get("state", ""))] += 1
+            if event.get('action') in ('search','read') and (event.get('state') in ('failed','blocked') or event.get('action')=='read' and event.get('state')=='empty'):
+                action=event['action'];error=event.get('error') or ('EmptyRead' if event.get('state')=='empty' else 'UnknownError')
+                reason=safe_reference(event.get('reason') or ('来源未返回正文' if error=='EmptyRead' else ''))
+                key=(action,error,reason)
+                if key not in self.failure_groups and len(self.failure_groups)<48:
+                    self.failure_groups[key]={'action':action,'error':error,'reason':reason,'count':0,'references':[]}
+                group=self.failure_groups.get(key)
+                if group is None:self.failure_groups_truncated=True
+                else:
+                    group['count']+=1
+                    reference=safe_reference(event.get('reference') or '')
+                    if reference and reference not in group['references'] and len(group['references'])<3:group['references'].append(reference)
+
             if len(self.events) < 80:
                 self.events.append(event)
             else:
@@ -155,6 +170,7 @@ class AgentRun:
                 counts.setdefault(action, {})[state] = n
             decisions = [dict(e) for e in self.decisions]
             decision_counts = dict(self.decision_counts)
+            failures=[{**g,'references':list(g['references'])} for g in self.failure_groups.values()]
         started=bool(self.budget.searches or self.budget.page_reads or any(e.get('action') in ('search','read') for e in events))
         money=self.cost_budget
         paused=bool(money and (money.stopped or getattr(money,'search_stopped',False)))
@@ -169,6 +185,7 @@ class AgentRun:
                              'queryCount':len(self.plan.queries),'notes':list(self.plan.notes)},
                 'decisions':decisions,'decisionCounts':decision_counts,'decisionsTruncated':self.decisions_truncated,
                 "events": events, "truncated": self.truncated, "counts": counts,
+                "failureGroups": failures, "failureGroupsTruncated": self.failure_groups_truncated,
                 "budget": {"unlimited": getattr(self.budget, "unlimited", False), "maxSearches": public_limit(self.budget.max_searches), "searches": self.budget.searches,
                            "maxReads": public_limit(self.budget.max_page_reads), "reads": self.budget.page_reads,
                            "seconds": round(self._elapsed if self._elapsed is not None else self.budget.elapsed(), 2), "maxSeconds": public_limit(self.budget.max_seconds),

@@ -174,6 +174,17 @@ class Tests(unittest.TestCase):
     with store.connect(self.db) as db:
       self.assertEqual(store.get_user(db,'alice')['quota_used'],1);self.assertEqual(len(store.list_reports(db,'alice')),1)
       self.assertEqual(db.execute('SELECT COUNT(*) FROM ict_report_context').fetchone()[0],1)
+ def test_markdown_export_names_the_saved_source_error(self):
+    report=serve.to_presentation(REPORT);claim=report['claims'][0]
+    claim.update(status='none',retrievalStatus='partial',retrievalSummary={'queriesAttempted':3,'pagesReadSuccess':1,'pagesAttempted':2},verificationAgent={'sourceAccess':{'failureGroups':[{'reason':'HTTP 403','count':2,'references':['https://synthetic.example/blocked']} ]}})
+    raw=serve.report_to_markdown(report)
+    self.assertIn('来源查询问题：HTTP 403；2 次',raw);self.assertIn('https://synthetic.example/blocked',raw)
+    self.assertIn('尚未取得足够的本人关联证据',raw);self.assertNotIn('检索未完成',raw);self.assertNotIn('本次核验未完成',raw)
+ def test_markdown_export_does_not_invent_unknown_historical_failure(self):
+    report=serve.to_presentation(REPORT);claim=report['claims'][0]
+    claim.update(status='none',retrievalStatus='partial',retrievalSummary={'queriesAttempted':2,'pagesReadSuccess':0,'pagesAttempted':0},verificationAgent={})
+    raw=serve.report_to_markdown(report);self.assertIn('没有保留具体失败原因',raw);self.assertNotIn('HTTP 403',raw)
+    claim['retrievalStatus']='time_limited';self.assertIn('当时执行时限触发停止',serve.report_to_markdown(report))
  def test_all_quotas_disabled_for_existing_zero_quota_account(self):
     cookie=self.login('bob');token=self.prepared('bob')
     def charged(*args,**kwargs):

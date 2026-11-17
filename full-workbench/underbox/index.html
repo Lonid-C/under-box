@@ -730,7 +730,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-unlimited17">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-query-reasons17">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -1006,8 +1006,8 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
     <div class="u-body" id="usageBody"></div>
   </div>
 </div>
-<script src="__ICT_BASE__boxy-drag.js?v=ict-unlimited17"></script>
-<script src="__ICT_BASE__ui.js?v=ict-unlimited17"></script>
+<script src="__ICT_BASE__boxy-drag.js?v=ict-query-reasons17"></script>
+<script src="__ICT_BASE__ui.js?v=ict-query-reasons17"></script>
 <script>
 function contextLink(url, label) {
   try {
@@ -1136,7 +1136,7 @@ const STATUS = {
   ask:  {label:'待澄清',        dot:'#D85A30', bg:'#FAECE7', fg:'#712B13'},
   none: {label:'未找到公开记录', dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
   who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
-  incomplete:{label:'检索未完成',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
+  incomplete:{label:'查询遇到问题',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
   unsearched:{label:'待补充检索信息',dot:'#B4B2A9',bg:'#F0EDE6',fg:'#44413A'}
 };
 const ORDER = ['ok','part','ask','none','who','incomplete','unsearched'];
@@ -1211,35 +1211,135 @@ function renderOverview() {
    ['来源可关联到本人', pct(REPORT.claims.filter(x=>['ok','part','ask'].includes(x.status)).length, total)],
    ['要素被全部证明', pct(c.ok, total)],
    ['要素级覆盖率', REPORT.coverage ? pct(REPORT.coverage.coveredElements, REPORT.coverage.selectedElements) : pct(proved, elements)],
-   ['本次检索状态', REPORT.claims.some(x => x.retrievalSummary && x.retrievalStatus !== 'complete') ? '存在未完成来源' : '已完成/未记录'],
+   ['来源查询情况', REPORT.claims.some(x=>retrievalProblems(x).length) ? `${REPORT.claims.filter(x=>retrievalProblems(x).length).length} 项有来源问题，展开查看原因` : '未记录来源访问异常'],
    ['需人工复核', pct(human, total)]
   ].forEach(([k,v]) => met.appendChild(el('div', {class:'metric'}, el('span',{text:k}), el('span',{text:v}))));
   $('disc').textContent = REPORT.disclaimer + ' 覆盖率只反映公开信息的多少，不代表候选人的可信程度。';
   $('rno').textContent = REPORT.reportNo;
 }
 
+function retrievalProblems(c) {
+  const access=c.verificationAgent?.sourceAccess || {}, summary=c.retrievalSummary || {};
+  const issues=new Map();
+  const classify=(reason,error,action)=>{
+    const text=reason+' '+error;
+    if(/robots/i.test(text))return ['robots','网站限制自动读取','网站的 robots.txt 不允许自动读取该来源。'];
+    if(/证书已过期|certificate.*expired/i.test(text))return ['ssl_expired','来源证书已过期','来源网站证书已过期，未继续读取正文。'];
+    if(/SSL|证书/i.test(text))return ['ssl','来源证书校验失败','无法验证来源网站证书，未继续读取正文。'];
+    if(/UnsafeURL|内网|元数据|不接受该端口|安全解析|重定向.*不合法/i.test(text))return ['unsafe_url','来源地址安全检查失败','未能安全确认来源或重定向地址，未继续读取。'];
+    if(/验证码|登录|额外权限/.test(text))return ['login','来源需要登录或验证码','来源要求登录、验证码或额外权限，无法直接读取。'];
+    const http=text.match(/HTTP\s*(\d{3})/i);
+    if(http){
+      const code=Number(http[1]);
+      if(code===429)return ['http_429','来源请求被限流','来源返回 HTTP 429，暂时拒绝更多请求。'];
+      if([401,403,412,418,468].includes(code))return ['http_'+code,'来源拒绝访问','来源返回 HTTP '+code+'，未能读取原文。'];
+      if([404,410].includes(code))return ['http_'+code,'来源链接不可用','来源返回 HTTP '+code+'，未能取得该地址的内容。'];
+      return ['http_'+code,'来源网站响应异常','来源返回 HTTP '+code+'，未取得可核对的正文。'];
+    }
+    if(/DOC\/XLS|旧版.*(?:Office|DOC)|antiword/i.test(text))return ['legacy_office','旧版 Office 附件解析失败','旧版 DOC/XLS 附件未读出文本；现有记录未进一步确认是读取器缺失、文件受保护还是超限。'];
+    if(/DOCX|XLSX|Office/i.test(text))return ['office','Office 附件解析失败','Office 附件未提取到可核对文本。'];
+    if(/PDF.*(?:未提取|无文本|扫描|受保护|不是有效)/i.test(text))return ['pdf','PDF 未提取到文本','PDF 未提取到可核对文本，可能需要人工查看扫描件或受保护文件。'];
+    if(/RAR|压缩|解压/i.test(text))return ['archive','压缩附件解析失败','压缩附件未能读取到可核对文档。'];
+    if(/OCR|图片.*文字/i.test(text))return ['ocr','图片文字识别失败','图片未能识别出可靠文字。'];
+    if(/超过.*(?:MB|大小)|内容超过|文件超限/i.test(text))return ['size','来源文件超过读取大小','来源文件超过可处理大小，未读取正文。'];
+    if(/连接超时|ConnectTimeout/i.test(text))return ['connect_timeout','来源连接超时','连接来源网站超时，未取得正文。'];
+    if(/读取超时|ReadTimeout/i.test(text))return ['read_timeout','来源读取超时','网站未在单次读取等待时间内返回正文。'];
+    if(/Timeout|超时/i.test(text))return ['timeout','来源请求超时','来源请求超时；现有记录未区分连接还是读取阶段。'];
+    if(/连接失败|ConnectError|ConnectionError/i.test(text))return ['connect','来源连接失败','未能建立到来源网站的连接。'];
+    if(/EmptyRead|未返回正文/.test(text))return ['empty_read','来源未返回正文','该地址未返回可核对的正文，记录没有更具体的原因。'];
+    if(/SourceNotAllowed/.test(text))return ['source_scope','来源不在本项查询范围','该来源不属于本条已授权的核验范围，未调用。'];
+    if(action==='search')return ['search_error','搜索服务调用失败','搜索服务未正常返回；具体原因以保存的原始记录为准。'];
+    return ['read_error','来源读取失败，原因未记录','来源未能读取；现有记录不足以判断具体原因。'];
+  };
+  const add=(event,count=1)=>{
+    const [key,title,description]=classify(event.reason || '',event.error || '',event.action);
+    if(!issues.has(key))issues.set(key,{key,title,description,count:0,records:[]});
+    const issue=issues.get(key);issue.count+=count;
+    const refs=event.references || (event.reference?[event.reference]:[]);
+    for(const url of refs){if(issue.records.length>=3)break;if(!issue.records.some(r=>r.url===url))issue.records.push({url,reason:event.reason || event.error || ''});}
+  };
+  let recorded=0;
+  if(Array.isArray(access.failureGroups)){
+    for(const group of access.failureGroups){const count=Math.max(0,Number(group.count)||0);if(count){add(group,count);recorded+=count;}}
+  } else {
+    const events=(access.events || []).filter(e=>['failed','blocked'].includes(e.state) || e.action==='read' && e.state==='empty');
+    const fallback=events.length?events:(summary.pageFailures || []);
+    for(const event of fallback){add(event);recorded++;}
+    if(!recorded)for(const note of summary.limitations || []){add({reason:note.message,error:note.code,action:'read'});recorded++;}
+  }
+  const counts=access.counts || {}, read=counts.read || {}, search=counts.search || {};
+  const expected=Math.max(Number(access.budget?.readFailures)||0,(read.failed||0)+(read.blocked||0)+(read.empty||0))+(search.failed||0)+(search.blocked||0);
+  if(expected>recorded)add({error:'ReadUnavailable',action:'read'},expected-recorded);
+  const robots=Number(access.budget?.robotsSkipped)||0;
+  if(robots && !issues.has('robots'))add({reason:'robots.txt 不允许访问',action:'read'},robots);
+  const stopStates=['budget_not_started','budget_limited','budget_exhausted','time_limited','canceled'];
+  const state=stopStates.includes(access.execution?.state)?access.execution.state:c.retrievalStatus;
+  const stop={budget_not_started:['budget_not_started','当时金额预算不足','保存记录显示当时金额预算不足，未执行本条查询。'],budget_limited:['budget_limited','当时金额预算触发停止','保存记录显示本条因当时的金额预算停止；已取得的材料仍保留。'],budget_exhausted:['budget_exhausted','当时查询配额触发停止','保存记录显示当时的搜索或读页配额触发停止。'],time_limited:['time_limited','当时执行时限触发停止','保存记录显示本条达到当时的执行时限；已取得的材料仍保留。'],canceled:['canceled','查询被中断','保存记录显示本条查询被中断。']}[state];
+  if(stop)issues.set(stop[0],{key:stop[0],title:stop[1],description:stop[2],count:null,records:[]});
+  if(!issues.size && ['partial','provider_error','blocked','timeout'].includes(c.retrievalStatus)){
+    const fallback=c.retrievalStatus==='timeout'?['timeout','来源请求超时','保存记录显示来源请求超时。']:c.retrievalStatus==='provider_error'?['search_error','搜索服务调用失败','保存记录显示搜索服务异常，但未保留具体错误。']:['unrecorded','查询异常，原因未记录','该报告未保存足够的失败明细，无法确认哪些来源因何未能访问。'];
+    issues.set(fallback[0],{key:fallback[0],title:fallback[1],description:fallback[2],count:null,records:[]});
+  }
+  return [...issues.values()].sort((a,b)=>(b.count||0)-(a.count||0));
+}
+function retrievalProblemText(c) {
+  return retrievalProblems(c).map(p=>p.title+(p.count==null?'':` ${p.count} 次`)).join('；');
+}
+function retrievalProblemBrief(c) {
+  const issues=retrievalProblems(c);
+  return issues.slice(0,2).map(p=>p.title+(p.count==null?'':` ${p.count} 次`)).join('；')+(issues.length>2?`；另 ${issues.length-2} 类，展开查看`:'');
+}
 function retrievalLabel(c) {
-  return c.manualReview?.kind === 'internship' ? '待人工背调' : c.status !== 'none' ? STATUS[c.status].label : ({not_attempted:'尚未执行检索',partial:'检索未完成',provider_error:'搜索服务异常',blocked:'来源访问受阻',timeout:'检索超时',budget_exhausted:'检索受预算限制',canceled:'检索已中断',not_started:'待补充检索信息',budget_not_started:'预算不足，未执行',budget_limited:'检索受预算限制',time_limited:'检索未完成'})[c.retrievalStatus] || STATUS[c.status].label;
+  if(c.manualReview?.kind==='internship')return '待人工背调';
+  if(c.status!=='none')return STATUS[c.status].label;
+  const issues=retrievalProblems(c);
+  if(issues.length)return issues[0].title+(issues.length>1?`等${issues.length}类`:'');
+  const decisions=c.verificationAgent?.sourceAccess?.decisionCounts || {};
+  if(Object.keys(decisions).some(k=>/缺少本人|身份.*不匹配/.test(k)))return '未找到本人关联证据';
+  return ({not_attempted:'尚未执行检索',not_started:'待补充检索信息'})[c.retrievalStatus] || STATUS[c.status].label;
 }
 function displayStatus(c) {
   return c.status !== 'none' ? c.status : ['budget_not_started','budget_limited','time_limited','partial','provider_error','blocked','timeout','budget_exhausted','canceled'].includes(c.retrievalStatus) ? 'incomplete' : ['not_started','not_attempted'].includes(c.retrievalStatus) ? 'unsearched' : c.status;
 }
 function retrievalEmpty(c) {
-  return c.manualReview ? '请联系企业核实实习岗位、时间和职责。' : ({not_attempted:'本条尚未执行检索，不能解释为没有公开记录。',partial:'本条只完成部分检索，不能据此认定没有公开记录。',provider_error:'搜索服务调用失败，请查看来源记录；不能解释为没有公开记录。',blocked:'来源访问受阻，无法核对原文。',timeout:'本条检索超时，已取得的材料保留。',budget_exhausted:'本条达到搜索安全上限，尚未检索的部分保持未知。',canceled:'本次检索已中断。',not_started:'尚未执行有效查询，请补充检索信息后再核验。',budget_not_started:'本条因费用预算不足未执行检索，不能解释为查无公开记录。',budget_limited:'本条只完成部分检索，已为其他事项保留费用；已有证据保留，未核实部分可补充材料。',time_limited:'本条达到时间限制，检索未完成；不能据此认定没有公开记录。'})[c.retrievalStatus] || '未找到与本人关联的公开记录，可请候选人补充材料。';
+  if(c.manualReview)return '请联系企业核实实习岗位、时间和职责。';
+  const issues=retrievalProblems(c);
+  if(issues.length)return '尚未取得足够的本人关联证据。查询遇到：'+retrievalProblemText(c)+'。已取得的可用材料保留；来源访问失败不能证明经历不实。';
+  if(['not_started','not_attempted'].includes(c.retrievalStatus))return '本条未执行有效查询，请补充必要信息后再核验；不能据此认定没有公开记录。';
+  const decisions=c.verificationAgent?.sourceAccess?.decisionCounts || {};
+  if(Object.keys(decisions).some(k=>/缺少本人|身份.*不匹配/.test(k)))return '已读取的候选页面缺少本人或团队身份关联，未能作为本条证据。可补充能关联本人的原始材料。';
+  return '已执行的公开查询未取得可关联到本人的证据；不等于经历不实，可补充原始材料。';
 }
 function retrievalDetails(c) {
-  const access = c.verificationAgent?.sourceAccess;
-  if (!access?.queryPlan) return null;
-  const box = el('div', {class:'dsec'}, el('h4',{text:'检索与来源筛选'}));
-  box.appendChild(el('div',{class:'hint',text:access.queryPlan.state === 'no_queries'
-    ? '未生成可用查询，请先补充检索信息。' : `已生成 ${access.queryPlan.queryCount} 条查询；实际执行与停止原因见来源记录。`}));
-  if(access.execution?.reason) box.appendChild(el('div',{class:'hint',text:access.execution.reason}));
-  if(access.costAllocation) box.appendChild(el('div',{class:'hint',text:`本条费用份额 ¥${Number(access.costAllocation.allocatedCny).toFixed(2)}；估算使用 ¥${Number(access.costAllocation.estimatedCny).toFixed(2)}。未用份额留给后续事项，实际费用以供应商账单为准。`}));
-  if (access.decisionCounts && Object.keys(access.decisionCounts).length) {
-    const records = el('details', {}, el('summary',{text:'来源筛选记录'}));
-    Object.entries(access.decisionCounts).forEach(([reason,count])=>records.appendChild(el('div',{class:'hint',text:`${reason}：${count} 条记录`})));
+  const access=c.verificationAgent?.sourceAccess || {}, issues=retrievalProblems(c);
+  if(!access.queryPlan && !issues.length)return null;
+  const box=el('div',{class:'dsec'},el('h4',{text:'查询结果与来源问题'}));
+  if(access.queryPlan)box.appendChild(el('div',{class:'hint',text:access.queryPlan.state==='no_queries'?'未生成可用查询，请补充检索信息。':`已生成 ${access.queryPlan.queryCount} 条查询。`}));
+  const counts=access.counts || {}, b=access.budget || {};
+  const reads=b.readSuccesses ?? counts.read?.returned, failed=b.readFailures ?? ((counts.read?.failed||0)+(counts.read?.blocked||0));
+  if(reads!=null)box.appendChild(el('div',{class:'hint',text:`来源读取成功 ${reads} 次；读取失败 ${failed} 次。次数按访问记录统计，不代表不同网页数，也不代表这些页面均能证明本人经历。`}));
+  if(issues.length){
+    box.appendChild(el('p',{class:'hint',text:'以下是未能核对的来源及具体原因；已取得的可用证据保留，不据此认定经历不实。'}));
+    for(const issue of issues){
+      const card=el('div',{class:'query-issue'},el('b',{text:issue.title+(issue.count==null?'':` · ${issue.count} 次`)}),el('p',{class:'hint',text:issue.description}));
+      for(const record of issue.records){
+        const row=el('p',{class:'hint',style:'overflow-wrap:anywhere'}),link=contextLink(record.url,record.url);
+        if(link)row.appendChild(link);else row.appendChild(el('span',{text:'未保存可打开的来源链接'}));
+        if(record.reason)row.appendChild(el('span',{text:' · 原始记录：'+record.reason}));
+        card.appendChild(row);
+      }
+      if(!issue.records.length)card.appendChild(el('p',{class:'hint',text:'该类问题未保存具体来源链接。'}));
+      box.appendChild(card);
+    }
+    if(access.truncated || access.failureGroupsTruncated)box.appendChild(el('p',{class:'hint',text:'来源明细有保存上限；每类最多展示 3 个链接示例，未保存的失败原因明确标为未知，不推测。'}));
+  }
+  if(access.execution?.reason)box.appendChild(el('div',{class:'hint',text:access.execution.reason}));
+  if(access.costAllocation)box.appendChild(el('div',{class:'hint',text:access.costAllocation.allocatedCny==null?`本条金额不限；当前估算 ¥${Number(access.costAllocation.estimatedCny).toFixed(2)}。`:`本条费用份额 ¥${Number(access.costAllocation.allocatedCny).toFixed(2)}；估算使用 ¥${Number(access.costAllocation.estimatedCny).toFixed(2)}。`}));
+  if(access.decisionCounts && Object.keys(access.decisionCounts).length){
+    const records=el('details',{},el('summary',{text:'为什么已读取的页面未能作为证据'}));
+    Object.entries(access.decisionCounts).forEach(([reason,count])=>records.appendChild(el('div',{class:'hint',text:`${reason}：${count} 条筛选记录`}))) ;
     (access.decisions || []).forEach(item=>records.appendChild(el('div',{class:'hint',style:'overflow-wrap:anywhere',text:`${item.reason} · ${item.reference}`})));
-    if(access.decisionsTruncated) records.appendChild(el('div',{class:'hint',text:'逐页记录已达显示上限，汇总计数仍包含全部筛选记录。'}));
+    if(access.decisionsTruncated)records.appendChild(el('div',{class:'hint',text:'逐页记录已达显示上限，汇总计数仍包含全部筛选记录。'}));
     box.appendChild(records);
   }
   return box;
@@ -1341,11 +1441,7 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : c.retrievalStatus && c.retrievalStatus !== 'complete' ? '本次核验未完成或部分来源不可访问，不能据此认为没有公开记录。' : '公开检索暂未找到可关联到本人的记录，不等于经历不实，可请候选人提供材料。'})));
-  }
-  if (c.retrievalSummary && c.retrievalStatus !== 'complete') {
-    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'检索未完成'}),
-      el('div', {class:'hint', text:`状态：${c.retrievalStatus}。本次不能据此显示“没有公开记录”。`})));
+      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : retrievalEmpty(c)})));
   }
   if(c.educationReview)d.appendChild(renderEducationReview(c.educationReview));
   if(c.verificationContacts)d.appendChild(renderVerificationContacts(c.verificationContacts));
@@ -1524,10 +1620,10 @@ function renderClaims() {
     const st = STATUS[displayStatus(c)];
     const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':displayStatus(c)},
       el('span', {class:'dot', style:`background:${st.dot}`}),
-      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c)}),
+      el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c),title:retrievalProblemText(c) || retrievalLabel(c)}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
-      el('span', {class:'tx'}, claimSummary(c), c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
+      el('span', {class:'tx'}, claimSummary(c), retrievalProblems(c).length ? el('small',{class:'query-problem',text:'查询问题：'+retrievalProblemBrief(c),title:retrievalProblemText(c)}) : null, c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
       el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);

@@ -678,6 +678,19 @@ def stream_answer(material: str, question: str, web_context: dict | None = None)
 
 
 
+def source_problem_records(claim):
+    """Explain saved source failures without changing evidence or rerunning tools."""
+    access=(claim.get('verificationAgent') or {}).get('sourceAccess') or {}
+    summary=claim.get('retrievalSummary') or {}
+    if isinstance(access.get('failureGroups'),list):
+        return access['failureGroups']
+    events=[e for e in access.get('events',[]) if e.get('state') in {'failed','blocked'}
+            or e.get('action')=='read' and e.get('state')=='empty']
+    events=events or summary.get('pageFailures') or []
+    return [{'reason':e.get('reason') or ('搜索服务调用失败，未记录具体原因' if e.get('action')=='search' else '来源读取失败，未记录具体原因'),'count':1,
+             'references':[e['reference']] if e.get('reference') else []} for e in events]
+
+
 def report_to_markdown(rep: dict) -> str:
     """把网页端形状的报告转成 Markdown，供导出。**只汇总，不给分不排名。**"""
     L = [f"# 履历核验报告 {rep.get('reportNo', '')}",
@@ -688,6 +701,8 @@ def report_to_markdown(rep: dict) -> str:
          ""]
     for c in rep.get("claims", []):
         st = STATUS_CN.get(c.get("status"), c.get("status"))
+        if c.get('status')=='none' and c.get('retrievalStatus') in {'partial','provider_error','blocked','timeout','budget_exhausted','time_limited','budget_not_started','budget_limited','canceled'}:
+            st='尚未取得足够的本人关联证据'
         L.append(f"## {c['id']}　{st}　{c.get('category', '')}"
                  f"{('　来源等级 ' + c['tier']) if c.get('tier') else ''}")
         L.append(f"- 陈述原文：{c.get('rawText', '')}")
@@ -700,10 +715,24 @@ def report_to_markdown(rep: dict) -> str:
             L.append("- 旧版本未记录完整证据护照，保留报告当时结论。")
         if c.get("retrievalSummary"):
             summary = c["retrievalSummary"]
-            L.append(f"- 检索状态：{c.get('retrievalStatus')}；查询尝试 {summary.get('queriesAttempted', 0)}，"
+            L.append(f"- 查询记录：查询尝试 {summary.get('queriesAttempted', 0)}，"
                      f"读页成功 {summary.get('pagesReadSuccess', 0)}/{summary.get('pagesAttempted', 0)}。")
-            if c.get("retrievalStatus") != "complete":
-                L.append("- 本次核验未完成或部分来源不可访问，不代表没有公开记录。")
+        problems=source_problem_records(c)
+        for problem in problems:
+            reason=problem.get('reason') or ('搜索服务调用失败，未记录具体原因' if problem.get('action')=='search' else '来源读取失败，未记录具体原因')
+            L.append(f"- 来源查询问题：{reason}；{problem.get('count',1)} 次。")
+            for url in problem.get('references',[])[:3]:L.append('  - 来源记录：'+str(url))
+        access=(c.get('verificationAgent') or {}).get('sourceAccess') or {}
+        if access.get('truncated') or access.get('failureGroupsTruncated'):
+            L.append('- 来源明细有保存上限；未保留的失败原因无法补推。')
+        if c.get('retrievalStatus') not in {None,'complete','searched'}:
+            stop={'budget_exhausted':'当时查询配额触发停止','budget_not_started':'当时金额预算不足，未执行查询',
+                  'budget_limited':'当时金额预算触发停止','time_limited':'当时执行时限触发停止',
+                  'timeout':'来源请求超时','canceled':'查询被中断','not_started':'未执行有效查询',
+                  'not_attempted':'未执行有效查询'}.get(c.get('retrievalStatus'))
+            if stop:L.append('- 查询记录：'+stop+'。')
+            elif not problems:L.append('- 来源查询问题：该报告没有保留具体失败原因，无法进一步确认。')
+            L.append('- 已取得的可用材料保留；来源未能访问不代表经历不实。')
         if c.get("proved"):
             L.append(f"- 已证明：{'；'.join(c['proved'])}")
         if c.get("unproved"):

@@ -47,6 +47,26 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 原项目独立基线为 615/619，原有四项 legacy 签名仍存在：test_03、test_08、test_30、test_31。原项目没有为此次迁移修改；ICT 版使用完整原仓库契约并保留已修正的用例，四项在 ICT 版均通过。
 
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
+# 2026-11-17: concrete source failure descriptions
+
+`ict-full-20261117.2` replaces the ambiguous unfinished-search wording with
+recorded causes: refused access/HTTP status, connection/read timeout, certificate
+failure, attachment parsing failure, robots restrictions or unsafe destinations.
+Rows show concrete causes; expanded details show counts, source examples and raw
+saved reasons. Existing evidence conclusions remain intact. Historical reports
+derive descriptions from saved records; missing reasons stay explicitly unknown.
+Markdown exports use the same saved failure records, with no report rerun.
+
+Future tasks retain failure totals independently of the 80-event display cap,
+with up to 48 distinct reason groups and three sanitized source examples per
+group. Truncation and unknown remainder counts are explicit. This changes source
+recording and presentation only; it does not relax proof rules, change search
+providers, install document readers or call paid APIs during verification.
+
+Validation: 844 Python cases, 5 frontend suites and 17 adapter cases; synthetic
+browser checks cover desktop, tablet, mobile and historical-report rendering.
+Artifacts: `outputs/regression/ict-query-reasons-20261117/`.
+
 # 2026-11-17: ICT quota override
 
 `UNDERBOX_ICT_UNLIMITED=1` requires ICT mode. It disables monetary and account

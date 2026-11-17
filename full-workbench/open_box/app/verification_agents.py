@@ -22,6 +22,7 @@ class VerificationAgent:
     def source_ids(self):
         shared = ("public_web", "school_catalog")
         return {
+            "exchange": (*shared, "school_records"),
             "education": (*shared, "school_records"),
             "employment": shared,
             "paper": (*shared, "paper_metadata", "publisher_records"),

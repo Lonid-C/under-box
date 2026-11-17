@@ -50,6 +50,7 @@ def live_environment(output):
         if k.startswith(('UNDERBOX_','DEEPSEEK_','LLM_','SEARCH_','ZHIPU_','CLAIM_')):os.environ[k]=v
     output.mkdir(mode=0o700,parents=True,exist_ok=True)
     os.environ.update(UNDERBOX_DB=str(output/'experiment-unused.db'),OPEN_BOX_ROOT=str(ROOT/'open_box'),
+        ARCHIVE_CACHE=str(output/'archive-cache.json'),
         UNDERBOX_ICT_ENABLE='1',UNDERBOX_ICT_RECALL='1',UNDERBOX_ICT_UNLIMITED='1',
         UNDERBOX_ICT_GLM_ONLY='1',UNDERBOX_ICT_COST_BUDGET='0',UNDERBOX_ENV_FILE='/dev/null',MODE='live')
     return {'claimWorkers':os.environ.get('CLAIM_WORKERS','0'),

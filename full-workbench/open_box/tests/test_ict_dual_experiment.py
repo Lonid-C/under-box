@@ -171,3 +171,25 @@ class DualExperimentTests(unittest.TestCase):
         path=Path(__file__).resolve().parents[2]/'scripts/compare_search.py'
         spec=importlib.util.spec_from_file_location('synthetic_compare_runner',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         self.assertEqual(module.split_sections('合成的一段经历，没有章节标题。'),['合成的一段经历，没有章节标题。'])
+
+    def test_each_arm_has_its_own_persistent_school_discovery_cache(self):
+        path=Path(__file__).resolve().parents[2]/'scripts/compare_search.py'
+        spec=importlib.util.spec_from_file_location('synthetic_compare_runner',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{}),patch.object(module.subprocess,'check_output',return_value='worker pid=1234'),patch.object(Path,'read_bytes',return_value=b'CLAIM_WORKERS=2\x00SEARCH_API_KEY=synthetic\x00'):
+            first=Path(folder)/'single';second=Path(folder)/'dual'
+            module.live_environment(first);a=os.environ['ARCHIVE_CACHE']
+            module.live_environment(second);b=os.environ['ARCHIVE_CACHE']
+            self.assertEqual(a,str(first.resolve()/'archive-cache.json'));self.assertEqual(b,str(second.resolve()/'archive-cache.json'));self.assertNotEqual(a,b)
+
+    def test_exchange_specialist_has_a_complete_source_contract(self):
+        from app.verification_agents import agent_for
+        c=run().claim.model_copy(update={'category':'交流活动'})
+        description=agent_for(c).describe()
+        self.assertIn('school_records',[tool['id'] for tool in description['tools']])
+        self.assertEqual(description['queryKinds'],['web'])
+
+    def test_every_registered_specialist_can_describe_its_tools(self):
+        from app.verification_agents import AGENTS
+        for agent in AGENTS:
+            description=agent.describe()
+            self.assertTrue(description['tools']);self.assertEqual(description['id'],agent.id)

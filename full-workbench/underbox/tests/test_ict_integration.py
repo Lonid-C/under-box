@@ -38,13 +38,13 @@ class Tests(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
     cls.tmp=tempfile.TemporaryDirectory(prefix='ict-offline-');cls.db=Path(cls.tmp.name)/'users.db';store.init(cls.db)
-    os.environ.update(UNDERBOX_DB=str(cls.db),UNDERBOX_GATEWAY_WORKER='1',UNDERBOX_ICT_WORKER_TOKEN='synthetic-worker-secret')
+    os.environ.update(UNDERBOX_DB=str(cls.db),UNDERBOX_GATEWAY_WORKER='1',UNDERBOX_INTERNAL_TOKEN='synthetic-private-worker',UNDERBOX_ICT_WORKER_TOKEN='synthetic-worker-secret')
     with store.connect(cls.db) as c:
       for uid,role,quota in [('alice','user',5),('bob','user',0),('admin','admin',-1)]:store.create_user(c,uid,'合成'+uid,'test-password',role=role,quota_total=quota)
       c.commit()
     cls.worker=serve.ThreadingHTTPServer(('127.0.0.1',0),serve.Handler);threading.Thread(target=cls.worker.serve_forever,daemon=True).start()
     cls.acc=accounts.Accounts(cls.db)
-    cls.gateway=serve.ThreadingHTTPServer(('127.0.0.1',0),accounts.account_handler(serve.Handler,cls.acc,cls.worker.server_port));threading.Thread(target=cls.gateway.serve_forever,daemon=True).start()
+    cls.gateway=serve.ThreadingHTTPServer(('127.0.0.1',0),accounts.account_handler(serve.Handler,cls.acc,cls.worker.server_port,SimpleNamespace(internal_token='synthetic-private-worker')));threading.Thread(target=cls.gateway.serve_forever,daemon=True).start()
     cls.broker=serve.ThreadingHTTPServer(('127.0.0.1',0),ict.ToolHandler);threading.Thread(target=cls.broker.serve_forever,daemon=True).start()
  @classmethod
  def tearDownClass(cls):
@@ -71,7 +71,7 @@ class Tests(unittest.TestCase):
     code,h,b=self.request('/api/login',{'username':uid,'password':'test-password'});self.assertEqual(code,200);return h['Set-Cookie'].split(';')[0]
  def prepared(self,owner='alice'):
     token='prepared-'+owner
-    serve.PREPARED[token]={'owner':owner,'prepared':SimpleNamespace(name='合成测试甲',claims=[REPORT.claims[0].claim],skipped=[],profile=PROFILE),'filename':'synthetic.txt','fileType':'txt'}
+    serve.PREPARED[token]={'owner':owner,'prepared':SimpleNamespace(name='合成测试甲',claims=[REPORT.claims[0].claim],skipped=[],profile=PROFILE),'filename':'synthetic.txt','fileType':'txt','expires_at':time.time()+1800,'running':False}
     return token
  def test_login_cookie_scoped_secure(self):
     code,h,b=self.request('/api/login',{'username':'alice','password':'test-password'});self.assertEqual(code,200)
@@ -441,4 +441,89 @@ class Tests(unittest.TestCase):
       self.assertEqual(code,200);self.assertIn('agentarts',done['report']);self.assertFalse(done.get('failed',False))
       with store.connect(self.db) as conn:
         self.assertEqual(len(store.list_reports(conn,uid)),1);self.assertEqual(len(store.list_reports(conn,'admin')),0);self.assertEqual(store.get_user(conn,uid)['quota_used'],1)
+ def test_full_migration_text_upload_uses_real_owner_and_accepts_utf8_only(self):
+    cookie=self.login();source='个人简历（合成测试）\n姓名：林示例\n教育背景：合成大学本科在读。'
+    def split(data,filename,events,holder):
+      token=serve._remember_prepared({'prepared':SimpleNamespace(name='林示例',claims=[REPORT.claims[0].claim]),'filename':filename})
+      events.put({'done':True,'split':{'token':token,'claims':[]}});events.put(None)
+    with patch.object(serve,'run_split_job',side_effect=split),patch.object(ict.runtime_client,'invoke') as cloud:
+      code,_,raw=self.request('/api/split/stream',source.encode(),cookie,{'X-Underbox-Consent':'1','Content-Type':'text/plain','X-Filename':'synthetic.txt'})
+    self.assertEqual(code,200);cloud.assert_not_called()
+    done=next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+    entry=serve.prepared_entry(done['split']['token'],'alice')
+    self.assertEqual(entry['owner_id'],'alice');self.assertGreater(entry['expires_at'],time.time())
+    self.assertEqual(self.request('/api/split/stream',b'\x00binary',cookie,{'X-Underbox-Consent':'1','Content-Type':'text/plain','X-Filename':'synthetic.txt'})[0],415)
+
+ def test_full_migration_prepared_expiry_and_concurrent_consume_guard(self):
+    token=serve._remember_prepared({'prepared':SimpleNamespace(name='合成',claims=[REPORT.claims[0].claim])},owner_id='alice')
+    serve.PREPARED[token]['expires_at']=time.time()-1
+    owner=ict.USER.set('alice')
+    try:
+      with self.assertRaises(ValueError):ict.register(token,[REPORT.claims[0].claim.id],{},queue.Queue(),{})
+    finally:ict.USER.reset(owner)
+    token=serve._remember_prepared({'prepared':SimpleNamespace(name='合成',claims=[REPORT.claims[0].claim])},owner_id='alice')
+    serve.prepared_entry(token,'alice',consume=True)
+    with self.assertRaises(LookupError):serve.prepared_entry(token,'alice',consume=True)
+    with self.assertRaises(LookupError):serve.prepared_entry(token,'bob')
+
+ def test_full_migration_background_usage_is_saved_once_after_foreground_timeout(self):
+    cookie=self.login();token=self.prepared()
+    def disconnected(ticket):
+      ict.tool_action({'action':'submit','resume_text':ticket['text'],'consent':True})
+      raise TimeoutError('synthetic foreground timeout')
+    def slow(*args,**kwargs):time.sleep(.05);fake_core(*args,**kwargs)
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=slow) as core:
+      with patch.object(ict,'cloud_roundtrip',side_effect=disconnected):first=self.verify_request(token,cookie)
+      self.assertTrue(first['failed']);ticket=next(iter(ict.TICKETS.values()));self.assertTrue(ticket['finished'].wait(3))
+      with store.connect(self.db) as conn:
+        self.assertEqual(conn.execute('SELECT SUM(ds_calls) FROM usage_log').fetchone()[0],1)
+        self.assertEqual(store.get_user(conn,'alice')['quota_used'],0)
+        self.assertEqual(len(store.list_reports(conn,'alice')),0)
+      ict.TICKETS.clear();serve.PREPARED.clear()
+      with patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):second=self.verify_request(token,cookie)
+      self.assertNotIn('failed',second);self.assertEqual(core.call_count,1)
+      with store.connect(self.db) as conn:
+        self.assertEqual(conn.execute('SELECT COUNT(*),SUM(ds_calls),SUM(ok) FROM usage_log').fetchone()[:],(1,1,1))
+        self.assertEqual(store.get_user(conn,'alice')['quota_used'],1)
+        self.assertEqual(len(store.list_reports(conn,'alice')),1)
+      self.assertIn('historyId',second)
+      with patch.object(ict.runtime_client,'invoke') as cloud:self.verify_request(token,cookie)
+      cloud.assert_not_called()
+
+ def test_full_migration_review_keeps_frozen_receipt_and_matching_qa_context(self):
+    cookie=self.login('admin');token=self.prepared('admin')
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):done=self.verify_request(token,cookie)
+    rid=done['historyId'];cid=REPORT.claims[0].claim.id
+    before=done['report']['agentarts'];raw_before=serve.user_state('admin')['oby'].model_dump_json()
+    payload={'reportId':rid,'claimId':cid,'action':'open','source':'https://synthetic.example/record','reason':'合成复核说明','expectedVersion':0}
+    self.assertEqual(self.request('/api/review',payload,cookie)[0],200)
+    self.assertEqual(self.request('/api/review',payload,cookie)[0],409)
+    code,_,body=self.request('/api/history/'+str(rid)+'/activate',{},cookie)
+    report=json.loads(body)['report'];self.assertEqual(code,200);self.assertEqual(len(report['reviewHistory']),1)
+    self.assertEqual(report['agentarts'],before);self.assertEqual(serve.user_state('admin')['oby'].model_dump_json(),raw_before)
+    self.assertEqual(self.request('/api/history/'+str(rid)+'/activate',b'{',cookie)[0],400)
+
+ def test_full_migration_usage_aggregates_keep_failed_cost_and_only_count_completed_verifications(self):
+    priced={'deepseek':{'calls':1,'yuan':.1},'glm':{'searches':1,'yuan':.05}}
+    unknown={'deepseek':{'calls':1,'yuan':None},'glm':{'searches':1,'yuan':.05}}
+    with store.connect(self.db) as conn:
+      store.record_usage(conn,'alice',kind='split',usage=priced,ok=True)
+      store.record_usage(conn,'alice',kind='verify',claims=2,usage=priced,ok=True)
+      store.record_usage(conn,'alice',kind='verify_pending',usage=unknown,ok=False);conn.commit()
+      daily=store.usage_daily(conn,user_id='alice')[-1]
+      self.assertEqual(daily['runs'],1);self.assertEqual(daily['claims'],2)
+      self.assertEqual(daily['searches'],3);self.assertIsNone(daily['yuan'])
+      user=next(row for row in store.usage_by_user(conn) if row['id']=='alice')
+      self.assertEqual(user['runs'],1);self.assertIsNone(user['yuan'])
+
+ def test_full_migration_native_settings_survive_database_reload(self):
+    values={'document_parser':'local','deepseek_fetch':'0','deepseek_qa_native':'0'}
+    with store.connect(self.db) as conn:
+      store.set_settings(conn,values);conn.commit()
+      self.assertTrue(values.items() <= store.get_settings(conn).items())
+      env=store.settings_env(conn)
+      self.assertEqual(env['UNDERBOX_DOCUMENT_PARSER'],'local');self.assertEqual(env['DEEPSEEK_FETCH_ENABLED'],'0');self.assertEqual(env['DEEPSEEK_QA_NATIVE'],'0')
+    with store.connect(self.db) as conn:
+      store.set_settings(conn,{key:'' for key in values});conn.commit()
+
 if __name__=='__main__':unittest.main(verbosity=2)

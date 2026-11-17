@@ -12,6 +12,7 @@ from app.plan import Query
 from app.schema import Claim
 from app.search import (BraveSearcher, FallbackSearcher, PageFetcher, SearchHit, SearchUnavailable,
                         crossref_hits, paper_hits)
+from http_kit import PUBLIC_DNS
 from app.strategy import build_plan
 
 
@@ -94,6 +95,7 @@ class OfficialSourceTests(unittest.TestCase):
             text="binary data", raise_for_status=lambda: None,
         )
         with patch("app.search.robots_allows", return_value=True), \
+             patch("app.safe_http.DNS_RESOLVER", PUBLIC_DNS), \
              patch("httpx.get", return_value=response):
             text = PageFetcher().get("https://school.example.edu/award-list.pdf")
         self.assertIn("林昱和", text)

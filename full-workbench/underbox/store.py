@@ -133,6 +133,21 @@ CREATE TABLE IF NOT EXISTS report_history (
   report_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_report_history_user ON report_history(user_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS review_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL REFERENCES report_history(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  reviewer_id TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL,
+  outcome TEXT NOT NULL DEFAULT 'pending',
+  at TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  UNIQUE(report_id, claim_id, version)
+);
 """
 
 SCHEMA_VERSION = "4"
@@ -181,6 +196,9 @@ def init(path: str | Path | None = None) -> Path:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
+    usage_columns = {r["name"] for r in conn.execute("PRAGMA table_info(usage_log)")}
+    if "ds_tools" not in usage_columns:
+        conn.execute("ALTER TABLE usage_log ADD COLUMN ds_tools TEXT NOT NULL DEFAULT '{}'")
     """给旧库补字段。当前 schema 已是 v1，留好入口给以后加列。"""
     have = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
     for col, ddl in (("role", "TEXT NOT NULL DEFAULT 'user'"),
@@ -190,9 +208,6 @@ def _migrate(conn: sqlite3.Connection) -> None:
                      ("last_login_at", "TEXT")):
         if col not in have:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
-    usage_columns = {r["name"] for r in conn.execute("PRAGMA table_info(usage_log)")}
-    if "ds_tools" not in usage_columns:
-        conn.execute("ALTER TABLE usage_log ADD COLUMN ds_tools TEXT NOT NULL DEFAULT '{}'")
 
 
 def save_report(conn: sqlite3.Connection, user_id: str, report: dict) -> int:
@@ -225,7 +240,52 @@ def list_reports(conn: sqlite3.Connection, user_id: str) -> list[dict]:
 def get_report(conn: sqlite3.Connection, user_id: str, report_id: int) -> dict | None:
     row = conn.execute("SELECT report_json FROM report_history WHERE id=? AND user_id=?",
                        (report_id, user_id)).fetchone()
-    return json.loads(row["report_json"]) if row else None
+    if not row:
+        return None
+    report = json.loads(row["report_json"])
+    report["reviewHistory"] = [dict(r) for r in conn.execute(
+        "SELECT claim_id,action,reviewer_id,source,reason,outcome,at,version FROM review_events "
+        "WHERE report_id=? AND user_id=? ORDER BY id", (report_id, user_id))]
+    return report
+
+
+def append_review(conn, *, owner_id, actor_id, report_id, claim_id, action, source, reason,
+                  outcome="pending", expected_version=0):
+    actor = get_user(conn, actor_id)
+    if not actor or not actor["enabled"] or actor["role"] not in {"admin", "reviewer"}:
+        raise PermissionError("仅管理员或授权复核角色可录入复核")
+    if actor_id != owner_id:
+        raise PermissionError("只能处理当前账户拥有的报告")
+    report = get_report(conn, owner_id, report_id)
+    if not report or claim_id not in {c.get("id") for c in report.get("claims", [])}:
+        raise LookupError("报告或陈述不存在")
+    if action not in {"open", "supplement", "decide"}:
+        raise ValueError("无效复核操作")
+    if outcome not in {"pending", "supported", "unresolved", "corrected"}:
+        raise ValueError("无效复核结果")
+    if action != "decide" and outcome != "pending":
+        raise ValueError("补充材料不能直接产生复核决定")
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
+        raise ValueError("请填写复核理由")
+    if not isinstance(source, str) or len(source) > 1000:
+        raise ValueError("材料索引过长")
+    row = conn.execute("SELECT COALESCE(MAX(version),0) AS v FROM review_events WHERE report_id=? AND claim_id=?",
+                       (report_id, claim_id)).fetchone()
+    version = row["v"]
+    if version != expected_version:
+        raise ValueError("复核版本已变化，请刷新后重试")
+    if version == 0 and action != "open":
+        raise ValueError("请先发起复核任务")
+    if version > 0 and action == "open":
+        raise ValueError("复核任务已存在")
+    conn.execute("INSERT INTO review_events(report_id,user_id,claim_id,action,reviewer_id,source,reason,outcome,at,version) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                 (report_id, owner_id, claim_id, action, actor_id, source, reason.strip(), outcome, now(), version + 1))
+    return version + 1
+
+
+def clear_history(conn, owner_id):
+    conn.execute("DELETE FROM review_events WHERE user_id=?", (owner_id,))
+    conn.execute("DELETE FROM report_history WHERE user_id=?", (owner_id,))
 
 
 # ── 口令 ──────────────────────────────────────────────────────────────────
@@ -343,7 +403,7 @@ def count_sessions(conn) -> int:
 
 # ── 用量 ──────────────────────────────────────────────────────────────────
 def record_usage(conn, user_id: str, *, kind: str, claims: int = 0, seconds: float = 0,
-                 usage: dict | None = None, ok: bool = True) -> None:
+                 usage: dict | None = None, ok: bool = True, entry_id: int | None = None) -> int:
     """工作进程在完成任务后追加一条。usage 是 usage.py 的 since() 结果（Dict）。"""
     u = usage or {}
     ds = u.get("deepseek") or {}
@@ -351,14 +411,20 @@ def record_usage(conn, user_id: str, *, kind: str, claims: int = 0, seconds: flo
     yuan = None
     if isinstance(ds.get("yuan"), (int, float)) and isinstance(gl.get("yuan"), (int, float)):
         yuan = round(float(ds["yuan"]) + float(gl["yuan"]), 4)
-    conn.execute(
-        """INSERT INTO usage_log(user_id, at, kind, claims, seconds, ds_calls, ds_in,
-                                 ds_cached, ds_out, glm_searches, yuan, ok, ds_tools)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (user_id, now(), kind, int(claims or 0), float(seconds or 0),
-         int(ds.get("calls") or 0), int(ds.get("in") or 0), int(ds.get("cached") or 0),
-         int(ds.get("out") or 0), int(gl.get("searches") or 0), yuan, 1 if ok else 0,
-         json.dumps(ds.get("tools") or {}, ensure_ascii=False)))
+    values=(user_id, now(), kind, int(claims or 0), float(seconds or 0),
+            int(ds.get("calls") or 0), int(ds.get("in") or 0), int(ds.get("cached") or 0),
+            int(ds.get("out") or 0), int(gl.get("searches") or 0), yuan, 1 if ok else 0,
+            json.dumps(ds.get("tools") or {}, ensure_ascii=False))
+    columns="user_id,at,kind,claims,seconds,ds_calls,ds_in,ds_cached,ds_out,glm_searches,yuan,ok,ds_tools"
+    if entry_id is not None:
+        cursor=conn.execute("UPDATE usage_log SET "+",".join(c+"=?" for c in columns.split(","))+
+                            " WHERE id=? AND user_id=?",(*values,int(entry_id),user_id))
+        if cursor.rowcount!=1:raise LookupError("task_usage_owner_or_row_missing")
+        return int(entry_id)
+    cursor=conn.execute("INSERT INTO usage_log("+columns+") VALUES("+",".join("?" for _ in values)+")",values)
+    return cursor.lastrowid
+
+
 
 
 def user_usage(conn, user_id: str, *, days: int = 30) -> dict:
@@ -385,6 +451,7 @@ def user_usage(conn, user_id: str, *, days: int = 30) -> dict:
                 totals[key] = totals.get(key, 0) + value
     out["deepseekTools"] = totals
     return out
+
 
 
 def usage_daily(conn, *, days: int = 14, user_id: str | None = None) -> list[dict]:
@@ -480,9 +547,9 @@ SETTING_ENVS = {
     "search_engine_open": "SEARCH_ENGINE_OPEN",
     "search_endpoint":    "SEARCH_ENDPOINT",
     "brave_api_key":      "BRAVE_SEARCH_API_KEY",
-    "document_parser":    "UNDERBOX_DOCUMENT_PARSER",
-    "deepseek_fetch":     "DEEPSEEK_FETCH_ENABLED",
-    "deepseek_qa_native": "DEEPSEEK_QA_NATIVE",
+    "document_parser":"UNDERBOX_DOCUMENT_PARSER",
+    "deepseek_fetch":"DEEPSEEK_FETCH_ENABLED",
+    "deepseek_qa_native":"DEEPSEEK_QA_NATIVE",
 }
 SECRET_KEYS = ("deepseek_api_key", "zhipu_api_key", "llm_api_key", "search_api_key", "brave_api_key")
 

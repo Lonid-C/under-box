@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261116.10'
+VERSION='ict-full-20261116.11'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -31,7 +31,7 @@ def persist_ticket(t):
     """Private crash recovery; never place resume/report content in process logs."""
     path=journal_path(t['scope'])
     if path is None:return
-    data={k:t.get(k) for k in ('id','owner','scope','created_at','state','text','cloud_session','done','error','verified','unstarted')}
+    data={k:t.get(k) for k in ('id','owner','scope','created_at','state','text','cloud_session','done','error','verified','unstarted','usage','seconds')}
     if t.get('cost_budget'):data['cost_budget_id']=t['cost_budget'].id
     holder=t['holder'];rep=holder.get('oby');profile=holder.get('profile')
     if rep is not None:data['raw_report']=rep.model_dump(mode='json')
@@ -123,16 +123,15 @@ def register(token,ids,materials,events,holder):
                 existing['events']=events
                 holder.update(existing['holder'])
                 return existing
-    with ENGINE._PREPARED_LOCK:
-        entry=ENGINE.PREPARED.get(token)
-        if entry is None or entry.get('owner','local')!=USER.get():raise ValueError('拆分结果已过期或不属于当前账户。')
-        if entry.get('snapshot'):raise ValueError('比赛实时入口不使用私有文件回放，请上传脱敏材料。')
-        prepared=entry.get('prepared')
-        if prepared is None:raise ValueError('缺少拆分结果。')
-        selected=[c for c in prepared.claims if c.id in ids]
-        if len(selected)!=len(set(ids)):raise ValueError('包含无效事项。')
-        text='个人简历（选中事项，用户已授权）\n个人信息\n姓名：'+prepared.name+'\n待核验经历\n'+'\n'.join(c.raw_text for c in selected)
-        if len(text.encode())>32768:raise ValueError('选中摘录超过32768字节，请缩小范围。')
+    try:entry=ENGINE.prepared_entry(token,USER.get())
+    except LookupError as exc:raise ValueError(str(exc)) from exc
+    if entry.get('snapshot'):raise ValueError('比赛实时入口不使用私有文件回放，请上传脱敏材料。')
+    prepared=entry.get('prepared')
+    if prepared is None:raise ValueError('缺少拆分结果。')
+    selected=[c for c in prepared.claims if c.id in ids]
+    if len(selected)!=len(set(ids)):raise ValueError('包含无效事项。')
+    text='个人简历（选中事项，用户已授权）\n个人信息\n姓名：'+prepared.name+'\n待核验经历\n'+'\n'.join(c.raw_text for c in selected)
+    if len(text.encode())>32768:raise ValueError('选中摘录超过32768字节，请缩小范围。')
     with LOCK:
         if not ACTIVE.acquire(blocking=False):raise ValueError('已有核验正在运行，请等待完成后再试。')
         rid='wb_'+secrets.token_urlsafe(24)
@@ -142,7 +141,7 @@ def register(token,ids,materials,events,holder):
            'cloud_session':secrets.token_hex(16),'token':token,'ids':list(ids),'materials':materials,'events':events,'holder':holder,
            'context':contextvars.copy_context(),'finished':threading.Event(),'done':None,'error':None,'released':False,'flow_lock':flow_lock}
         from app.usage import METER
-        scope=METER.mark()['_scope'];t['meter_scope']=scope if METER.retain_scope(scope) else None
+        t['meter_base']=METER.mark();scope=t['meter_base']['_scope'];t['meter_scope']=scope if METER.retain_scope(scope) else None
         TICKETS[rid]=t
         try:persist_ticket(t)
         except Exception:
@@ -158,6 +157,7 @@ def release(t):
                 METER.release_scope(t['meter_scope'])
 
 def execute(t):
+    started=time.monotonic()
     class Capture:
         def put(self,event):
             if event is None:return
@@ -175,8 +175,33 @@ def execute(t):
     except Exception as exc:
         with LOCK:t['state']='failed';t['error']='核验服务异常（'+type(exc).__name__+'）。'
     finally:
-        try:persist_ticket(t)
+        from app.usage import METER
+        t['seconds']=round(time.monotonic()-started,2)
+        t['usage']=METER.since(t['meter_base'])
+        try:
+            persist_ticket(t)
+            # Attribute background usage even after the browser/cloud times out.
+            try:
+                import store
+                with store.connect(os.environ['UNDERBOX_DB']) as conn:
+                    record_ticket_usage(t,conn);conn.commit()
+            except Exception:
+                # Private journal retains the snapshot for a later receipt retry.
+                t['usage_save_pending']=True
         finally:t['finished'].set();release(t)
+
+
+def record_ticket_usage(t,conn,*,ok=False,claims=0):
+    import store
+    if t.get('usage') is None:return False  # Older journals have no final snapshot.
+    marker='ict-task-usage:'+t['id']
+    saved=conn.execute('SELECT value FROM meta WHERE key=?',(marker,)).fetchone()
+    row_id=store.record_usage(conn,t['owner'],kind='verify' if ok else 'verify_pending',
+        claims=claims,seconds=t.get('seconds',0),usage=t['usage'],ok=ok,
+        entry_id=int(saved['value']) if saved else None)
+    if not saved:conn.execute('INSERT INTO meta(key,value) VALUES(?,?)',(marker,str(row_id)))
+    return True
+
 
 def tool_action(data):
     action=data.get('action')
@@ -334,7 +359,7 @@ def verify_selected(token,ids,events,holder,*,materials=None):
         elif state=='running':message='后台仍在核验，任务已保留。稍后重试将继续获取本轮结果，不会重新提交。'
         elif str(exc)=='backend_verification_failed':message=ticket.get('error') or '后台核验未完成，请检查服务状态。'
         else:message=str(exc) if isinstance(exc,ValueError) else 'AgentArts 调用未完成（'+code+'），未自动重复提交。'
-        events.put({'done':True,'failed':True,'error':message,'seconds':round(time.monotonic()-started,1)})
+        events.put({'done':True,'failed':True,'error':message,'seconds':round(time.monotonic()-started,1),**({'_ict_task':ticket['id']} if ticket and not ticket.get('unstarted') else {})})
     finally:
         if ticket:ticket['flow_lock'].release()
         events.put(None)
@@ -351,7 +376,8 @@ def record_verified_ticket(request_id,ev,uid,holder):
         conn.execute('BEGIN IMMEDIATE');context_table(conn)
         saved=conn.execute('SELECT value FROM meta WHERE key=?',(marker,)).fetchone()
         if saved:return int(saved['value'])
-        store.record_usage(conn,uid,kind='verify',claims=len(report.get('claims') or []),seconds=ev.get('seconds',0),usage=ev.get('usage'),ok=True)
+        if not record_ticket_usage(t,conn,ok=True,claims=len(report.get('claims') or [])):
+            store.record_usage(conn,uid,kind='verify',claims=len(report.get('claims') or []),seconds=ev.get('seconds',0),usage=ev.get('usage'),ok=True)
         store.consume_quota(conn,uid)
         report_id=store.save_report(conn,uid,report)
         rep=holder['oby'];profile=holder.get('profile')
@@ -398,25 +424,28 @@ def sse(self,target,args,kind=''):
                             entry['owner']=uid
                             if ledger:entry['cost_budget']=ledger
                 if ledger:ev.setdefault('costBudget',ledger.snapshot())
-                ev['usage']=METER.since(base);request_id=ev.pop('_ict_request',None)
+                ev['usage']=METER.since(base);request_id=ev.pop('_ict_request',None);pending_id=ev.pop('_ict_task',None)
                 if request_id and kind=='verify' and ev.get('report'):
-                    try:record_verified_ticket(request_id,ev,uid,holder)
+                    try:ev['historyId']=record_verified_ticket(request_id,ev,uid,holder)
                     except Exception:
                         # Keep the private ticket for a safe retry; never report an unsaved success.
                         ev={'done':True,'failed':True,'error':'核验结果已保留，但历史记录保存未完成。请重试获取本轮结果，不会重新核验。','usage':ev['usage']}
-                        ENGINE.record_gateway_usage(kind,ev,uid)
+                        # Existing task snapshot remains attributed once; retry commits report/quota.
+                elif pending_id and kind=='verify':
+                    pass  # The retained tool worker owns accounting, including after disconnect.
                 else:
                     saved_id=ENGINE.record_gateway_usage(kind,ev,uid)
                     if saved_id and holder.get('oby') is not None:save_context(saved_id,holder)
                 if 'report' in ev:
                     with ENGINE._STATE_LOCK:
                         state=ENGINE._STATES.get(uid)
-                        if state and state['generation']==generation:state.update(presentation=ev['report'],oby=holder.get('oby'),profile=holder.get('profile'))
+                        if state and state['generation']==generation:state.update(presentation=ev['report'],oby=holder.get('oby'),profile=holder.get('profile'),history_id=ev.get('historyId'))
             events.put(ev)
     tracker=Tracking()
     def run():
         nonlocal ledger
         ident=USER.set(uid)
+        owner_token=ENGINE._JOB_OWNER.set(uid)
         try:
             if recall_enabled() and kind=='split':ledger=CostBudget()
             elif recall_enabled() and kind=='verify':
@@ -430,7 +459,9 @@ def sse(self,target,args,kind=''):
             with bind_search_credentials(credentials),bind_cost(ledger):METER.run_in_scope(scope,target,*args,tracker,holder)
         except Exception as exc:
             tracker.put({'done':True,'failed':True,'error':'处理失败（'+type(exc).__name__+'）。'});events.put(None)
-        finally:USER.reset(ident)
+        finally:
+            ENGINE._JOB_OWNER.reset(owner_token)
+            USER.reset(ident)
     threading.Thread(target=run,daemon=True).start()
     try:
         self.send_response(200);self.send_header('Content-Type','text/event-stream; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('X-Accel-Buffering','no');self.send_header('Connection','close');self.close_connection=True;self.end_headers()
@@ -467,7 +498,7 @@ def activate_history(handler,rid):
     raw=Report.model_validate(json.loads(row['report_json']));profile=ResumeProfile(**json.loads(row['profile_json']))
     with ENGINE._STATE_LOCK:
         st=ENGINE._STATES.setdefault(handler.uid(),{'generation':0})
-        st.update(presentation=report,oby=raw,profile=profile,generation=st['generation']+1)
+        st.update(presentation=report,oby=raw,profile=profile,history_id=rid,generation=st['generation']+1)
     return handler._json({'report':report})
 
 def install(engine):
@@ -515,7 +546,9 @@ def install(engine):
         if worker_guard(self):return
         match=re.fullmatch(r'/api/history/(\d+)/activate',self.path.split('?',1)[0])
         if match:
-            self._read_json()
+            if self._deny_api(self.path.split('?',1)[0]):return
+            try:self._read_json()
+            except engine.RequestBodyRejected:return
             return activate_history(self,int(match.group(1)))
         return old_post(self)
     engine.Handler.do_POST=post

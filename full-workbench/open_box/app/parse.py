@@ -201,8 +201,7 @@ def detect_document_type(path: str | Path, *, allow_legacy: bool = False) -> str
     if _PDF_MAGIC in head:
         return "pdf"
     if head.startswith(_OLE_MAGIC):
-        if allow_legacy and p.suffix.lower() == ".doc":
-            return "doc"
+        if allow_legacy and p.suffix.lower() == ".doc":return "doc"
         raise ValueError("旧版 .doc 暂不支持，请另存为 PDF 或 DOCX 后上传")
     if zipfile.is_zipfile(p):
         with zipfile.ZipFile(p) as archive:

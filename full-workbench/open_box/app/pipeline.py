@@ -301,9 +301,9 @@ def verify_prepared(
             )
         if claim.category == "实习":
             task = coordinator.start_task(claim, plan, budget)
-            vc = specialist.collect(task, claim, name, searcher, llm,
+            vc = specialist.collect(task, claim, name, claim_searcher, llm,
                                     collector=collect_for_claim, manual_collector=build_manual_review,
-                                    budget=budget, fetcher=fetcher, progress=csay)
+                                    budget=budget, fetcher=claim_fetcher, progress=csay)
             vc.verification_agent = task.finish(vc)
             if workers > 1:
                 nonlocal done
@@ -456,6 +456,7 @@ def verify_prepared(
         for item in verified:
             if not any(note.startswith('费用预算限制：') for note in item.source_notes):
                 item.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
+    from .coverage import report_coverage
     return Report(
         id=report_id,
         candidate_name=name or "（未标注姓名）",
@@ -469,6 +470,7 @@ def verify_prepared(
         claims=verified,
         skipped_claims=list(prepared.skipped),
         verification_workflow=coordinator.summary(verified),
+        coverage=report_coverage(verified, prepared.skipped),
     )
 
 

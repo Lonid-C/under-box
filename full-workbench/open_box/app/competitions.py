@@ -289,7 +289,7 @@ def catalog_query_specs(item: dict, claim, name: str) -> list[dict]:
     school = claim_school(claim) or entities.get("school_search_hint", "")
     school_host = school_domain(school)
     if school_host:
-        school_label = item.get("school_search_label") or (label if item.get("search_label") else f'"{item["name"].split("（", 1)[0]}"')
+        school_label = label if item.get("search_label") else f'"{item["name"].split("（", 1)[0]}"'
         out.append(dict(text=" ".join(f'{school_label} {year} {scope} 获奖名单'.split()),site=school_host,
                         source="school:竞赛:catalog-roster",purpose="补查学校官网整批名单及内嵌附件，再核对本人",
                         round=1,weight=120,expect_tier="A",confirm_empty=True))
@@ -315,7 +315,7 @@ def _chinese_number(n: int) -> str:
 def roster_image_links(html: str, page, claim) -> list[dict]:
     """仅识别已确认官网/该校正文中的名单图片，不把Logo、二维码和头像作为名单。"""
     item = competition_for_claim(claim)
-    if not item or competition_page_mismatch(claim, page.title or ""):
+    if not item or not _RESULT_WORDS.search(page.title or "") or competition_page_mismatch(claim, page.title or ""):
         return []
     from .plan import claim_school, school_domain
     school_host = school_domain(claim_school(claim) or (claim.entities or {}).get("school_search_hint", ""))
@@ -324,20 +324,13 @@ def roster_image_links(html: str, page, claim) -> list[dict]:
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "lxml")
     root = soup.select_one("article, .wp_articlecontent, .v_news_content, #vsb_content, .news-content, .content") or soup
-    # Some university news titles omit “获奖/名单”; require the article itself
-    # to contain results vocabulary before treating images as candidates.
-    if not _RESULT_WORDS.search((page.title or "") + " " + root.get_text(" ", strip=True)[:2000]):
-        return []
     result = []
     requested = str(claim.raw_text) + str(claim.entities) + str(claim.elements)
     for img in root.select("img[src], img[data-src]"):
         url = urljoin(page.url, img.get("data-src") or img.get("src", ""))
-        parsed = urlparse(url)
-        vsb_image = (parsed.path.endswith("/virtual_attach_file.vsb")
-                     and any(part.startswith("afc=") for part in parsed.query.split("&")))
-        normal_image = (re.search(r"/(?:[^/?]*(?:upload|__local)|ueditor)/", url, re.I)
-                        and re.search(r"\.(?:png|jpe?g|webp)(?:$|[?#])", url, re.I))
-        if (not (vsb_image or normal_image) or re.search(r"logo|qrcode|avatar|icon", url, re.I)):
+        if (not re.search(r"/(?:[^/?]*(?:upload|__local)|ueditor)/", url, re.I)
+                or not re.search(r"\.(?:png|jpe?g|webp)(?:$|[?#])", url, re.I)
+                or re.search(r"logo|qrcode|avatar|icon", url, re.I)):
             continue
         if not allowed_official_url(item, url) and not (school_host and _in_domains(url, [school_host])):
             continue
@@ -349,10 +342,8 @@ def roster_image_links(html: str, page, claim) -> list[dict]:
         if "非英语专业组" in requested and label in ("【英语专业组】", "【专科生组】"):
             continue
         if url not in [p["url"] for p in result]:
-            result.append(dict(url=url,title=f"{page.title} · {label} 名单图片OCR识别（需核对原图）",
-                               _priority=bool(_RESULT_WORDS.search(label))))
-    result.sort(key=lambda p: not p["_priority"])
-    return [{k:v for k,v in p.items() if k != "_priority"} for p in result[:3]]
+            result.append(dict(url=url,title=f"{page.title} · {label} 名单图片OCR识别（需核对原图）"))
+    return result[:3]
 
 
 _RESULT_WORDS = re.compile(r"获奖|授奖|公示|赛果|成绩|结果|名单|\b(?:results?|winners?|awards?|standings|rankings?|scoreboard)\b", re.I)

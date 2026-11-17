@@ -145,7 +145,7 @@ class RetrievalRegressionTests(unittest.TestCase):
         import httpx
         from app.deepseek_fetch import build_fetcher
         response=httpx.Response(200,content=b'<html>public record</html>',request=httpx.Request('GET','https://public.example/page'))
-        with patch('app.search.robots_allows',return_value=True),patch('httpx.get',return_value=response),patch('app.deepseek_client.DeepSeekClient.fetch',side_effect=AssertionError('no paid fetch')):
+        with patch('app.search.robots_allows',return_value=True),patch('app.safe_http.public_request',return_value=response),patch('app.deepseek_client.DeepSeekClient.fetch',side_effect=AssertionError('no paid fetch')):
             self.assertIn('public record',build_fetcher().get('https://public.example/page'))
 
     def test_exchange_is_not_an_award_and_has_real_source_agent(self):

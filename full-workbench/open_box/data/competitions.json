@@ -4540,9 +4540,7 @@
         "team_id",
         "team_number",
         "team"
-      ],
-      "quote_search_label": false,
-      "school_search_label": "数学建模 美赛"
+      ]
     },
     {
       "id": "imc",

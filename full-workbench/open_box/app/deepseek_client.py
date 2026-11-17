@@ -27,10 +27,24 @@ _LIMITS = {
 
 
 class DeepSeekError(RuntimeError):
-    def __init__(self, operation, status=None):
-        self.operation, self.status = operation, status
+    def __init__(self, operation, status=None, detail=""):
+        self.operation, self.status, self.detail = operation, status, detail
         super().__init__(f"DeepSeek {operation} 暂不可用" + (f"（HTTP {status}）" if status else ""))
 
+
+def _error_detail(response) -> str:
+    """Preserve the provider's error code/message for classification and logs."""
+    try:
+        data = response.json()
+    except (ValueError, TypeError):
+        return str(getattr(response, "text", "") or "")[:300]
+    if isinstance(data, dict):
+        error = data.get("error")
+        if isinstance(error, dict):
+            return " ".join(str(error.get(key) or "")
+                            for key in ("code", "type", "message")).strip()[:500]
+        return str(data.get("message") or "")[:500]
+    return ""
 
 class DeepSeekIncomplete(DeepSeekError):
     """An otherwise successful model response omitted or truncated its text."""
@@ -71,7 +85,7 @@ class DeepSeekClient:
                     time.sleep(0.4)
                     continue
                 if response.status_code >= 400:
-                    raise DeepSeekError(operation, response.status_code)
+                    raise DeepSeekError(operation, response.status_code, _error_detail(response))
                 return response
             except httpx.TransportError as exc:
                 if retry and attempt == 0:

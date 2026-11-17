@@ -212,7 +212,8 @@ def audit_claim(claim, links, llm=None, client=None, progress=None, budget=None)
         rec['source']='github_public_api';rec['recordExists']=True
         audit['records'].append(rec)
         values={'repository':rec['repo'],'author':rec.get('actor'),'state':rec.get('state'),'merged':rec.get('merged'),'files':[{'filename':f['path'],'patch':f.get('patch','')[:600]} for f in rec.get('files',[])[:8]]}
-        evidence.append(Evidence(url=rec['url'],title=rec.get('title') or 'GitHub API 公开记录',publisher='GitHub',source_tier=tier_for_record(rec),snippet=json.dumps(values,ensure_ascii=False),identity_signals=['账号由候选人提供','候选人自提供该链接'],supports=supported_elements(claim,rec),contradicts=record_conflicts(claim,rec),github_record=rec))
+        from .provenance import bind_structured
+        evidence.append(bind_structured(Evidence(url=rec['url'],title=rec.get('title') or 'GitHub API 公开记录',publisher='GitHub',source_tier=tier_for_record(rec),snippet=json.dumps(values,ensure_ascii=False),identity_signals=['账号由候选人提供','候选人自提供该链接'],supports=supported_elements(claim,rec),contradicts=record_conflicts(claim,rec),github_record=rec)))
     def files_for(path):
         raw,truncated=client.pages(path)
         files=[{'path':str(f.get('filename',''))[:300],'type':file_kind(str(f.get('filename',''))),'status':f.get('status'),'additions':f.get('additions',0),'deletions':f.get('deletions',0),'patch':str(f.get('patch') or '')[:4000] if index<12 else '','domainHint':domain_hint(str(f.get('filename',''))),'patchAvailable':isinstance(f.get('patch'),str),'patchTruncated':not isinstance(f.get('patch'),str) or index>=12 or len(str(f.get('patch') or ''))>4000} for index,f in enumerate(raw) if isinstance(f,dict)]

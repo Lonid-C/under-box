@@ -219,7 +219,7 @@
     if(stage !== 'gate' && !tour) maybeTour();
     if(report && report.reportNo !== lastReport){
       lastReport=report.reportNo;
-      byId('bocyLauncherNote').textContent='报告已生成';
+      if(byId('bocyLauncherNote'))byId('bocyLauncherNote').textContent='报告已生成';
     }
     if(!report && byId('bocyLauncherNote'))byId('bocyLauncherNote').textContent='你的核验小助手';
   }

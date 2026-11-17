@@ -5,7 +5,7 @@ from unittest.mock import patch
 from app.collect import Budget, collect_for_claim, extract_evidence
 from app.plan import Query, school_domain
 from app.schema import Claim
-from app.search import SearchHit, SearchUnavailable, ZhipuSearcher, FixtureSearcher
+from app.search import FixtureSearcher, SearchHit, SearchUnavailable, ZhipuSearcher
 from app.strategy import ResumeProfile, build_plan
 
 
@@ -34,19 +34,6 @@ class Fetcher:
 
 
 class RecallTests(unittest.TestCase):
-    def test_zero_read_budget_marks_unread_hits_without_fetching(self):
-        fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
-        search=FixtureSearcher(table={'合成查询':[SearchHit('https://school.example/unread')]})
-        found,exhausted=collect_for_claim(claim(),'张三',search,Extractor(),fetcher=fetcher,
-            queries=[Query('合成查询')],budget=budget)
-        self.assertEqual(found,[]);self.assertTrue(exhausted);self.assertEqual(fetcher.calls,[])
-
-    def test_zero_read_budget_with_no_hits_does_not_invent_unread_pages(self):
-        fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
-        found,exhausted=collect_for_claim(claim(),'张三',FixtureSearcher(table={}),Extractor(),fetcher=fetcher,
-            queries=[Query('合成查询')],budget=budget)
-        self.assertEqual(found,[]);self.assertFalse(exhausted);self.assertEqual(fetcher.calls,[])
-
     def test_results_are_read_before_later_slow_queries(self):
         budget = Budget(max_searches=4, max_page_reads=4, max_seconds=10)
         reads = []
@@ -219,6 +206,20 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(found, [])
         self.assertTrue(any("返回 1 条链接" in line for line in logs))
         self.assertTrue(any("失败/未完成 1" in line for line in logs))
+
+    def test_zero_read_budget_marks_unread_hits_without_fetching(self):
+            fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
+            search=FixtureSearcher(table={'合成查询':[SearchHit('https://school.example/unread')]})
+            found,exhausted=collect_for_claim(claim(),'张三',search,Extractor(),fetcher=fetcher,
+                queries=[Query('合成查询')],budget=budget)
+            self.assertEqual(found,[]);self.assertTrue(exhausted);self.assertEqual(fetcher.calls,[])
+
+    def test_zero_read_budget_with_no_hits_does_not_invent_unread_pages(self):
+            fetcher=Fetcher();budget=Budget(max_searches=1,max_page_reads=0)
+            found,exhausted=collect_for_claim(claim(),'张三',FixtureSearcher(table={}),Extractor(),fetcher=fetcher,
+                queries=[Query('合成查询')],budget=budget)
+            self.assertEqual(found,[]);self.assertFalse(exhausted);self.assertEqual(fetcher.calls,[])
+
 
 
 if __name__ == "__main__":

@@ -68,15 +68,23 @@ def worker(name: str, destination: Path) -> int:
                   "failures": [c for c in cases if c["status"] == "failed"], "skipped": [],
                   "cases": cases}
     else:
-        suite = unittest.defaultTestLoader.discover("tests")
+        # Original and ICT service modules install different handlers at import time.
+        # Exercise both in separate processes, with every file collected once.
+        sys.path.insert(0, str(Path("tests").resolve()))
+        suite = unittest.TestSuite()
         # unittest does not collect plain test functions; run future ones too.
         # The legacy module is intentionally executed separately with its baseline.
         for source in sorted(Path("tests").glob("test*.py")):
             if name == "core" and source.stem == "test_rules":
                 continue
+            if name == "service_original" and source.stem.startswith("test_ict"):
+                continue
+            if name == "service" and not source.stem.startswith("test_ict"):
+                continue
             # discover(start_dir='tests') imports these as top-level modules.
             # Using 'tests.*' can accidentally select the other project's package.
             module = importlib.import_module(source.stem)
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromModule(module))
             for function_name, fn in sorted(vars(module).items()):
                 if (function_name.startswith("test_") and inspect.isfunction(fn)
                         and fn.__module__ == module.__name__):
@@ -129,7 +137,7 @@ def main() -> int:
     parser.add_argument("--node", default=os.environ.get("NODE", "node"))
     parser.add_argument("--output", type=Path, help="Output directory; a timestamped one is the default")
     parser.add_argument("--timeout", type=int, default=600, help="Per-suite timeout in seconds")
-    parser.add_argument("--worker", choices=("core", "service", "legacy"), help=argparse.SUPPRESS)
+    parser.add_argument("--worker", choices=("core", "service_original", "service", "legacy"), help=argparse.SUPPRESS)
     parser.add_argument("--result", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.worker:
@@ -144,7 +152,7 @@ def main() -> int:
         empty_env = temporary / "empty.env"
         empty_env.write_text("", encoding="utf-8")
         env = clean_env(empty_env, temporary / "unused.db")
-        for name, directory in (("core", "open_box"), ("service", "underbox"), ("legacy", "open_box")):
+        for name, directory in (("core", "open_box"), ("service_original", "underbox"), ("service", "underbox"), ("legacy", "open_box")):
             print(f"Running {name}…", flush=True)
             result_file = output / f"{name}.json"
             result_file.unlink(missing_ok=True)

@@ -2,6 +2,17 @@
 (()=>{
 const byId=id=>document.getElementById(id);
 const api='__ICT_BASE__api/';
+const editionFetch=window.fetch?.bind(window);
+if(editionFetch)window.fetch=async function(input,init={}){
+ const url=typeof input==='string'?input:input.url;
+ const headers=new Headers(input instanceof Request?input.headers:undefined);
+ new Headers(init.headers || {}).forEach((v,k)=>headers.set(k,v));
+ if((init.method || (input instanceof Request?input.method:'GET')).toUpperCase()==='POST' && /api\/(?:split|verify|ask|voice)/.test(url)){
+  if(!byId('ictConsent')?.checked)throw Error('请先勾选材料处理授权，并使用脱敏副本。');
+  headers.set('X-Underbox-Consent','1');
+ }
+ return editionFetch(input,{...init,headers});
+};
 window.ictCostBudget=function(info){
  const box=byId('ictBudgetStatus');box.hidden=!info;if(!info)return;
  if(info.enforced===false){
@@ -43,6 +54,7 @@ byId('ictTextButton').addEventListener('click',()=>{
  byId('ictTextStatus').textContent='正在将已确认摘录交给服务器整理；核验范围在下一步勾选。';
  accept('脱敏简历摘录.txt',new File([text],'脱敏简历摘录.txt',{type:'text/plain'}));
 });
+if(byId('ictHistoryDialog')){
 const dialog=byId('ictHistoryDialog');
 byId('ictHistoryClose').addEventListener('click',()=>dialog.close());
 async function openHistory(){
@@ -62,10 +74,11 @@ async function openHistory(){
 }
 byId('ictHistoryButton').addEventListener('click',openHistory);
 byId('ictHeroHistoryButton').addEventListener('click',openHistory);
+}
 const oldRenderPick=renderPick;
 const materials=new Map();let materialScope=null;
 renderPick=function(){if(materialScope!==PICK.token){materials.clear();materialScope=PICK.token;}oldRenderPick();for(const c of PICK.claims){
- if(!c.githubMaterialEligible)continue;
+ if(!c.githubMaterialEligible || (PICK.materials && typeof HISTORY_VIEW_ID!=='undefined'))continue;
  const box=document.createElement('details');box.className='ict-github-material';const summary=document.createElement('summary');summary.textContent=c.id+' · 补充本条 GitHub 公开材料';
  const account=document.createElement('textarea');account.placeholder='本人 GitHub 账号主页 URL，每行一个，最多2个';account.setAttribute('aria-label',c.id+' 本人 GitHub 账号');
  const urls=document.createElement('textarea');urls.placeholder='本项目仓库 / PR / commit URL，每行一个，最多6个';urls.setAttribute('aria-label',c.id+' GitHub 项目链接');
@@ -73,5 +86,5 @@ renderPick=function(){if(materialScope!==PICK.token){materials.clear();materialS
  for(const input of [account,urls])input.addEventListener('input',()=>materials.set(c.id,{accounts:account.value,urls:urls.value}));
  const note=document.createElement('p');note.textContent='只核对原始简历已明确提及 GitHub 的这一项目，不扩展调查其他仓库。';box.append(summary,note,account,urls);byId('pickBlocks').append(box);
 }};
-window.ictGithubMaterials=()=>{const result={};if(materialScope!==PICK.token)return result;for(const c of PICK.claims){const m=materials.get(c.id);if(m && PICK.selected.has(c.id) && c.githubMaterialEligible){const accounts=m.accounts.split(/\s+/).filter(Boolean),urls=m.urls.split(/\s+/).filter(Boolean);if(accounts.length || urls.length)result[c.id]={accounts,urls};}}return result;};
+window.ictGithubMaterials=()=>{const result={};if(PICK.materials && typeof HISTORY_VIEW_ID!=='undefined'){for(const c of PICK.claims){if(c.githubMaterialEligible && PICK.selected.has(c.id) && PICK.materials[c.id])result[c.id]=PICK.materials[c.id];}return result;}if(materialScope!==PICK.token)return result;for(const c of PICK.claims){const m=materials.get(c.id);if(m && PICK.selected.has(c.id) && c.githubMaterialEligible){const accounts=m.accounts.split(/\s+/).filter(Boolean),urls=m.urls.split(/\s+/).filter(Boolean);if(accounts.length || urls.length)result[c.id]={accounts,urls};}}return result;};
 })();

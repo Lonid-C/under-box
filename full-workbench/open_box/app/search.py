@@ -618,6 +618,7 @@ class ZhipuSearcher:
                     except BudgetLimit:
                         return []
                     dispatched = True
+                    QUEUE.mark_sent()
                     response = httpx.post(self.endpoint, json=body,
                         headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
                                  "User-Agent": UA}, timeout=self.timeout)

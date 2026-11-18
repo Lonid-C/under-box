@@ -124,7 +124,6 @@ class SearchQueue:
                             raise self.last_rate_error.deferred()
                         raise ZhipuSearchError("智谱搜索排队超时", kind="deferred", sent=False)
                     if self.waiting[0] is ticket and not self.busy and now >= ready_at:
-                        self.next_at = now + MIN_INTERVAL
                         self.busy = True
                         break
                     wake_at = ready_at if self.waiting[0] is ticket and not self.busy else deadline
@@ -138,6 +137,10 @@ class SearchQueue:
             with self.condition:
                 self.busy = False
                 self.condition.notify_all()
+
+    def mark_sent(self):
+        with self.condition:
+            self.next_at = time.monotonic() + MIN_INTERVAL
 
     def reject(self, credential_id, error):
         now = time.monotonic()

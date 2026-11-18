@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261117.6'
+VERSION='ict-full-20261117.7'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -533,6 +533,7 @@ def install(engine):
             from app.pipeline import claim_workers
             from app.quota_policy import unlimited
             from app.zhipu_rate import enabled as glm_queue, MIN_INTERVAL
+            from app.source_repairs import enabled as source_repair
             return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
                                'retrieval':{'expanded':enabled(),'page_reader':'native' if enabled() else 'configured',
                                             'unlimited':unlimited(),'account_quota_enforced':not unlimited(),
@@ -544,6 +545,7 @@ def install(engine):
                                             'claim_workers':claim_workers(32),
                                             'glm_request_queue':glm_queue(),
                                             'glm_request_min_interval_seconds':MIN_INTERVAL if glm_queue() else None,
+                                            'source_repair':source_repair(),
                                             'cost_budget_enforced':enforced(),
                                             'estimated_budget_cny':4 if enforced() else None,
                                             'target_cny':3 if enforced() else None,'cloud_allowance_cny':.5,

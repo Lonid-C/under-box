@@ -41,6 +41,7 @@ from .search import (github_hits, paper_hits, PATENT_SITE,  # noqa: F401
 from .strategy import WECHAT_HOST, _name_variants, competition_site, publication_site
 from .data_sources import record_decision
 from .retrieval_policy import enabled as recall_enabled
+from .source_repairs import enabled as repair_sources
 from .quota_policy import unlimited, label as limit_label
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
@@ -280,6 +281,10 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
             claim, hit.url, page_text, hit.title, school_domains):
         return reject('学校不匹配')
     if not has_candidate_anchor(claim, hit.url, page_text, hit.title, school_domains):
+        if repair_sources():
+            person = check_person(claim, hit.url, page_text, hit.title, school_domains=school_domains, final=False)
+            if person.reason:
+                return reject("本人关联不足：" + person.reason)
         return reject('正文缺少本人或团队身份锚点')
     if claim.category in AWARD_CATEGORIES:
         target = re.sub(r"[\s\W_]+", "", award_name(claim)).casefold()
@@ -311,6 +316,8 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
     snippet = (got.get("snippet") or "").strip()
     from .provenance import locate_quote
     if locate_quote(snippet, original_page_text) is None:
+        if repair_sources():
+            return reject("原文中无法定位摘录" if snippet else "读取成功，但模型未摘录可核对的原文")
         return None
     # 模型该给数组的地方经常给单个字符串。必须**先收敛再判断**：
     # 否则下面 `[s for s in supports if ...]` 会逐字符迭代，supports 静默变成空列表——
@@ -870,30 +877,70 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             budget.finish_read(hit.url in successful)
     seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
     recovered = []; recovery_attempts = 0
+    repair = repair_sources()
+    if repair and budget and claim.category == "论文":
+        from .data_sources import invoke_source
+        from .paper_identity import compact
+        from .search import crossref_doi_hit
+        from .source_repairs import doi_from_url, failed_entry
+        wanted = str(claim.entities.get("title") or next(
+            (e.partition("=")[2] for e in claim.elements if e.partition("=")[0] in {"论文标题", "论文题目"}), ""))
+        failed = getattr(fetcher, "failures", {})
+        for old in selected:
+            doi = doi_from_url(old.url)
+            key = ("crossref", doi.casefold())
+            if (not doi or not wanted or compact(wanted) not in compact(claim.raw_text)
+                    or not failed_entry(failed.get(old.url, ""))
+                    or key in budget.relocation_titles
+                    or sum(k[0] == "crossref" for k in budget.relocation_titles) >= 2
+                    or not budget.can_read()):
+                continue
+            budget.relocation_titles.add(key)
+            found = invoke_source("paper_metadata", lambda: crossref_doi_hit(doi),
+                                  reference=doi, action="catalog", category="论文")
+            if (found and compact(found.title) == compact(wanted) and found.author_records
+                    and found.content and not excluded(found.url, sources, found.publisher)
+                    and _url_key(found.url) not in seen_urls):
+                seen_urls.add(_url_key(found.url))
+                recovered.append((found, found.content))
+                record_decision("出版商原文不可读，另取得对应 DOI 的登记资料", found.url, state="navigation")
+
     migration_category = claim.category in {"学历", "著作", "教学活动"}
     award_recovery = improved and claim.category in AWARD_CATEGORIES
-    if searcher and budget and (migration_category or award_recovery):
+    official_recovery = repair and (claim.category in (AWARD_CATEGORIES | {"竞赛", "学历", "项目", "学生工作", "交流活动"}))
+    if searcher and budget and (migration_category or award_recovery or official_recovery):
         got = {h.url for h, _ in fetched}
         for old in selected[:4]:
             reason = incomplete.get(old.url) or getattr(fetcher, "failures", {}).get(old.url, "")
             domain = _base_domain(_host_of(old.url))
             title = re.sub(r"\s+", " ", old.title or "").strip()[:160]
             title_key = re.sub(r"[\W_]+", "", title).casefold()
-            official = school_domain(claim_school(claim)) or (school_domains or {}).get(claim_school(claim))
+            school = claim_school(claim) or (claim.entities or {}).get("school_search_hint", "")
+            official = school_domain(school) or (school_domains or {}).get(school)
             snippet = re.sub(r"\s+", "", old.title + " " + old.snippet).casefold()
             reconnect = bool(improved and official and url_in_domain(old.url, official)
                              and any(re.sub(r"\s+", "", name).casefold() in snippet
                                      for name in _name_variants(candidate_name) if len(name.strip()) >= 2)
                              and re.search(r"连接失败|连接超时|网络不可达|读取超时", reason))
-            if (old.url in got or not (reconnect or migration_category and (
+            route = ""
+            if official_recovery:
+                from .source_repairs import failed_entry
+                domains = [official, *((competition_for_claim(claim) or {}).get("official_domains") or [])]
+                matched = next((site for site in domains if site and url_in_domain(old.url, site)), "")
+                if matched and re.search(r"名单|公示|录取|赛果|获奖|奖学金|项目|通知|结果", title):
+                    route = failed_entry(reason)
+                    if route:
+                        domain = matched
+            if (old.url in got or not (route or reconnect or migration_category and (
                     re.search(r"\b(?:404|410)\b", reason) or old.url in incomplete))
-                    or not judge.is_school_host(old.url) or len(title) < 6
+                    or not (route or judge.is_school_host(old.url)) or len(title) < 6
                     or recovery_attempts >= 2 or not budget.can_search() or not budget.can_read()):
                 continue
-            if reconnect:
-                domain = official
-                key = (domain, title_key)
-                if len(budget.relocation_titles) >= 2 or key in budget.relocation_titles:
+            if route or reconnect:
+                if reconnect and not route:
+                    domain = official
+                key = ("entry", domain, title_key)
+                if sum(k[0] == "entry" for k in budget.relocation_titles) >= 2 or key in budget.relocation_titles:
                     continue
                 budget.relocation_titles.add(key)
             recovery_attempts += 1
@@ -905,18 +952,20 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 if progress: progress("    原标题补查被搜索服务过滤，保留读取失败状态")
                 continue
             except SearchUnavailable as exc:
-                if not improved:
+                if not (improved or repair):
                     raise
                 if progress: progress(f"    同校替代入口搜索失败（{type(exc).__name__}）")
                 continue
             for new in replacements:
                 if (not url_in_domain(new.url, domain) or excluded(new.url, sources, new.publisher)
                         or _url_key(new.url) in seen_urls): continue
-                if reconnect and _host_of(new.url) == _host_of(old.url):
+                if route and not new.url.startswith("https://"):
+                    continue
+                if (reconnect or route == "unavailable") and _host_of(new.url) == _host_of(old.url):
                     continue
                 # 需要同一公告题名，或本条明确书名；没有靠摘要换地址的猜测。
                 key = re.sub(r"[^\w\u3400-\u9fff]", "", title).casefold()
-                blob = re.sub(r"[^\w\u3400-\u9fff]", "", new.title + new.snippet).casefold()
+                blob = re.sub(r"[^\w\u3400-\u9fff]", "", new.title if route else new.title + new.snippet).casefold()
                 book = str((claim.entities or {}).get("title") or "") if claim.category == "著作" else ""
                 if key not in blob and not (book and book in new.title + new.snippet): continue
                 if not budget.can_read(): break
@@ -926,6 +975,11 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 except Exception: body = None
                 if not body:
                     budget.finish_read(False)
+                    continue
+                resolved = getattr(fetcher, "resolved_urls", {}).get(new.url, new.url)
+                if route and (not resolved.startswith("https://") or not url_in_domain(resolved, domain)):
+                    budget.finish_read(False)
+                    record_decision("替代入口跳转后不在原机构的安全链接范围", new.url)
                     continue
                 text = extract_main_text(body) if "<" in body[:2000] else body
                 if len(text.strip()) < 200 and re.search(r"Loading|正在加载|enable.*JavaScript", text, re.I):
@@ -962,6 +1016,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     queue = deque((hit, html, 0) for hit, html in fetched)
     while queue:
         hit, html, depth = queue.popleft()
+        from .ocr import OCRText
+        scanned = isinstance(html, OCRText)
         resolved = getattr(fetcher, "resolved_urls", {}).get(hit.url)
         if resolved:
             hit = replace(hit, url=resolved)
@@ -983,6 +1039,9 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             if "初稿/拟授奖" in hit.title and not re.search(r"初稿|拟授奖|拟获奖|preliminary", title, re.I):
                 title += " · 初稿/拟授奖（目录已有官方说明）"
             hit = replace(hit, title=title)
+        if scanned:
+            hit = replace(hit, title=f"{hit.title} · 名单图片OCR识别（扫描 PDF）")
+            record_decision("扫描 PDF 已经 OCR，识别结果供人工对照原图", hit.url, state="navigation")
         links = _official_roster_links(html, hit, claim, school_domains) if depth < 2 else []
         if recall_enabled() and depth < 2:
             from .retrieval_recovery import school_record_links
@@ -1025,6 +1084,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 if observer := EVIDENCE_OBSERVER.get():
                     observer(claim, ev)
                 record_decision('通过证据抽取与身份范围校验',hit.url,state='retained')
+        elif repair and not links and not has_name:
+            record_decision("本人关联不足：正文未出现候选人姓名", hit.url)
         else:
             record_decision('正文缺少本人或团队身份锚点，目录仅跟进附件',hit.url)
         # 栏目 → 当年公告 → 附件，最多两层；赛事可按题目读取多份赛果，共用原读页预算。
@@ -1175,7 +1236,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         if not html:
             continue
         text = extract_main_text(html) if "<" in html[:2000] else html
-        ev = extract_evidence(claim, SearchHit(url=url, title=""), text, llm,
+        from .ocr import OCRText
+        title = "名单图片OCR识别（扫描 PDF）" if isinstance(html, OCRText) else ""
+        ev = extract_evidence(claim, SearchHit(url=url, title=title), text, llm,
                               organizer_hosts=organizer_hosts, candidate_provided=True,
                               candidate_name=candidate_name, school_domains=school_domains)
         if ev:

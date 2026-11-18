@@ -49,6 +49,22 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
 # 2026-11-17: DeepSeek saved-record diagnosis
 
+`ict-full-20261117.7` enables `UNDERBOX_ICT_SOURCE_REPAIR` on the ICT
+worker. Legacy DOC reads use a dedicated Antiword resource home, configured by
+`UNDERBOX_ICT_DOC_HOME` and readable by the service account. Its `.antiword`
+directory contains the required mapping and font configuration. The child
+process receives that home without changing the worker's home. Scan-only
+public PDFs of at most 20 pages can use the existing DeepSeek OCR service.
+Identical bytes share one OCR result per verification run. OCR text remains
+a human-review lead under the existing provenance rules.
+
+Broken official notices can be rediscovered by title within their verified
+school or organizer domain. Access and certificate failures look for a
+different HTTPS host, and the alternative still passes source controls.
+Publisher failures can use public Crossref records when the DOI resolves to
+the exact claim title. The report distinguishes inaccessible attachments
+from material read successfully but rejected by the identity checks.
+
 `ict-full-20261117.6` enables `UNDERBOX_ICT_GLM_QUEUE=1` for the ICT worker.
 All GLM searches in that worker share a queue, including retries. The queue
 sends one request at a time at least 2.5 seconds apart. Transient 429 responses

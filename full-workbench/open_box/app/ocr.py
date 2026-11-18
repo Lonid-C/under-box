@@ -14,6 +14,46 @@ import threading
 _build_lock = threading.Lock()
 
 
+class OCRText(str):
+    """A text view of an image document, used only as a lead."""
+
+
+def recognize_scanned_pdf(data: bytes, *, timeout=55):
+    try:
+        import pymupdf
+        with pymupdf.open(stream=data, filetype="pdf") as document:
+            if document.needs_pass:
+                return None, "PDF 受密码保护，无法提取正文"
+            count = len(document)
+            if count > 20:
+                return None, "扫描 PDF 超过单份自动 OCR 页数上限（20 页）"
+            if not count or any(page.get_text().strip() for page in document):
+                return None, "PDF 文本层未能可靠读取"
+            if not any(page.get_images() for page in document):
+                return None, "PDF 无可读文本，也未识别出扫描图像"
+    except Exception:
+        return None, "PDF 文件结构无法解析"
+    if not os.environ.get("DEEPSEEK_API_KEY"):
+        return None, "扫描 PDF 无文本层，OCR 服务未配置"
+    if timeout <= 0:
+        return None, "扫描 PDF 无文本层，已达到读取时限"
+    from .deepseek_client import DeepSeekClient, DeepSeekError
+    from .deepseek_document import _ocr_text
+    try:
+        pages = DeepSeekClient().ocr_bytes(data, "public-roster.pdf", timeout=timeout)
+    except DeepSeekError as error:
+        status = f"（HTTP {error.status}）" if error.status else ""
+        return None, "扫描 PDF OCR 服务未能完成识别" + status
+    except Exception:
+        return None, "扫描 PDF OCR 返回结果无法解析"
+    if sorted(index for index, _ in pages) != list(range(1, count + 1)):
+        return None, "扫描 PDF OCR 返回页数不完整"
+    text = _ocr_text(pages).strip() if any(raw.strip() for _, raw in pages) else ""
+    if not text:
+        return None, "扫描 PDF OCR 未识别到可读文字"
+    return OCRText(text), ""
+
+
 def _vision_binary() -> Path | None:
     if sys.platform != "darwin" or not shutil.which("swiftc"):
         return None

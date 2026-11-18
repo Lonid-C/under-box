@@ -268,6 +268,7 @@ def verify_prepared(
     coordinator = VerificationCoordinator()
     improved = ict_pipeline.enabled()
     parallel_agents = ict_pipeline.parallel_enabled()
+    from .source_repairs import enabled as repair_sources
 
     def run_one(i: int, claim):
         scope = for_claim(claim, sources)
@@ -380,6 +381,14 @@ def verify_prepared(
         elif task.snapshot()['execution']['state']=='time_limited':
             vc.needs_human=True
             vc.next_step='本条达到执行时限，部分查询或原文未能读取。已有证据保留，请复核未覆盖要素。'
+        elif repair_sources() and not evidences:
+            audit = task.snapshot()
+            reasons = [reason.partition("：")[2] for reason in audit["decisionCounts"]
+                       if reason.startswith("本人关联不足：")]
+            if reasons and audit["counts"].get("read", {}).get("returned"):
+                detail = next((reason for reason in reasons if "只有姓名" in reason), reasons[0])
+                vc.needs_human = True
+                vc.next_step = f"找到并读取了公开资料，身份关联不足：{detail}。请补充可核对的本人记录。"
         vc.source_notes.extend(n for n in plan.notes if '缺字段' in n or '未提供论文题名' in n)
         if current_orgs:
             allowed = scope.get('allowed_academic_institutions', []) if isinstance(scope, dict) else []

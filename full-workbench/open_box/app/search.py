@@ -1294,6 +1294,7 @@ class PageFetcher:
         self.failures: dict[str, str] = {}
         # 附件相对路径必须以重定向后的页面地址为基准，例如 results → results/。
         self.resolved_urls: dict[str, str] = {}
+        self._pdf_ocr_results = {}
         # 连不上的站点（连接超时/拒绝）本次核验内不再重试：同一学院站点往往一次
         # 搜出好几条链接，每条都等满连接超时，两三个站点就能吃掉整条陈述的时间。
         self.dead_hosts: dict[str, str] = {}
@@ -1407,6 +1408,19 @@ class PageFetcher:
                         else:
                             text = _pdf_text(r.content)
                         if not text:
+                            from .source_repairs import enabled as repair_sources
+                            if repair_sources():
+                                from hashlib import sha256
+                                from .ocr import recognize_scanned_pdf
+                                key = sha256(r.content).hexdigest()
+                                with self._host_lock("pdf-ocr:" + key):
+                                    if key not in self._pdf_ocr_results:
+                                        self._pdf_ocr_results[key] = recognize_scanned_pdf(
+                                            r.content, timeout=min(55, read_remaining()))
+                                    text, reason = self._pdf_ocr_results[key]
+                                if reason:
+                                    self.failures[url] = reason
+                                return text
                             self.failures[url] = "PDF 未提取到文本，可能是扫描件或受保护文件"
                         return text
                     if r.content.startswith(b"PK\x03\x04"):
@@ -1427,10 +1441,10 @@ class PageFetcher:
                         self.failures[url] = "返回内容不是有效 PDF"
                         return None
                     if r.content.startswith(b"\xd0\xcf\x11\xe0"):
-                        from .public_documents import legacy_office_text
-                        text = legacy_office_text(r.content)
+                        from .public_documents import legacy_office_read
+                        text, reason = legacy_office_read(r.content)
                         if not text:
-                            self.failures[url] = "旧版 DOC/XLS 未读到文本（读取器缺失、超限或文件受保护）"
+                            self.failures[url] = reason
                         return text
                     if (r.content.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"))
                             or r.content[:4] == b"RIFF" and r.content[8:12] == b"WEBP"):

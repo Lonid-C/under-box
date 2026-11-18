@@ -982,7 +982,7 @@ def build_plan(
     # 先保留各原始渠道，再追加别名变体；同组内按轮次、权重、域限定排序。
     regional_contest = competition and bool(re.search(r"省赛|省级|省[一二三]等奖|\bprovincial\b", _claim_search_blob(claim), re.I))
     def priority(q: Query) -> int:
-        if q.source.startswith('recovery:'):
+        if q.source.startswith(('recovery:', 'wechat:')):
             return 0
         if q.source.startswith('faculty_fact:'):
             return 0
@@ -1010,6 +1010,8 @@ def build_plan(
     dropped = [q.text for q in queries[cap:]]
     plan = Plan(queries[:cap], head.get("id", "none"), head.get("name", "无匹配"),
                 notes=list(head.get("notes") or []), dropped=dropped, budget=budget)
+    if any(q.source == 'wechat:student_work' for q in plan.queries):
+        plan.notes.append('查找学校和学生组织的公众号公开文章。若原文限制自动读取，索引链接供人工核对。')
     if ict_recall() and any(q.source.startswith('recovery:') for q in plan.queries):
         plan.notes.append('补查流程：原文编号优先 → 短题名/完整英文姓名发现 → 官网公告及附件本人行 → 身份、年份、位次逐项核实；发现线索不等于核验通过，题名或版本差异保留待确认。')
     if conference_probe:

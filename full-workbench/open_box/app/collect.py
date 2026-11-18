@@ -1343,7 +1343,11 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                 if key in seen_urls:
                     continue
                 seen_urls.add(key)
-                if not _readable(hit, budget, say):continue
+                if not _readable(hit, budget, say):
+                    if recall_enabled() and claim.category == '学生工作' and _host_of(hit.url) == WECHAT_HOST:
+                        record_decision('公众号原文禁止自动回读，已保留公开索引链接供人工核对',
+                                        hit.url, state='navigation')
+                    continue
                 budget.note_read()
                 selected.append(hit)
         found = _read_and_extract(
@@ -1609,7 +1613,11 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             raise SearchUnavailable(f"检索执行失败（{type(exc).__name__}），请稍后重试") from exc
         # 预算按**成功执行**的查询计：被审核拦下的那条没拿到任何结果，不该占名额。
         budget.note_search()
-        if site:
+        student_wechat = q.source == 'wechat:student_work' and site == WECHAT_HOST
+        if student_wechat:
+            from .search import is_wechat_article
+            hits = [h for h in hits if is_wechat_article(h.url)]
+        elif site:
             hits = [h for h in hits if url_in_domain(h.url, site)]
         say(f"    检索 {budget.searches}/{limit_label(budget.max_searches)}：{q.text}"
             f"{(' · ' + site) if site else ''} → {len(hits)} 条，"
@@ -1706,7 +1714,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
 
         # 不把复杂引号表达式或未知域变成硬门槛。只对空结果追加一次渐进放宽，
         # 每一次实际搜索都计入同一预算；先执行其余原始渠道，再尝试变体。
-        if not hits:
+        if not hits and not student_wechat:
             official = q.source.startswith("school:") or bool(
                 site and site in (school_site, source_site))
             label = source_school if source_site and site == source_site else school

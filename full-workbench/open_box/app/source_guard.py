@@ -153,6 +153,11 @@ class SourceGuardSearcher:
             from .data_sources import record_decision
             record_decision('查询范围处于排除来源',site or '')
             return None
+        from .retrieval_policy import enabled
+        from .strategy import WECHAT_HOST
+        if enabled() and site == WECHAT_HOST:
+            # The index is already restricted to this host. Publisher and URL filters still apply to the hits.
+            return query
         domains = _parts(self.sources).get('domains', [])
         return query + ''.join(' -site:' + d for d in domains if '-site:' + d not in query)
 

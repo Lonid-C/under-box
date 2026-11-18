@@ -39,6 +39,7 @@ SOURCES = {s.id: s for s in (
     DataSource("school_catalog", "学校域名与公示栏目目录", ALL_CATEGORIES, "plan.school_domain / school_archives", "navigation_only"),
     DataSource("competition_catalog", "赛事及历年名单入口目录", ("竞赛",), "competitions.competition_for_claim / seed_pages", "navigation_only"),
     DataSource("school_records", "学校公开培养、招生及荣誉记录", ("学历", "校内荣誉", "奖学金", "竞赛", "学生工作", "交流活动"), "searcher + PageFetcher / public attachments"),
+    DataSource("student_wechat", "学生组织微信公众号公开文章", ("学生工作",), "account-bound searcher + PageFetcher"),
     DataSource("public_web", "独立第三方公开网页", tuple(c for c in ALL_CATEGORIES if c != "实习"), "account-bound searcher + PageFetcher"),
     DataSource("paper_metadata", "Crossref / OpenAlex 论文登记记录", ("论文",), "search.paper_hits", "public_metadata"),
     DataSource("publisher_records", "期刊与出版社原始记录", ("论文", "著作"), "searcher + PageFetcher"),
@@ -289,6 +290,8 @@ def invoke_source(source_id, operation, *, reference="", action="search", catego
 def source_for_query(claim, query=None, site=None):
     kind = getattr(query, "kind", "web")
     source = getattr(query, "source", "")
+    if claim.category == "学生工作" and source == "wechat:student_work":
+        return "student_wechat"
     if claim.category == "实习":
         return "qcc_contacts"
     if kind == "crossref":
@@ -344,6 +347,10 @@ class SourceFetcher:
         source = source_for_query(self.run.claim)
         if self.run.claim.category in {"学历", "校内荣誉", "奖学金", "学生工作"}:
             source = "school_records"
+        if self.run.claim.category == "学生工作":
+            from .search import is_wechat_article
+            if is_wechat_article(url):
+                source = "student_wechat"
         def unavailable():
             failures = getattr(self.inner, "failures", None)
             return failures.get(url, "") if isinstance(failures, dict) else ""

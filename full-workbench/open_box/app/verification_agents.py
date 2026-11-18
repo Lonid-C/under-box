@@ -35,7 +35,7 @@ class VerificationAgent:
             "project": (*shared, "github_records"),
             "teaching": shared,
             "art": shared,
-            "student_work": (*shared, "school_records"),
+            "student_work": (*shared, "school_records", "student_wechat"),
         }[self.id]
 
     @property
@@ -200,7 +200,7 @@ AGENTS = (
         ("独立主办方节目单", "公开作品/演出记录"),
         "核对具体作品、创作或演出角色及时间；组织演出不等于创作或首演，引用作品不是作者，首演等修饰语需独立材料。"),
     VerificationAgent("student_work", "学生工作核验", ("学生工作",),
-        ("学生组织正式职务公示", "独立活动角色记录"),
+        ("学生组织正式职务公示", "微信公众号公开文章", "独立活动角色记录"),
         "核对学校/组织、本人职务和任期；活动参加者不等于组织负责人，组织存在不证明本人担任职务。"),
 )
 

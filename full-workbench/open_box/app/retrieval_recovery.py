@@ -102,9 +102,42 @@ def discovery_queries(claim, name, ctx):
     return rows
 
 
+def student_wechat_queries(claim, name, school):
+    """Search public account indexes by role, and find rosters without a name in the title."""
+    from .retrieval_repairs import role_variants
+    from .strategy import Query, WECHAT_HOST
+
+    compact = lambda value: re.sub(r'\W', '', value)
+    raw = compact(claim.raw_text)
+    school = clean_anchor(school)
+    if compact(school) not in raw:
+        school = ''
+    orgs = [e.partition('=')[2].strip() for e in claim.elements
+            if e.partition('=')[0].strip() in {'任职组织', '组织', '社团', '学生组织'}]
+    orgs += [clean_anchor(claim.entities.get('org', ''))]
+    orgs = list(dict.fromkeys(org for org in orgs if org != school and 2 <= len(org) <= 40
+                              and compact(org) and compact(org) in raw))[:3]
+    anchor = school or next(iter(orgs), '')
+    if not anchor:
+        return []
+
+    lookups = [(f'{anchor} {name} {role}', '按学校、姓名和一项职务查公众号公开报道')
+               for role in role_variants(claim) if name]
+    lookups += [(f'{school} {org} 换届', '按学校与学生组织找换届名单，再核对本人及任期')
+                for org in orgs]
+    return [Query(clean_query(text), site=WECHAT_HOST, round=1, weight=115,
+                  source='wechat:student_work', purpose=purpose) for text, purpose in lookups]
+
+
 def refine_queries(claim, name, ctx, queries):
     """One deterministic set of routes, deduplicated before any paid search."""
     from dataclasses import replace
+    from .strategy import WECHAT_HOST
+
+    if claim.category == '学生工作':
+        wechat = student_wechat_queries(claim, name, ctx.get('school', ''))
+        if wechat:
+            queries = wechat + [q for q in queries if q.site != WECHAT_HOST]
     result = []; seen = set()
     for q in discovery_queries(claim, name, ctx) + queries:
         q = replace(q, text=clean_query(q.text))

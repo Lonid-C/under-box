@@ -436,6 +436,20 @@ def url_in_domain(url: str, domain: str) -> bool:
         host == domain or host.endswith("." + domain))
 
 
+def is_wechat_article(url: str) -> bool:
+    from urllib.parse import parse_qs
+
+    try:
+        parts = urlparse(url)
+        if parts.scheme != 'https' or parts.netloc != 'mp.weixin.qq.com':
+            return False
+    except ValueError:
+        return False
+    if re.fullmatch(r'/s/[A-Za-z0-9_-]+/?', parts.path):
+        return True
+    return parts.path == '/s' and {'__biz', 'mid'} <= parse_qs(parts.query).keys()
+
+
 class ZhipuSearcher:
     """智谱 Web Search API。
 

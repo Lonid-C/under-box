@@ -170,6 +170,51 @@ class RetrievalRegressionTests(unittest.TestCase):
         self.assertFalse(any('赛事部部长、办公室副部长' in q.text for q in queries))
         self.assertTrue(any('赛事部部长' in q.text for q in queries));self.assertTrue(any('办公室副部长' in q.text for q in queries))
 
+    def test_student_wechat_queries_cover_roles_and_organization_rosters(self):
+        from app.plan import WECHAT_HOST
+
+        c = claim('学生工作', '林示例在清华大学担任校科协赛事部部长、系学生会办公室副部长',
+                  school='清华大学', org='清华大学')
+        c.elements = ['组织=校科协', '组织=系学生会', '职务=赛事部部长', '职务=办公室副部长']
+        plan = build_plan(c, '林示例', ResumeProfile(identity='student'))
+        wechat = [q for q in plan.queries if q.site == WECHAT_HOST]
+        self.assertEqual({q.text for q in wechat}, {
+            '清华大学 林示例 赛事部部长', '清华大学 林示例 办公室副部长',
+            '清华大学 校科协 换届', '清华大学 系学生会 换届',
+        })
+        self.assertTrue(all(q.round == 1 for q in wechat))
+        self.assertTrue(any(q.site != WECHAT_HOST for q in plan.queries))
+
+    def test_student_wechat_records_index_hits_without_reading_disallowed_articles(self):
+        from app.collect import Budget, collect_for_claim
+        from app.data_sources import AgentRun, SourceFetcher, SourceSearcher
+        from app.plan import WECHAT_HOST
+        from app.source_guard import SourceGuardSearcher
+        from app.verification_agents import agent_for
+
+        c = claim('学生工作', '2025年林示例在清华大学学生会担任部长', school='清华大学')
+        c.elements = ['组织=学生会', '职务=部长']
+        plan = build_plan(c, '林示例', ResumeProfile(identity='student'))
+        plan.queries = [next(q for q in plan.queries if q.source == 'wechat:student_work' and '林示例' in q.text)]
+        article = 'https://mp.weixin.qq.com/s/abc_123'
+        search = Mock()
+        search.search.return_value = [SearchHit(article, title='学生会换届公示', snippet='林示例担任部长'),
+                                      SearchHit('https://mp.weixin.qq.com/mp/profile_ext', title='公众号主页'),
+                                      SearchHit('https://mp.weixin.qq.com.example/s/abc', title='无关链接'),
+                                      SearchHit('https://mp.weixin.qq.com/s/excluded', publisher='北京大学学生会')]
+        fetcher = Mock()
+        budget = Budget(max_searches=1, max_page_reads=3, max_seconds=20)
+        run = AgentRun(agent_for(c), c, plan, budget)
+        guarded = SourceGuardSearcher(search, policy(domains=['pku.edu.cn'], organizations=['北京大学']))
+        with run.bind(), patch('app.search.robots_allows', return_value=False):
+            evidence, _ = collect_for_claim(c, '林示例', SourceSearcher(guarded, run), Mock(),
+                                            budget=budget, fetcher=SourceFetcher(fetcher, run), queries=plan.queries)
+        search.search.assert_called_once_with(plan.queries[0].text, site=WECHAT_HOST)
+        fetcher.get_roster.assert_not_called()
+        self.assertEqual(evidence, [])
+        self.assertTrue(any(e['sourceId'] == 'student_wechat' and e['state'] == 'returned' for e in run.events))
+        self.assertEqual([d['reference'] for d in run.decisions if d['state'] == 'navigation'], [article])
+
     def project(self,raw=None,employed=False):
         c=claim('项目',raw or '林示例清华大学研究生教育教学改革研究项目，项目编号：25Z-AA017',school='清华大学',title='研究生教育教学改革研究项目')
         if employed:c.entities['candidate_identity_context']['current_employers']=['清华大学']

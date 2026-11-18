@@ -49,6 +49,22 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
 # 2026-11-17: DeepSeek saved-record diagnosis
 
+`ict-full-20261117.5` enables category agents to search multiple selected claims
+from the same résumé concurrently, through the existing AgentArts callback.
+Set `UNDERBOX_ICT_PARALLEL_AGENTS=1` and `UNDERBOX_ICT_CLAIM_WORKERS=4` in the
+ICT service environment. A single job can use up to four claim slots. Ready
+categories share these slots, while education and authored-work dependencies
+continue to govern which identity hints are available. Reports list the
+selected claims in résumé order. GLM pacing and per-domain
+reading rules still apply. An unexpected failure in one claim is recorded
+independently and does not cancel the other claims.
+
+Production enables the scheduling flag alone. The test runner independently
+uses `UNDERBOX_ICT_PIPELINE_NEXT` for its sectional splitter and its time bounds.
+Keep that flag off on the production service to retain its existing search
+limits, splitter, and reader. The authenticated status endpoint shows the
+active claim schedule and maximum concurrency.
+
 `ict-full-20261117.4` adds a discovery recovery layer to the category agents:
 verbatim project/patent identifiers, short paper-title anchors, full Latin names
 for publisher discovery, and person/school roster searches. Extraction comments

@@ -79,6 +79,7 @@ def split_sections(text):
 
 def prepare(args):
     live_environment(Path(args.output).parent)
+    os.environ["UNDERBOX_ICT_PARALLEL_AGENTS"] = "0"
     os.environ["UNDERBOX_ICT_PIPELINE_NEXT"] = "1" if args.pipeline == "next" else "0"
     from app.pipeline import prepare_resume
     from app.usage import METER
@@ -123,6 +124,7 @@ def prepare(args):
 def worker(args):
     output=Path(args.output);config=live_environment(output)
     improved = args.pipeline == "next"
+    os.environ["UNDERBOX_ICT_PARALLEL_AGENTS"] = "0"
     os.environ["UNDERBOX_ICT_PIPELINE_NEXT"] = "1" if improved else "0"
     config["pipeline"] = args.pipeline
     from app import collect,pipeline

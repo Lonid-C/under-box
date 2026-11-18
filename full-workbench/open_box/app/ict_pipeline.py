@@ -1,4 +1,4 @@
-"""Opt-in ICT scheduling and retrieval controls for the isolated backend."""
+"""ICT claim scheduling and optional experimental retrieval controls."""
 from __future__ import annotations
 
 import os
@@ -17,6 +17,10 @@ READ_BATCH_SECONDS = 15
 
 def enabled():
     return os.environ.get("UNDERBOX_ICT_PIPELINE_NEXT") == "1"
+
+
+def parallel_enabled():
+    return enabled() or os.environ.get("UNDERBOX_ICT_PARALLEL_AGENTS") == "1"
 
 
 def run_agents(claims, workers, verify, receive, dispatched):

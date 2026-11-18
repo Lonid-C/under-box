@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261117.4'
+VERSION='ict-full-20261117.5'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -529,6 +529,8 @@ def install(engine):
         if self.path.split('?',1)[0] in ('/health','/api/ict/status'):
             from app.retrieval_policy import enabled
             from app.cost_budget import enforced
+            from app.ict_pipeline import parallel_enabled
+            from app.pipeline import claim_workers
             from app.quota_policy import unlimited
             return self._json({'ok':True,'version':VERSION,'orchestration':'Huawei Cloud AgentArts','iam_configured':runtime_client.configured(),
                                'retrieval':{'expanded':enabled(),'page_reader':'native' if enabled() else 'configured',
@@ -537,6 +539,8 @@ def install(engine):
                                             'time_ceiling_seconds':None if unlimited() else 'strategy',
                                             'failed_read_recovery_ceiling':None if unlimited() else 8,'alternate_searches_per_claim':0 if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else (None if unlimited() else 4),
                                             'search_policy':'zhipu_only' if os.environ.get('UNDERBOX_ICT_GLM_ONLY')=='1' else 'configured_with_fallback',
+                                            'claim_schedule':'parallel_agents' if parallel_enabled() else 'stage_batches',
+                                            'claim_workers':claim_workers(32),
                                             'cost_budget_enforced':enforced(),
                                             'estimated_budget_cny':4 if enforced() else None,
                                             'target_cny':3 if enforced() else None,'cloud_allowance_cny':.5,

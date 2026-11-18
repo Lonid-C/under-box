@@ -62,8 +62,9 @@ def load_mock_report(report_id: str = "lin") -> Report:
 
 def claim_workers(n: int) -> int:
     """同时处理几条陈述。CLAIM_WORKERS=0/未设 → 全部同时开始；1 → 逐条串行（旧行为）。"""
+    configured = os.environ.get("UNDERBOX_ICT_CLAIM_WORKERS") if ict_pipeline.parallel_enabled() else None
     try:
-        w = int(os.environ.get("CLAIM_WORKERS", "0") or 0)
+        w = int(configured or os.environ.get("CLAIM_WORKERS", "0") or 0)
     except ValueError:
         w = 0
     if w <= 0:
@@ -266,6 +267,7 @@ def verify_prepared(
     done_lock = threading.Lock()
     coordinator = VerificationCoordinator()
     improved = ict_pipeline.enabled()
+    parallel_agents = ict_pipeline.parallel_enabled()
 
     def run_one(i: int, claim):
         scope = for_claim(claim, sources)
@@ -343,7 +345,7 @@ def verify_prepared(
         paused=money and (money.stopped or getattr(money,'search_stopped',False))
         if paused:
             vc.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
-        if not improved:
+        if not parallel_agents:
             vc.verification_agent = task.finish(vc)
         if not vc.github_audit:
             vc.source_notes.append("只有姓名或发布时间一致的记录不纳入证据；学校、学段、任职及具体经历须能与本次输入关联。")
@@ -391,7 +393,7 @@ def verify_prepared(
             vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")
         # 6 澄清问题
         if not (vc.github_audit or vc.claim_verification or paused or not plan.queries and not evidences):
-            if not improved:
+            if not parallel_agents:
                 vc.question = generate_question(vc, llm)
             elif read_remaining() >= 5:
                 try:
@@ -400,7 +402,7 @@ def verify_prepared(
                     csay(f"澄清问题生成失败（{type(exc).__name__}），已保留核验结果")
         if vc.github_audit:
             vc.next_step = "只补充本条项目的本人账号、贡献链接和角色/指标的可追溯材料；未公开部分保持未知。"
-        if improved:
+        if parallel_agents:
             vc.verification_agent = task.finish(vc)
         if workers > 1:
             with done_lock:
@@ -412,10 +414,12 @@ def verify_prepared(
 
     def verify_one(i,claim):
         with allocations.claim(claim.id) if allocations else nullcontext():
-            if not improved:
+            if not parallel_agents:
                 return run_one(i, claim)
-            end = time.monotonic() + min(ict_pipeline.CLAIM_SECONDS, read_remaining())
-            deadline_token = READ_DEADLINE.set(end)
+            deadline_token = None
+            if improved:
+                end = time.monotonic() + min(ict_pipeline.CLAIM_SECONDS, read_remaining())
+                deadline_token = READ_DEADLINE.set(end)
             evidence = []
             upstream_observer = EVIDENCE_OBSERVER.get()
 
@@ -448,7 +452,8 @@ def verify_prepared(
                 return vc
             finally:
                 EVIDENCE_OBSERVER.reset(observer_token)
-                READ_DEADLINE.reset(deadline_token)
+                if deadline_token is not None:
+                    READ_DEADLINE.reset(deadline_token)
 
     # 先核对本科，再核对硕士/博士就读及入学路径，最后独立核对奖项等条目。
     # 每个阶段内部仍并行，报告维持输入原顺序；本科无公开证据不会阻止独立核对研究生。
@@ -457,7 +462,7 @@ def verify_prepared(
         by_id[result.claim.id] = result
         coordinator.record([result])
 
-    if improved:
+    if parallel_agents:
         say(f"[3-5/6] 类别 Agent 协作核验，同步处理最多 {workers} 条")
         def dispatched(claim):
             coordinator.record_dispatch(claim)

@@ -3,13 +3,13 @@ import os
 import threading
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import httpx
 
 from app import collect, ict_pipeline, pipeline
 from app.schema import Claim, Evidence
-from app.search import PageFetcher, SearchHit
+from app.search import PageFetcher, SearchHit, ZhipuSearcher
 from app.strategy import Plan, Query, ResumeProfile
 
 
@@ -82,6 +82,47 @@ class PipelineNextTests(unittest.TestCase):
         assert failed.verification_agent["sourceAccess"]["execution"]["reason"] == "KeyError"
         assert "KeyError" in failed.next_step
         assert other.verification_agent["id"] == "patent"
+
+    def test_production_mode_overlaps_four_glm_requests_without_enabling_experimental_limits(self):
+        self.use(patch.dict(os.environ, {"UNDERBOX_ICT_PIPELINE_NEXT": "0",
+            "UNDERBOX_ICT_PARALLEL_AGENTS": "1", "UNDERBOX_ICT_CLAIM_WORKERS": "4",
+            "UNDERBOX_ICT_UNLIMITED": "1", "CLAIM_WORKERS": "2", "UNDERBOX_ICT_GLM_ONLY": "1"}))
+        claims = [claim("school", "学历", "合成大学本科"),
+                  claim("award", "奖学金", "合成奖学金"),
+                  claim("paper", "论文", "合成论文甲"),
+                  claim("patent", "专利", "合成公开专利甲")]
+        doc = SimpleNamespace(kind="txt", source="fake", safe_text="", risks=[])
+        prepared = pipeline.PreparedResume("fake", doc, object(), ResumeProfile(), claims, "张示例")
+        pending = threading.Barrier(4, timeout=6)
+        response = Mock(status_code=200)
+        response.json.return_value = {"search_result": []}
+
+        def fake_provider(*args, **kwargs):
+            pending.wait()
+            return response
+
+        def plan(item, *args):
+            return Plan([Query(f"{item.id} 合成查询")], "test", "测试",
+                        budget={"searches": 1, "reads": 1, "seconds": 1})
+
+        def verify():
+            return pipeline.verify_prepared(prepared, searcher=ZhipuSearcher(api_key="synthetic"),
+                                            fetcher=SimpleNamespace(get=lambda url: None))
+
+        with patch.object(pipeline, "employer_policy", return_value={}), \
+             patch.object(pipeline, "plan_with_notes", side_effect=plan), \
+             patch.object(pipeline, "generate_question", return_value=None), \
+             patch("app.education_review.build_education_review", return_value={}), \
+             patch("app.contact_fallback.attach_contact_reviews"), \
+             patch("httpx.post", side_effect=fake_provider) as network:
+            report = verify()
+        self.assertEqual(network.call_count, 4)
+        self.assertEqual([v.claim.id for v in report.claims], [c.id for c in claims])
+        for v in report.claims:
+            self.assertEqual(v.retrieval_status, "complete")
+            stats = v.verification_agent["sourceAccess"]
+            self.assertEqual(stats["counts"]["search"]["empty"], 1)
+            self.assertIsNone(stats["budget"]["maxSeconds"])
 
 
     def test_unreachable_origin_is_not_retried_and_other_school_host_still_works(self):

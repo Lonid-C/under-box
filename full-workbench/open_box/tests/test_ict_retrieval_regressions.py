@@ -196,9 +196,10 @@ class RetrievalRegressionTests(unittest.TestCase):
         c.elements = ['组织=学生会', '职务=部长']
         plan = build_plan(c, '林示例', ResumeProfile(identity='student'))
         plan.queries = [next(q for q in plan.queries if q.source == 'wechat:student_work' and '林示例' in q.text)]
-        article = 'https://mp.weixin.qq.com/s/abc_123'
+        indexed_article = 'http://mp.weixin.qq.com/s?__biz=acct&mid=123&idx=1&sn=abc'
+        article = indexed_article.replace('http://', 'https://', 1)
         search = Mock()
-        search.search.return_value = [SearchHit(article, title='学生会换届公示', snippet='林示例担任部长'),
+        search.search.return_value = [SearchHit(indexed_article, title='学生会换届公示', snippet='林示例担任部长'),
                                       SearchHit('https://mp.weixin.qq.com/mp/profile_ext', title='公众号主页'),
                                       SearchHit('https://mp.weixin.qq.com.example/s/abc', title='无关链接'),
                                       SearchHit('https://mp.weixin.qq.com/s/excluded', publisher='北京大学学生会')]

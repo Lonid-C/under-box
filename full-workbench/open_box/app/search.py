@@ -436,18 +436,18 @@ def url_in_domain(url: str, domain: str) -> bool:
         host == domain or host.endswith("." + domain))
 
 
-def is_wechat_article(url: str) -> bool:
+def wechat_article_url(url: str) -> str:
     from urllib.parse import parse_qs
 
     try:
         parts = urlparse(url)
-        if parts.scheme != 'https' or parts.netloc != 'mp.weixin.qq.com':
-            return False
+        if parts.scheme not in ('http', 'https') or parts.netloc != 'mp.weixin.qq.com':
+            return ''
     except ValueError:
-        return False
-    if re.fullmatch(r'/s/[A-Za-z0-9_-]+/?', parts.path):
-        return True
-    return parts.path == '/s' and {'__biz', 'mid'} <= parse_qs(parts.query).keys()
+        return ''
+    short_link = re.fullmatch(r'/s/[A-Za-z0-9_-]+/?', parts.path)
+    legacy_link = parts.path == '/s' and {'__biz', 'mid'} <= parse_qs(parts.query).keys()
+    return parts._replace(scheme='https', fragment='').geturl() if short_link or legacy_link else ''
 
 
 class ZhipuSearcher:

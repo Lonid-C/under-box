@@ -1615,8 +1615,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         budget.note_search()
         student_wechat = q.source == 'wechat:student_work' and site == WECHAT_HOST
         if student_wechat:
-            from .search import is_wechat_article
-            hits = [h for h in hits if is_wechat_article(h.url)]
+            from .search import wechat_article_url
+            hits = [replace(h, url=url) for h in hits if (url := wechat_article_url(h.url))]
         elif site:
             hits = [h for h in hits if url_in_domain(h.url, site)]
         say(f"    检索 {budget.searches}/{limit_label(budget.max_searches)}：{q.text}"

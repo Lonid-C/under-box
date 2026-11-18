@@ -348,8 +348,8 @@ class SourceFetcher:
         if self.run.claim.category in {"学历", "校内荣誉", "奖学金", "学生工作"}:
             source = "school_records"
         if self.run.claim.category == "学生工作":
-            from .search import is_wechat_article
-            if is_wechat_article(url):
+            from .search import wechat_article_url
+            if wechat_article_url(url):
                 source = "student_wechat"
         def unavailable():
             failures = getattr(self.inner, "failures", None)

@@ -1132,6 +1132,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
     from .claim_scope import enrich_claim
     from .strategy import github_trigger
     from .source_guard import excluded, claim_sources, SourceGuardFetcher, SourceGuardSearcher, blocked_site, blocked_query, third_party_text
+    from .zhipu_rate import enabled as use_glm_queue, ZhipuSearchError
+    queued_glm = use_glm_queue()
     claim = enrich_claim(claim)
     claim.entities = {**claim.entities, "candidate_name": candidate_name}
     sources = claim_sources(claim)
@@ -1487,7 +1489,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                         next_site = PATENT_SITE
                 next_key = ((next_q.text, next_site, next_q.kind) if next_q else None)
                 can_parallel = (
-                    not discovery and not q.source.startswith("school:")
+                    not queued_glm and not discovery and not q.source.startswith("school:")
                     and next_q is not None and q.kind == "web"
                     and next_q.kind == "web" and next_key not in attempted
                     and not blocked_query(next_q.text, next_site, sources)
@@ -1523,7 +1525,9 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
             continue
         except SearchUnavailable as exc:
             msg = str(exc)
-            if "401" in msg or "403" in msg or "未授权" in msg or "鉴权" in msg:
+            if isinstance(exc, ZhipuSearchError):
+                say(f"    {msg}。已有证据已保留。")
+            elif "401" in msg or "403" in msg or "未授权" in msg or "鉴权" in msg:
                 say("    搜索供应商鉴权失败；保留已有证据，剩余范围未完成")
                 budget.exhausted = True
             elif "402" in msg or "余额不足" in msg or "资源包" in msg:

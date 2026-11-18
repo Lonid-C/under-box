@@ -549,6 +549,9 @@ class ZhipuSearcher:
             # 一等参数，比把 site: 拼进查询串稳
             body["search_domain_filter"] = site
         self.calls += 1
+        from .zhipu_rate import enabled as queued
+        if queued():
+            return self._queued_call(query, site, engine, body)
         self._throttle(urlparse(self.endpoint).hostname or "")
         for attempt in range(MAX_RETRIES + 1):
             try:
@@ -597,6 +600,54 @@ class ZhipuSearcher:
                     ) from exc
                 time.sleep(0.5 * (attempt + 1))
         return []
+
+    def _queued_call(self, query, site, engine, body):
+        import hashlib
+        import httpx
+        from .cost_budget import BudgetLimit, SEARCH_PRICES, reserve
+        from .data_sources import _ACTIVE_RUN
+        from .zhipu_rate import MAX_WAIT, QUEUE, ZhipuSearchError, provider_error
+
+        credential_id = hashlib.sha256(self.api_key.encode()).digest()
+        dispatched = False
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                with QUEUE.slot(credential_id, max_wait=min(MAX_WAIT, read_remaining())):
+                    try:
+                        reserve(SEARCH_PRICES.get(engine, float("nan")), "zhipu_" + engine, search=True)
+                    except BudgetLimit:
+                        return []
+                    dispatched = True
+                    response = httpx.post(self.endpoint, json=body,
+                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
+                                 "User-Agent": UA}, timeout=self.timeout)
+                    if response.status_code < 400:
+                        QUEUE.success()
+                        METER.record_search(engine)
+                        hits = self._parse(response.json())
+                        return [hit for hit in hits if url_in_domain(hit.url, site)] if site else hits
+                    if is_content_filtered(response):
+                        raise SearchFiltered("查询被内容审核拒绝（code 1301）", query=query, site=site)
+                    error = provider_error(response)
+                    QUEUE.reject(credential_id, error)
+                    if error.status == 429 and (run := _ACTIVE_RUN.get()):
+                        run.add({"sourceId": "public_web", "sourceName": "智谱联网搜索",
+                                 "action": "provider_response", "state": "rate_limited" if error.kind == "rate" else "rejected",
+                                 "status": error.status, "providerCode": error.code, "reason": error.reason,
+                                 "engine": engine})
+                    retryable = error.kind == "rate" or error.kind == "provider" and error.status >= 500
+            except ZhipuSearchError as exc:
+                if dispatched and not exc.sent:
+                    raise ZhipuSearchError(exc.reason + "，后续重试暂缓", status=exc.status,
+                                           code=exc.code, kind=exc.kind) from None
+                raise
+            except httpx.TransportError:
+                error = ZhipuSearchError("智谱搜索连接失败或响应超时")
+                retryable = True
+            except (ValueError, TypeError, AttributeError):
+                raise ZhipuSearchError("智谱搜索返回的结果格式无法解析") from None
+            if not retryable or attempt == MAX_RETRIES:
+                raise error
 
     def ping(self) -> list[SearchHit]:
         return self.search("清华大学 计算机系 公示", site="tsinghua.edu.cn")

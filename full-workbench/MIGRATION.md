@@ -49,6 +49,16 @@ python3 -m unittest discover -s agentarts-adapter -p 'test_*.py'
 全部自动化使用临时数据库、合成材料和模拟模型/云端，禁止付费 API。浏览器语音入口与后端合成音频已检查，未实录麦克风；本次没有重新提交成员真实简历，也没有测量新版本在真实公开资料上的召回率或新一轮云端费用。服务上线检查、数据完整性与截图记录见 `outputs/regression/full-migration-20261116/`。
 # 2026-11-17: DeepSeek saved-record diagnosis
 
+`ict-full-20261117.6` enables `UNDERBOX_ICT_GLM_QUEUE=1` for the ICT worker.
+All GLM searches in that worker share a queue, including retries. The queue
+sends one request at a time at least 2.5 seconds apart. Transient 429 responses
+slow the queue, honoring the provider's retry time when supplied. Account
+errors pause requests using the affected credential and report their reason.
+The four claim workers can still execute public registry lookups and read
+evidence concurrently. Rate limiting changes call pacing and retry behavior.
+Search admission, per-resume cost limits, and source proof rules retain their
+prior settings.
+
 `ict-full-20261117.5` enables category agents to search multiple selected claims
 from the same résumé concurrently, through the existing AgentArts callback.
 Set `UNDERBOX_ICT_PARALLEL_AGENTS=1` and `UNDERBOX_ICT_CLAIM_WORKERS=4` in the

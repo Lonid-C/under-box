@@ -162,6 +162,14 @@ class AgentRun:
             status = "timeout"
         if self._task_error:
             status = "partial" if verified.evidence else "provider_error"
+        elif not manual and verified.status != "ok":
+            glm_failure = next((g for g in stats["failureGroups"] if g["error"].startswith("zhipu_")), None)
+            if glm_failure:
+                reason = glm_failure["reason"]
+                if reason not in verified.source_notes:
+                    verified.source_notes.append(reason)
+                verified.needs_human = True
+                verified.next_step = reason + "。已有证据保留，恢复后可补查尚未覆盖的事项。"
         verified.retrieval_status = status
         verified.retrieval_summary = from_claim(verified, retrieval_status=status,
             queries_planned=len(self.plan.queries),
@@ -264,6 +272,13 @@ def invoke_source(source_id, operation, *, reference="", action="search", catego
         return result
     except Exception as exc:
         event.update(state="failed", error=type(exc).__name__)
+        if action == "search":
+            from .zhipu_rate import ZhipuSearchError
+            if isinstance(exc, ZhipuSearchError):
+                event.update(state="failed" if exc.sent else "blocked", attempted=exc.sent,
+                             error="zhipu_" + (exc.code or (f"http_{exc.status}" if exc.status else exc.kind)),
+                             reason=exc.reason if exc.sent else "查询未发出，" + exc.reason,
+                             status=exc.status, providerCode=exc.code)
         raise
     finally:
         if run:

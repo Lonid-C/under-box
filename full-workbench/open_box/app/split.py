@@ -97,7 +97,7 @@ MCM/ICM、校赛/省赛/国赛、模拟赛/正式赛、初稿公示/正式名单
 “高教社杯”是冠名，多个赛事共用；只有原文含数学建模/数模或成图等上下文时才能识别具体赛事，只有冠名时保留原词。"""
 
 
-def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
+def split_claims(resume_text: str, llm: LLM, *, complete_section=False) -> list[Claim]:
     """resume_text 必须是已经过 parse.scrub 的安全文本。
 
     max_tokens 给到 12000：真实简历动辄拆出 20+ 条陈述，fixture 只有 11 条所以
@@ -109,6 +109,11 @@ def split_claims(resume_text: str, llm: LLM) -> list[Claim]:
     # explicit coverage objective so it does not focus only on the introduction.
     webpage = resume_text.lstrip().startswith("网页标题：")
     system = SYSTEM
+    if complete_section:
+        start = system.index("9. 总数")
+        end = system.index("10. **科研成果", start)
+        system = (system[:start] + "9. 覆盖本段全部独立可核验事项。同一赛事不同年份、赛段或奖项各自成条。\n"
+                  + system[end:])
     if webpage:
         system += """
 
@@ -189,6 +194,12 @@ def correct_activity_category(claim):
     """仅修正明显错放进项目的活动；工程/科研项目保留项目性质。"""
     from .retrieval_policy import enabled
     from .retrieval_repairs import exchange_activity
+    from .ict_pipeline import enabled as improved_pipeline
+    if (improved_pipeline() and claim.category == '交流活动'
+            and re.search(r'夏令营|暑期学校', claim.raw_text)
+            and re.search(r'优秀(?:营员|学员)', claim.raw_text)
+            and not re.search(r'参与评审|负责评选|担任评委', claim.raw_text)):
+        return claim.model_copy(update={'category': '校内荣誉'})
     if enabled() and exchange_activity(claim):
         elements=[re.sub(r'^获奖年份=', '活动年份=',e) for e in claim.elements]
         return claim.model_copy(update={'category':'交流活动','elements':elements})

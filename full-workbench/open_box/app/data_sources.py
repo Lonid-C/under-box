@@ -94,6 +94,7 @@ class AgentRun:
         self._sample_queries = set()
         self.failure_groups = {}
         self.failure_groups_truncated = False
+        self._task_error = ""
 
     @contextmanager
     def bind(self):
@@ -156,6 +157,11 @@ class AgentRun:
             "budget_exhausted" if self.budget.exhausted else "complete" if attempted else "not_attempted")
         if manual:
             status = "not_attempted"  # Company contact lookup is not internship fact retrieval.
+        from .ict_pipeline import enabled
+        if enabled() and stats["execution"]["state"] == "time_limited":
+            status = "timeout"
+        if self._task_error:
+            status = "partial" if verified.evidence else "provider_error"
         verified.retrieval_status = status
         verified.retrieval_summary = from_claim(verified, retrieval_status=status,
             queries_planned=len(self.plan.queries),
@@ -179,6 +185,12 @@ class AgentRun:
                 self.decisions.append({'state':state,'reason':reason,'reference':safe_reference(reference)})
             else:self.decisions_truncated = True
 
+    def fail(self, error):
+        self._task_error = type(error).__name__
+        self._execution = {"state": "task_error", "reason": self._task_error}
+        self.add({"sourceId": self.agent.id, "sourceName": self.agent.name, "action": "verify",
+                  "state": "failed", "error": self._task_error, "reason": "本条核验程序异常"})
+
     def snapshot(self):
         with self._lock:
             events = [dict(e) for e in self.events]
@@ -193,8 +205,11 @@ class AgentRun:
         money=self.cost_budget
         paused=bool(money and (money.stopped or getattr(money,'search_stopped',False)))
         elapsed=self._elapsed if self._elapsed is not None else self.budget.elapsed()
+        from .ict_pipeline import enabled
+        timed_out = elapsed >= self.budget.max_seconds and (
+            enabled() or self.budget.exhausted and started)
         state=('budget_limited' if started else 'budget_not_started') if paused and self.budget.exhausted else (
-            'time_limited' if self.budget.exhausted and elapsed>=self.budget.max_seconds and started else
+            'time_limited' if timed_out else
             'no_queries' if not self.plan.queries and not started else 'searched' if started else 'not_started')
         return {"claimId": self.claim.id, "agentId": self.agent.id, "status": self.status,
                 'execution':getattr(self,'_execution',{'state':state,'reason':money.reason if paused else ''}),

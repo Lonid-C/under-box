@@ -346,6 +346,15 @@ class VerificationCoordinator:
             self._runs[claim.id] = run
         return run
 
+    def record_dispatch(self, claim):
+        agent = agent_for(claim)
+        self._batches.append({"order": len(self._batches) + 1, "label": agent.name,
+                              "claimIds": [claim.id], "agents": [agent.id]})
+
+    def task_for(self, claim_id):
+        with self._lock:
+            return self._runs.get(claim_id)
+
     def summary(self, verified):
         rows = []
         for vc in verified:

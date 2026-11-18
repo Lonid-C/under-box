@@ -1306,6 +1306,9 @@ class PageFetcher:
 
     def get(self, url: str, *, archive_hint: str = "", publication_catalog: bool = False) -> str | None:
         import httpx
+        from .ict_pipeline import enabled
+        improved = enabled()
+        retries = 0 if improved else self.PAGE_RETRIES
         host = urlparse(url).hostname or ""
         # 不同域可以并发；同一域仍严格串行并保持至少 1 秒间隔。
         # 锁包住 robots 检查与重试，避免多个线程同时冲击同一站点。
@@ -1320,7 +1323,7 @@ class PageFetcher:
                 self.failures[url] = "robots.txt 不允许访问"
                 return None
             self._throttle(host)
-            for attempt in range(self.PAGE_RETRIES + 1):
+            for attempt in range(retries + 1):
                 left=read_remaining()
                 if left<=0:
                     self.failures[url]='达到本条读取时间上限';return None
@@ -1408,6 +1411,8 @@ class PageFetcher:
                     return text
                 except httpx.ReadTimeout:
                     self.failures[url] = f"读取超时（>{self.timeout:.0f} 秒）"
+                    if improved and read_remaining() > 0:
+                        self._mark_transient_failure(url, "读取超时")
                     return None
                 except httpx.ConnectTimeout:
                     reason = f"连接超时（>{self.connect_timeout:.0f} 秒）"
@@ -1422,16 +1427,21 @@ class PageFetcher:
                         self.failures[url] = reason
                         self.dead_hosts[f"https://{host}"] = reason
                         return None
+                    if improved and re.search(r"network is unreachable|no route to host", text, re.I):
+                        reason = "服务器到源站网络不可达"
                 except httpx.HTTPStatusError as exc:
                     reason = f"HTTP {exc.response.status_code}"
                 except Exception as exc:
                     reason = f"请求失败（{type(exc).__name__}）"
-                if attempt >= self.PAGE_RETRIES:
+                if attempt >= retries:
                     self.failures[url] = reason
-                    if reason.startswith(("连接超时", "连接失败")):
+                    if reason.startswith(("连接超时", "连接失败", "服务器到源站网络不可达")):
                         from .retrieval_policy import enabled as ict_recall
-                        if ict_recall(): self._mark_transient_failure(url, reason)
-                        else: self.dead_hosts[host] = reason
+                        if ict_recall():
+                            if not improved or read_remaining() > 0:
+                                self._mark_transient_failure(url, reason)
+                        elif not improved:
+                            self.dead_hosts[host] = reason
                     return None
                 time.sleep(min(0.5 * (attempt + 1),read_remaining()))
         return None

@@ -30,7 +30,8 @@ from datetime import datetime
 from pathlib import Path
 
 from . import judge
-from .collect import Budget, collect_for_claim
+from . import ict_pipeline
+from .collect import Budget, EVIDENCE_OBSERVER, collect_for_claim
 from .llm import LLM, build_llm
 from .competitions import (competition_for_claim, competition_resolution_note, lookup_summary,
                            publication_note, seed_pages)
@@ -42,7 +43,7 @@ from .questions import default_next_step, generate_question
 from .source_guard import SourceGuardFetcher, SourceGuardSearcher, evidence_excluded, for_claim
 from .employer_scope import employer_policy
 from .schema import STATUS_LABEL, Report
-from .search import CachedSearcher, PageFetcher, Searcher, build_searcher
+from .search import CachedSearcher, PageFetcher, READ_DEADLINE, Searcher, build_searcher, read_remaining
 from .split import split_claims
 from .strategy import add_admission_source_hints, add_competition_school_hints
 from .identity import with_candidate_identity_context
@@ -151,7 +152,8 @@ def prepare_resume(
         llm = BoundedLLM(llm, _llm_limit())
 
     def _split():
-        return add_competition_school_hints(add_admission_source_hints(split_claims(doc.safe_text, llm)))
+        split = ict_pipeline.split_resume if ict_pipeline.enabled() else split_claims
+        return add_competition_school_hints(add_admission_source_hints(split(doc.safe_text, llm)))
 
     # 2 画像（决定用哪套检索策略）与 3 陈述拆分：两次互不依赖的模型调用，并行时同时发出
     if profile is None and parallel:
@@ -263,6 +265,7 @@ def verify_prepared(
     done = 0
     done_lock = threading.Lock()
     coordinator = VerificationCoordinator()
+    improved = ict_pipeline.enabled()
 
     def run_one(i: int, claim):
         scope = for_claim(claim, sources)
@@ -300,6 +303,8 @@ def verify_prepared(
                 max_page_reads=plan.budget.get("reads", MAX_PAGE_READS),
                 max_seconds=seconds,
             )
+        if improved:
+            budget.max_seconds = min(budget.max_seconds, read_remaining())
         if claim.category == "实习":
             task = coordinator.start_task(claim, plan, budget)
             vc = specialist.collect(task, claim, name, claim_searcher, llm,
@@ -338,7 +343,8 @@ def verify_prepared(
         paused=money and (money.stopped or getattr(money,'search_stopped',False))
         if paused:
             vc.source_notes.append('费用预算限制：'+money.reason+' 本轮不完整检索不能用于认定经历不实。')
-        vc.verification_agent = task.finish(vc)
+        if not improved:
+            vc.verification_agent = task.finish(vc)
         if not vc.github_audit:
             vc.source_notes.append("只有姓名或发布时间一致的记录不纳入证据；学校、学段、任职及具体经历须能与本次输入关联。")
         if claim.category == "学历" and study_stage(claim):
@@ -371,7 +377,7 @@ def verify_prepared(
                           if budget.searches or budget.page_reads else '本条因费用不足未执行检索；不能作为查无记录的结论，请补充可追溯材料。')
         elif task.snapshot()['execution']['state']=='time_limited':
             vc.needs_human=True
-            vc.next_step='本条达到时间限制，检索尚未完成；请核对已有来源并补充未覆盖部分的材料。'
+            vc.next_step='本条达到执行时限，部分查询或原文未能读取。已有证据保留，请复核未覆盖要素。'
         vc.source_notes.extend(n for n in plan.notes if '缺字段' in n or '未提供论文题名' in n)
         if current_orgs:
             allowed = scope.get('allowed_academic_institutions', []) if isinstance(scope, dict) else []
@@ -384,9 +390,18 @@ def verify_prepared(
         if any(e.extraction_method == "search_snippet" for e in evidences):
             vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")
         # 6 澄清问题
-        vc.question = None if vc.github_audit or vc.claim_verification or paused or not plan.queries and not evidences else generate_question(vc, llm)
+        if not (vc.github_audit or vc.claim_verification or paused or not plan.queries and not evidences):
+            if not improved:
+                vc.question = generate_question(vc, llm)
+            elif read_remaining() >= 5:
+                try:
+                    vc.question = generate_question(vc, llm)
+                except Exception as exc:
+                    csay(f"澄清问题生成失败（{type(exc).__name__}），已保留核验结果")
         if vc.github_audit:
             vc.next_step = "只补充本条项目的本人账号、贡献链接和角色/指标的可追溯材料；未公开部分保持未知。"
+        if improved:
+            vc.verification_agent = task.finish(vc)
         if workers > 1:
             with done_lock:
                 done += 1
@@ -397,23 +412,71 @@ def verify_prepared(
 
     def verify_one(i,claim):
         with allocations.claim(claim.id) if allocations else nullcontext():
-            return run_one(i,claim)
+            if not improved:
+                return run_one(i, claim)
+            end = time.monotonic() + min(ict_pipeline.CLAIM_SECONDS, read_remaining())
+            deadline_token = READ_DEADLINE.set(end)
+            evidence = []
+            upstream_observer = EVIDENCE_OBSERVER.get()
+
+            def retain(evaluated_claim, item):
+                evidence.append((evaluated_claim, item))
+                if upstream_observer:
+                    upstream_observer(evaluated_claim, item)
+
+            observer_token = EVIDENCE_OBSERVER.set(retain)
+            try:
+                return run_one(i, claim)
+            except Exception as exc:
+                from .coverage import from_claim
+                evaluated_claim = evidence[-1][0] if evidence else claim
+                scope = for_claim(evaluated_claim, sources)
+                kept = [item for _, item in evidence if not evidence_excluded(item, scope)]
+                vc = judge.assess(evaluated_claim, kept, search_exhausted=True)
+                vc.needs_human = True
+                vc.next_step = f"本条核验发生程序异常（{type(exc).__name__}），可单独复核。"
+                vc.source_notes.append(vc.next_step)
+                say(f"    [{claim.id}] {vc.next_step}")
+                task = coordinator.task_for(claim.id)
+                if task is None:
+                    vc.retrieval_status = "provider_error"
+                    vc.retrieval_summary = from_claim(vc, retrieval_status=vc.retrieval_status,
+                        limitations=[{"code": type(exc).__name__, "message": "核验计划未能建立"}])
+                else:
+                    task.fail(exc)
+                    vc.verification_agent = task.finish(vc)
+                return vc
+            finally:
+                EVIDENCE_OBSERVER.reset(observer_token)
+                READ_DEADLINE.reset(deadline_token)
 
     # 先核对本科，再核对硕士/博士就读及入学路径，最后独立核对奖项等条目。
     # 每个阶段内部仍并行，报告维持输入原顺序；本科无公开证据不会阻止独立核对研究生。
     by_id = {}
-    for label, ready in coordinator.schedule(claims):
-        group = [(i, coordinator.context_for(with_verified_education_context(c, list(by_id.values()))))
-                 for i, c in ready]
-        say(f"[3-5/6] {label}：{len(group)} 条")
-        if workers > 1 and len(group) > 1:
-            say(f"    {len(group)} 条陈述" + ("同时开始检索" if workers >= len(group) else f"并行检索（同时 {workers} 条）"))
-            with ThreadPoolExecutor(max_workers=min(workers, len(group))) as pool:
-                results = [f.result() for f in [pool.submit(verify_one, i, c) for i, c in group]]
-        else:
-            results = [verify_one(i, c) for i, c in group]
-        by_id.update((v.claim.id, v) for v in results)
-        coordinator.record(results)
+    def receive(result):
+        by_id[result.claim.id] = result
+        coordinator.record([result])
+
+    if improved:
+        say(f"[3-5/6] 类别 Agent 协作核验，同步处理最多 {workers} 条")
+        def dispatched(claim):
+            coordinator.record_dispatch(claim)
+            return coordinator.context_for(with_verified_education_context(claim, list(by_id.values())))
+
+        ict_pipeline.run_agents(claims, workers, verify_one, receive, dispatched)
+    else:
+        for label, ready in coordinator.schedule(claims):
+            group = [(i, coordinator.context_for(with_verified_education_context(c, list(by_id.values()))))
+                     for i, c in ready]
+            say(f"[3-5/6] {label}：{len(group)} 条")
+            if workers > 1 and len(group) > 1:
+                say(f"    {len(group)} 条陈述" + ("同时开始检索" if workers >= len(group) else f"并行检索（同时 {workers} 条）"))
+                with ThreadPoolExecutor(max_workers=min(workers, len(group))) as pool:
+                    results = [f.result() for f in [pool.submit(verify_one, i, c) for i, c in group]]
+            else:
+                results = [verify_one(i, c) for i, c in group]
+            for result in results:
+                receive(result)
     verified = [by_id[c.id] for c in claims]
 
     # 只在学历条目之间复用对应学段的直接就读/推荐记录，不能跨学位或从奖项借证。

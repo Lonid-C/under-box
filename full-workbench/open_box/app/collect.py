@@ -14,12 +14,13 @@ import re
 import time
 import threading
 from collections import Counter, deque
+from contextvars import ContextVar
 from .usage import UsageExecutor as ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlparse, urlunparse
 
-from . import judge
+from . import ict_pipeline, judge
 from .competitions import (claim_year, claim_level, claim_province, competition_level,
                            provinces_in_text, result_page_metadata, competition_for_claim, competition_page_mismatch,
                            roster_image_links, roster_links, seed_pages, useful_roster_hit)
@@ -44,6 +45,7 @@ from .quota_policy import unlimited, label as limit_label
 
 # 页面正文送进模型前的上限。学校通知页常常带着整站导航，不截断会白烧 token。
 MAX_PAGE_CHARS = 12000
+EVIDENCE_OBSERVER = ContextVar("ict_evidence_observer", default=None)
 
 
 def _worker_count() -> int:
@@ -118,6 +120,7 @@ class Budget:
     robots_skipped: int = 0
     recovery_enabled: bool = field(default_factory=recall_enabled)
     _read_lock: object = field(default_factory=threading.Lock, repr=False, compare=False)
+    relocation_titles: set = field(default_factory=set)
 
     unlimited: bool = field(default_factory=unlimited)
 
@@ -193,7 +196,9 @@ def _url_key(url: str) -> str:
 
 
 def _readable(hit, budget, progress=None):
-    if not budget.recovery_enabled or hit.content:
+    if not budget.recovery_enabled or hit.content or ict_pipeline.enabled():
+        # In the isolated fast reader, the fetcher's per-origin lock also
+        # protects robots lookup. Avoid serial DNS/robots requests in selection.
         return True
     from .search import robots_allows
     if robots_allows(hit.url):
@@ -809,6 +814,10 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     groups: dict[str, list[SearchHit]] = {}
     for hit in selected:
         groups.setdefault(_host_of(hit.url), []).append(hit)
+    from .search import READ_DEADLINE, read_remaining
+    improved = ict_pipeline.enabled()
+    batch_end = (time.monotonic() + min(ict_pipeline.READ_BATCH_SECONDS, max(0, read_remaining() - 5))
+                 if improved else None)
 
     def fetch_group(hits: list[SearchHit]) -> list[tuple[SearchHit, str]]:
         out: list[tuple[SearchHit, str]] = []
@@ -817,8 +826,11 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 budget.exhausted = True
                 break
             try:
-                from .search import READ_DEADLINE
-                token=READ_DEADLINE.set(budget.started+budget.max_seconds if budget and recall_enabled() and not budget.unlimited else None)
+                end = batch_end if improved else (
+                    budget.started + budget.max_seconds if budget and recall_enabled() and not budget.unlimited else None)
+                if improved and not hit.content and time.monotonic() >= end:
+                    break
+                token = READ_DEADLINE.set(end)
                 try:
                     reader = getattr(fetcher, "get_roster", None)
                     html = hit.content or (reader(hit.url, claim) if callable(reader) else fetcher.get(hit.url))
@@ -858,16 +870,32 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             budget.finish_read(hit.url in successful)
     seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
     recovered = []; recovery_attempts = 0
-    if searcher and budget and claim.category in {"学历", "著作", "教学活动"}:
+    migration_category = claim.category in {"学历", "著作", "教学活动"}
+    award_recovery = improved and claim.category in AWARD_CATEGORIES
+    if searcher and budget and (migration_category or award_recovery):
         got = {h.url for h, _ in fetched}
         for old in selected[:4]:
             reason = incomplete.get(old.url) or getattr(fetcher, "failures", {}).get(old.url, "")
             domain = _base_domain(_host_of(old.url))
             title = re.sub(r"\s+", " ", old.title or "").strip()[:160]
-            if (old.url in got or not (re.search(r"\b(?:404|410)\b", reason) or old.url in incomplete)
+            title_key = re.sub(r"[\W_]+", "", title).casefold()
+            official = school_domain(claim_school(claim)) or (school_domains or {}).get(claim_school(claim))
+            snippet = re.sub(r"\s+", "", old.title + " " + old.snippet).casefold()
+            reconnect = bool(improved and official and url_in_domain(old.url, official)
+                             and any(re.sub(r"\s+", "", name).casefold() in snippet
+                                     for name in _name_variants(candidate_name) if len(name.strip()) >= 2)
+                             and re.search(r"连接失败|连接超时|网络不可达|读取超时", reason))
+            if (old.url in got or not (reconnect or migration_category and (
+                    re.search(r"\b(?:404|410)\b", reason) or old.url in incomplete))
                     or not judge.is_school_host(old.url) or len(title) < 6
                     or recovery_attempts >= 2 or not budget.can_search() or not budget.can_read()):
                 continue
+            if reconnect:
+                domain = official
+                key = (domain, title_key)
+                if len(budget.relocation_titles) >= 2 or key in budget.relocation_titles:
+                    continue
+                budget.relocation_titles.add(key)
             recovery_attempts += 1
             budget.note_search()
             if progress: progress(f"    原链接失效，按原标题查同校新地址：{title} · {domain}")
@@ -876,9 +904,16 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             except SearchFiltered:
                 if progress: progress("    原标题补查被搜索服务过滤，保留读取失败状态")
                 continue
+            except SearchUnavailable as exc:
+                if not improved:
+                    raise
+                if progress: progress(f"    同校替代入口搜索失败（{type(exc).__name__}）")
+                continue
             for new in replacements:
                 if (not url_in_domain(new.url, domain) or excluded(new.url, sources, new.publisher)
                         or _url_key(new.url) in seen_urls): continue
+                if reconnect and _host_of(new.url) == _host_of(old.url):
+                    continue
                 # 需要同一公告题名，或本条明确书名；没有靠摘要换地址的猜测。
                 key = re.sub(r"[^\w\u3400-\u9fff]", "", title).casefold()
                 blob = re.sub(r"[^\w\u3400-\u9fff]", "", new.title + new.snippet).casefold()
@@ -987,6 +1022,8 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                     if ev.source_tier == "A":
                         ev.source_tier = "B"
                 evidences.append(ev)
+                if observer := EVIDENCE_OBSERVER.get():
+                    observer(claim, ev)
                 record_decision('通过证据抽取与身份范围校验',hit.url,state='retained')
         else:
             record_decision('正文缺少本人或团队身份锚点，目录仅跟进附件',hit.url)
@@ -1141,6 +1178,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
                               candidate_name=candidate_name, school_domains=school_domains)
         if ev:
             evidences.append(ev)
+            if observer := EVIDENCE_OBSERVER.get():
+                observer(claim, ev)
 
     pending = deque(queries)
     attempted: set[tuple] = set()
@@ -1214,6 +1253,8 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
 
     def read_batch(limit):
         selected = []
+        if ict_pipeline.enabled():
+            limit = min(limit, ict_pipeline.FIRST_READ_BATCH)
         # 大批回读先留两个原有读页名额，以便真正读取公告迁移后的地址。
         # 首批仍照常读取；未用掉的预留名额由最后的 read_batch 消化。
         if limit > 4 and claim.category in {"学历", "著作", "教学活动"} and budget.can_search():

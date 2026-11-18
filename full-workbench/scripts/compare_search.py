@@ -79,6 +79,7 @@ def split_sections(text):
 
 def prepare(args):
     live_environment(Path(args.output).parent)
+    os.environ["UNDERBOX_ICT_PIPELINE_NEXT"] = "1" if args.pipeline == "next" else "0"
     from app.pipeline import prepare_resume
     from app.usage import METER
     from app.cost_budget import CostBudget,bind
@@ -121,6 +122,9 @@ def prepare(args):
 
 def worker(args):
     output=Path(args.output);config=live_environment(output)
+    improved = args.pipeline == "next"
+    os.environ["UNDERBOX_ICT_PIPELINE_NEXT"] = "1" if improved else "0"
+    config["pipeline"] = args.pipeline
     from app import collect,pipeline
     from app.data_sources import AgentRun
     from app.dual_search_experiment import (Deadline,DualSearchExperiment,
@@ -130,7 +134,7 @@ def worker(args):
     from app.schema import Claim,VerifiedClaim,InputRisk
     from app.parse import ParsedDocument
     from app.strategy import ResumeProfile
-    from app.search import build_searcher,PageFetcher
+    from app.search import build_searcher,PageFetcher,read_remaining
     from app.usage import METER
     raw=Path(args.input).read_bytes();snapshot=json.loads(raw)
     claims=[Claim.model_validate(c) for c in snapshot['claims']]
@@ -156,7 +160,7 @@ def worker(args):
             if c.id in finished:
                 vc=VerifiedClaim.model_validate(finished[c.id])
                 execution=(vc.verification_agent or {}).get('sourceAccess',{}).get('execution',{})
-                if execution.get('state')=='time_limited':
+                if not improved and execution.get('state')=='time_limited':
                     vc.retrieval_status='timeout';vc.needs_human=True
                     vc.next_step='整份核验达到15分钟总时限；保留已有证据，未覆盖要素因超时停止。'
             else:
@@ -168,12 +172,16 @@ def worker(args):
                 else:vc=pipeline.judge.assess(c,[],search_exhausted=True)
                 vc.retrieval_status='timeout' if expired else 'partial' if c.id in run_stats else 'not_attempted'
                 vc.needs_human=True
-                vc.next_step=('整份核验已达到15分钟总时限，停止新增调用；已有证据保留，未完成事项不能解释为没有公开记录。'
-                    if expired else '后台对照测试正在运行，当前只是中间快照。')
+                if expired:
+                    vc.next_step = ('整份核验达到总时限，本条尚未启动。' if c.id not in run_stats
+                                    else '整份核验达到总时限，本条已停止查询或读取。已取得的证据保留。')
+                else:
+                    vc.next_step = '后台对照测试正在运行，当前只是中间快照。'
                 if c.id in run_stats:vc.verification_agent={'sourceAccess':run_stats[c.id]}
             result.append(vc)
         with METER.bind(scope):usage=METER.snapshot(scope)
         state={'arm':args.arm,'final':final,'timedOut':expired,'completedClaims':len(finished),
+            'startedClaims':len(set(run_stats) | set(finished)), 'notStartedClaims':len(claims)-len(set(run_stats) | set(finished)),
             'runningClaims':len(set(run_stats)-set(finished)),
             'elapsedSeconds':round(max(0,time.time()-started_wall),3),
             'maxSeconds':args.seconds,'startAt':started_wall,'snapshotSha256':hashlib.sha256(raw).hexdigest(),
@@ -200,23 +208,22 @@ def worker(args):
         with lock:completed[vc.claim.id]=vc.model_dump(mode='json')
         checkpoint();return row
     AgentRun.finish=finish_run
-    original_extract=collect.extract_evidence
-    def extract(*a,**kw):
-        deadline.check();ev=original_extract(*a,**kw)
-        if ev:
-            claim=a[0]
-            with lock:
-                row=evidence.setdefault(claim.id,{'claim':claim.model_dump(mode='json'),'items':[]})
-                row['items'].append(ev.model_dump(mode='json'))
-        return ev
-    collect.extract_evidence=extract
+    def retain(claim, ev):
+        with lock:
+            row=evidence.setdefault(claim.id,{'claim':claim.model_dump(mode='json'),'items':[]})
+            row['items'].append(ev.model_dump(mode='json'))
+    collect.EVIDENCE_OBSERVER.set(retain)
 
     # All network calls, including retries/public metadata/robots, check this
     # arm's shared deadline. The supervisor also terminates at the hard cutoff.
     import httpx
     def bounded_network(original,method):
         def call(url,*a,**kw):
-            deadline.check();remaining=max(.01,deadline.remaining());timeout=kw.get('timeout',5)
+            deadline.check()
+            remaining = min(deadline.remaining(), read_remaining()) if improved else deadline.remaining()
+            if remaining <= 0:
+                raise httpx.ReadTimeout("本条或本批读取达到执行时限")
+            timeout=kw.get('timeout',5)
             if isinstance(timeout,httpx.Timeout):
                 kw['timeout']=httpx.Timeout(min(timeout.read or remaining,remaining),
                     connect=min(timeout.connect or remaining,remaining),write=min(timeout.write or remaining,remaining),pool=min(timeout.pool or remaining,remaining))
@@ -246,7 +253,8 @@ def worker(args):
     if args.arm=='dual':
         primary=DualSearchExperiment(primary,model,DeepSeekSearcher(),deadline,trace=trace)
     searcher=DeadlineSearcher(primary,deadline)
-    fetcher=DeadlineFetcher(PageFetcher(),deadline)
+    reader = PageFetcher(timeout=6, connect_timeout=3) if improved else PageFetcher()
+    fetcher=DeadlineFetcher(reader,deadline)
     prepared=pipeline.PreparedResume(resume_path=str(Path(args.input)),
         doc=ParsedDocument(snapshot['text'],[InputRisk.model_validate(r) for r in snapshot['risks']],source='redacted-resume.txt'),
         profile=ResumeProfile.from_dict(snapshot['profile']),name=snapshot['name'],claims=claims,skipped=skipped,llm=model)
@@ -274,10 +282,11 @@ def run(args):
         folder=output/arm;folder.mkdir(mode=0o700,exist_ok=False)
         stream=(folder/'worker.log').open('w');os.chmod(folder/'worker.log',0o600);streams.append(stream)
         command=[sys.executable,__file__,'worker','--arm',arm,'--input',args.input,
-                 '--output',str(folder),'--seconds',str(args.seconds),'--start-at',str(start)]
+                 '--output',str(folder),'--seconds',str(args.seconds),'--start-at',str(start),
+                 '--pipeline',args.pipeline]
         children[arm]=subprocess.Popen(command,stdout=stream,stderr=stream,start_new_session=True)
     private_write(output/'run.json',{'pids':{k:p.pid for k,p in children.items()},'startAt':start,
-        'maxSeconds':args.seconds,'inputSnapshot':str(Path(args.input).resolve()),'sourceRoot':str(ROOT),
+        'maxSeconds':args.seconds,'inputSnapshot':str(Path(args.input).resolve()),'sourceRoot':str(ROOT),'pipeline':args.pipeline,
         'mode':'independent processes, same snapshot and deadline, no production writes/listeners'})
     while any(p.poll() is None for p in children.values()):
         if time.time()>=start+args.seconds:
@@ -301,6 +310,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
     for action in ('prepare','run','worker'):
         p=sub.add_parser(action);p.add_argument('--input',required=True);p.add_argument('--output',required=True)
+        p.add_argument('--pipeline',choices=('next','legacy'),default='next')
         if action=='prepare':p.add_argument('--section-split',action='store_true');p.add_argument('--reuse-profile')
         if action!='prepare':p.add_argument('--seconds',type=float,default=900)
         if action=='worker':p.add_argument('--arm',choices=('single','dual'),required=True);p.add_argument('--start-at',type=float,required=True)

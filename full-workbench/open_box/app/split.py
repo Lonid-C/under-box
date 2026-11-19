@@ -112,7 +112,10 @@ def split_claims(resume_text: str, llm: LLM, *, complete_section=False) -> list[
     if complete_section:
         start = system.index("9. 总数")
         end = system.index("10. **科研成果", start)
-        system = (system[:start] + "9. 覆盖本段全部独立可核验事项。同一赛事不同年份、赛段或奖项各自成条。\n"
+        system = (system[:start] + "9. 覆盖本段全部独立可核验事项。先按工作、项目、奖项、论文等独立事项定位原文，每个事项输出一次。"
+                  "同一事项的摘要、详细摘录及不同要素合在一条，保留最完整的连续原文。"
+                  "奖学金归奖学金，同一奖学金不再另列校内荣誉。一句话含两项独立奖项时分别标明各自名称。"
+                  "同一赛事不同年份、赛段或奖项各自成条；栏目标题和页码不作为陈述。\n"
                   + system[end:])
     if webpage:
         system += """

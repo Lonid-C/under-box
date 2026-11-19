@@ -201,3 +201,64 @@ class PipelineNextTests(unittest.TestCase):
         assert len(outputs) == 3
         assert [row.raw_text for row in results] == [first, last]
         assert [row.id for row in results] == ["c01", "c02"]
+
+    def test_duplicate_model_rows_keep_one_original_and_grounded_fields(self):
+        short = "示例大学学生会担任办公室副部长"
+        full = "2025.06 在" + short + "，负责协调新生活动。"
+        larger = claim("a", "学生工作", full, elements=["职务=办公室副部长"])
+        repeated = claim("b", "学生工作", full, elements=["职责=负责协调新生活动", "职责=虚构职责"])
+        fragment = claim("c", "学生工作", short, elements=["组织=示例大学学生会"])
+        heading = claim("d", "项目", "项目经历")
+        fake = Mock()
+        fake.complete_json.return_value = {"claims": [r.model_dump() for r in (fragment, larger, repeated, heading)]}
+        log = []
+        results = ict_pipeline.split_resume("项目经历\n" + full, fake, progress=log.append)
+        assert [item.raw_text for item in results] == [full]
+        assert set(results[0].elements) == {"职务=办公室副部长", "职责=负责协调新生活动", "组织=示例大学学生会"}
+        assert "合并 2 条" in log[0]
+
+    def test_same_sentence_keeps_distinct_honor_but_normalizes_duplicate_scholarship(self):
+        text = "2025年获示例大学「示例奖学金」及优秀志愿者称号。"
+        scholarship = claim("a", "奖学金", text, elements=["奖项=示例奖学金", "学校=示例大学"])
+        duplicate = claim("b", "校内荣誉", text, elements=["荣誉=示例奖学金"])
+        honor = claim("c", "校内荣誉", text, elements=["荣誉=优秀志愿者"])
+        fake = Mock()
+        fake.complete_json.return_value = {"claims": [r.model_dump() for r in (duplicate, scholarship, honor)]}
+        results = ict_pipeline.split_resume(text, fake)
+        assert [(item.category, item.elements[0]) for item in results] == [
+            ("奖学金", "奖项=示例奖学金"), ("校内荣誉", "荣誉=优秀志愿者")
+        ]
+        assert [item.raw_text for item in results] == [text, text]
+
+    def test_competition_year_stage_and_award_disambiguate_shared_original(self):
+        text = "示例挑战赛：2024校赛三等奖，2025校赛二等奖，2025省赛一等奖，2025省赛优秀奖。"
+        scopes = [("2024", "校赛", "三等奖"), ("2025", "校赛", "二等奖"),
+                  ("2025", "省赛", "一等奖"), ("2025", "省赛", "优秀奖")]
+        rows = [claim(str(i), "竞赛", text, elements=["赛事=示例挑战赛", "年份="+year, "赛级="+level,
+                                                    "奖级="+award]) for i, (year, level, award) in enumerate(scopes)]
+        fake = Mock()
+        fake.complete_json.return_value = {"claims": [r.model_dump() for r in rows]}
+        assert [row.elements for row in ict_pipeline.split_resume(text, fake)] == [row.elements for row in rows]
+
+    def test_long_split_matches_repeated_paper_by_doi_and_preserves_other_works(self):
+        first = '研究说明收录《示例论文甲》，DOI 10.1234/synthetic.one'
+        paper = '正式出版《示例论文甲》，DOI 10.1234/synthetic.one，刊物示例期刊。'
+        different = '正式出版《示例论文乙》，DOI 10.1234/synthetic.two。'
+        raw = f"科研成果\n{first}\n" + "测试填充。\n" * 420 + f"发表论文\n{paper}\n{different}"
+        items = [claim(str(i), "论文", text, elements=[f"论文标题=示例论文{label}"])
+                 for i, (text, label) in enumerate(((first, "甲"), (paper, "甲"), (different, "乙")))]
+        fake = Mock()
+        fake.complete_json.side_effect = lambda _, prompt, **kw: {
+            "claims": [item.model_dump() for item in items if item.raw_text in prompt]
+        }
+        results = ict_pipeline.split_resume(raw, fake)
+        assert [item.raw_text for item in results] == [paper, different]
+        assert fake.complete_json.call_count == 2
+
+    def test_separate_degrees_same_school_are_not_duplicates(self):
+        text = "示例大学2018年就读本科，2022年继续就读硕士。"
+        fake = Mock()
+        items = [claim(str(i), "学历", text, elements=["学校=示例大学", "学段=" + stage])
+                 for i, stage in enumerate(("本科", "硕士"))]
+        fake.complete_json.return_value = {"claims": [row.model_dump() for row in items]}
+        assert [row.elements for row in ict_pipeline.split_resume(text, fake)] == [row.elements for row in items]

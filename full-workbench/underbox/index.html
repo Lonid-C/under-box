@@ -3223,10 +3223,34 @@ const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileTy
 
 function blockOf(c) { return BLOCKS.find(b => b.cats.includes(c.category)) || { name: '其他', cats: [], why: '' }; }
 function claimSummary(c) {
+  const values = Object.fromEntries((c.elements || []).flatMap(element => {
+    const match = /^([^=：:]+)[=：:]\s*(.+)$/.exec(element);
+    return match ? [[match[1].trim(), match[2].trim()]] : [];
+  }));
   if (c.category === '著作') {
-    const values = Object.fromEntries((c.elements || []).filter(e => e.includes('=')).map(e => [e.slice(0, e.indexOf('=')), e.slice(e.indexOf('=') + 1)]));
     if (values['书名']) return `《${values['书名']}》${values['角色'] ? ' · ' + values['角色'] : ''}`;
     if (values['出版数量']) return `出版总量：${values['出版数量']}`;
+  }
+  const labels = {
+    '校内荣誉': ['荣誉', '荣誉名称', '奖项', '奖项名称'],
+    '奖学金': ['奖学金', '奖项', '奖项名称', '荣誉'],
+    '竞赛': ['赛事', '赛事名称', '比赛', '竞赛'],
+    '论文': ['论文标题', '论文题目', '题目'],
+    '专利': ['专利名称', '软件名称']
+  }[c.category];
+  if (labels) {
+    const compact = text => text.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+    const raw = compact(c.rawText || '');
+    const mention = keys => keys.map(k => values[k]).find(value => value && raw.includes(compact(value)));
+    const title = mention(labels);
+    if (title) {
+      const suffix = c.category === '竞赛' ? [
+        mention(['赛段', '赛级', '赛事级别']),
+        mention(['赛道', '组别']),
+        mention(['奖级', '奖项', '获奖级别'])
+      ] : [];
+      return summaryOf([title, ...suffix].filter(Boolean).join(' · '));
+    }
   }
   return summaryOf(c.rawText);
 }

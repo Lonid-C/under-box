@@ -76,6 +76,7 @@ _SECTION = re.compile(
     r"参与项目|项目经历|工作经历|实习经历|Publications|Education|Experience)\s*[:：]?\s*$", re.I
 )
 _LIST_START = re.compile(r"^\s*(?:\[\d+\]|\d+[.)、](?=\s|[\u3400-\u9fff])|[-•]\s)")
+_PAGE_LABEL = re.compile(r"^第\s*\d+\s*页$")
 
 
 def resume_sections(text):
@@ -94,17 +95,24 @@ def resume_sections(text):
     return chunks
 
 
-def split_resume(text, llm):
+def split_resume(text, llm, *, progress=None):
     from .split import split_claims
+    from .split_dedup import consolidate
 
     sections = resume_sections(text) if len(text) >= 2400 else [text]
-    results = []
-    seen = set()
-    for section in sections:
+    excerpts = []
+    for index, section in enumerate(sections):
+        if not any(line.strip() and not _SECTION.fullmatch(line.strip()) and not _PAGE_LABEL.fullmatch(line.strip())
+                   for line in section.splitlines()):
+            continue
+        body = re.sub(r"\s+", "", section)
         for claim in split_claims(section, llm, complete_section=True):
-            raw = re.sub(r"\s+", "", claim.raw_text)
-            key = (claim.category, raw, tuple(sorted(set(claim.elements))))
-            if raw and raw in re.sub(r"\s+", "", section) and key not in seen:
-                seen.add(key)
-                results.append(claim.model_copy(update={"id": f"c{len(results) + 1:02d}"}))
+            original = claim.raw_text.strip()
+            if not original or _SECTION.fullmatch(original) or _PAGE_LABEL.fullmatch(original):
+                continue
+            if re.sub(r"\s+", "", original) in body:
+                excerpts.append((claim, index))
+    results = consolidate(excerpts)
+    if progress and len(results) < len(excerpts):
+        progress(f"    已合并 {len(excerpts) - len(results)} 条重复拆分，保留 {len(results)} 条独立事项")
     return results

@@ -153,9 +153,11 @@ def prepare_resume(
         llm = BoundedLLM(llm, _llm_limit())
 
     def _split():
-        split = (ict_pipeline.split_resume if ict_pipeline.enabled()
-                 or os.environ.get('UNDERBOX_ICT_SPLIT_SECTIONS') == '1' else split_claims)
-        return add_competition_school_hints(add_admission_source_hints(split(doc.safe_text, llm)))
+        if ict_pipeline.enabled() or os.environ.get('UNDERBOX_ICT_SPLIT_SECTIONS') == '1':
+            items = ict_pipeline.split_resume(doc.safe_text, llm, progress=say)
+        else:
+            items = split_claims(doc.safe_text, llm)
+        return add_competition_school_hints(add_admission_source_hints(items))
 
     # 2 画像（决定用哪套检索策略）与 3 陈述拆分：两次互不依赖的模型调用，并行时同时发出
     if profile is None and parallel:

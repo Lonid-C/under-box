@@ -57,6 +57,12 @@ assert.match(ctx.renderManualReviewLinks(clue).textContent,/查看其余 1 个�
 assert.match(ctx.renderManualReviewLinks(clue).textContent,/候选公告 <script>/);
 assert.equal(JSON.stringify(clue),savedClue,'rendering possible links must not rewrite saved evidence');
 assert.equal(ctx.renderManualReviewLinks({status:'none'}),null);
+vm.runInContext(html.slice(html.indexOf('function claimSummary('),html.indexOf('function pageOfLocator(')),ctx);
+ctx.summaryOf=value=>value;
+const sharedOriginal='获示例大学示例奖学金及优秀志愿者称号。';
+assert.equal(ctx.claimSummary({category:'奖学金',rawText:sharedOriginal,elements:['奖项=示例奖学金']}),'示例奖学金');
+assert.equal(ctx.claimSummary({category:'校内荣誉',rawText:sharedOriginal,elements:['荣誉：优秀志愿者']}),'优秀志愿者');
+assert.equal(ctx.claimSummary({category:'校内荣誉',rawText:sharedOriginal,elements:['荣誉=虚构奖项']}),sharedOriginal);
 assert.ok(!html.includes('检索未完成'),'UI copy must not reintroduce the ambiguous label');
 console.log('ICT search state, rejection counts and safe text rendering passed');
 const controls=new Map();const byId=id=>{if(!controls.has(id))controls.set(id,{style:{},append(){}});return controls.get(id);};

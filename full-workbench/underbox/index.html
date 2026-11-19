@@ -550,6 +550,7 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
 .status-panel[hidden]{display:none}
 .sp-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid var(--ink);background:var(--cream);flex:none}
 .sp-dot{width:9px;height:9px;border-radius:50%;background:var(--pink);display:block;animation:spPulse 1s infinite}
+#statusDock.waiting .spin,#statusDock.waiting + #statusPanel .sp-dot{background:#BA7517;animation:none}
 #statusDock.done .sp-dot{background:#1D9E75;animation:none}
 #statusDock.failed .sp-dot{background:#D85A30;animation:none}
 .sp-h b{font-size:13px}
@@ -915,6 +916,10 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
         <button class="btn" id="pickGo" type="button" disabled>核验已选条目</button>
       </div>
     </section>
+    <div class="pending" id="resultRecovery" hidden>
+      <p id="recoveryText" aria-live="polite"></p>
+      <button class="ghost" id="recoveryGo" type="button">取回本轮结果</button>
+    </div>
     <div class="pending" id="pending" hidden>正在逐条核验<span class="dots"></span></div>
     <ul class="claims" id="claims" hidden></ul>
     <p class="skip-box" id="skipNote" hidden></p>
@@ -1887,6 +1892,7 @@ function initIntake() {
     fetch('__ICT_BASE__api/query/reset', { method: 'POST' }).catch(() => {});
     StatusDock.clear();
     clearReportView();
+    renderTaskRecovery(null);
     Usage.reset();
     window.__chatReset?.();
     $('tierPanel').hidden = true;
@@ -2822,7 +2828,7 @@ const StatusDock = {
     this.el('spTime').textContent = '';
     this.el('spPillTxt').textContent = '';
     this.el('spFoot').textContent = '';
-    this.el('statusDock').classList.remove('done', 'failed', 'collapsed');
+    this.el('statusDock').classList.remove('done', 'failed', 'waiting', 'collapsed');
     this.el('statusDock').hidden = true;
     this.el('statusPanel').hidden = true;
     this.el('statusPill').hidden = true;
@@ -2830,7 +2836,7 @@ const StatusDock = {
   reset() {
     const dock = this.el('statusDock');
     dock.hidden = false;
-    dock.classList.remove('done', 'failed', 'collapsed');
+    dock.classList.remove('done', 'failed', 'waiting', 'collapsed');
     this.el('spTitle').textContent = '正在核验';
     this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
     const box = this.el('spSteps'); box.innerHTML = '';
@@ -2867,7 +2873,7 @@ const StatusDock = {
   /** 勾选完开始核验：接着之前的日志往下写，计时从这里重新开始。 */
   resume() {
     const dock = this.el('statusDock');
-    dock.classList.remove('done', 'failed');
+    dock.classList.remove('done', 'failed', 'waiting');
     this.el('spTitle').textContent = '正在核验';
     this.el('spFoot').textContent = '日志来自真实流水线，每行都对应后端实际发生的动作。';
     this.started = Date.now();
@@ -2884,6 +2890,7 @@ const StatusDock = {
   },
   done(secs) {
     clearInterval(this.timer);
+    this.el('statusDock').classList.remove('waiting');
     this.el('statusDock').classList.add('done');
     this.el('spTitle').textContent = '核验完成';
     this.el('spTime').textContent = (secs ?? '?') + 's';
@@ -2891,8 +2898,17 @@ const StatusDock = {
     this.stages.forEach((_, i) => this.setStage(i, 'done'));
     this.el('spPillTxt').textContent = '核验完成';
   },
+  pending(message) {
+    clearInterval(this.timer);
+    this.timer = null;
+    this.el('statusDock').classList.add('waiting');
+    this.el('spTitle').textContent = '等待本轮结果';
+    this.el('spPillTxt').textContent = '等待本轮结果';
+    this.el('spFoot').textContent = message;
+  },
   fail(msg) {
     clearInterval(this.timer);
+    this.el('statusDock').classList.remove('waiting');
     this.el('statusDock').classList.add('failed');
     this.el('spTitle').textContent = '核验失败';
     this.el('spTime').textContent = '';
@@ -3047,6 +3063,10 @@ async function sseRequest(url, init, onEv) {
         if (ev.usage) Usage.live(ev.usage, usageTask);
         if (ev.usage && !ev.done) continue;           // 纯用量事件，不进业务回调
         onEv(ev);
+        if (ev.done) {
+          reader.cancel().catch(() => {});
+          return;
+        }
       }
     }
   } finally {
@@ -3371,10 +3391,73 @@ async function runSplit(src) {
 }
 
 /* 第二段：只核验勾选的条目 */
+function showVerificationResult(event) {
+  Steps.all().forEach((_, i) => Steps.set(i, 'done'));
+  Steps.all()[4].querySelector('.t').textContent =
+    `逐条判定 · ${event.report.claims.length} 条 · ${event.seconds}s`;
+  StatusDock.done(event.seconds);
+  applyReport(event.report, { historyId: event.historyId });
+  $('repick').hidden = !PICK.token;
+  renderTaskRecovery(null);
+  bringIntoView($('toolbar'));
+}
+
+let recoverableTask = null;
+function renderTaskRecovery(task, message) {
+  recoverableTask = task;
+  $('resultRecovery').hidden = !task;
+  if (!task) return;
+  const running = task.state === 'running';
+  const created = new Date(task.createdAt * 1000).toLocaleString();
+  $('recoveryText').textContent = message || (running
+    ? `${created} 开始的 ${task.claims} 条核验仍在后台运行。`
+    : `${created} 开始的 ${task.claims} 条核验已在后台完成。`);
+  $('recoveryGo').textContent = running ? '刷新本轮状态' : '取回本轮结果';
+}
+
+async function refreshTaskRecovery() {
+  const epoch = QUERY_EPOCH;
+  const response = await fetch('__ICT_BASE__api/ict/recovery');
+  if (!response.ok) throw new Error('未能读取后台任务状态。');
+  const data = await response.json();
+  if (epoch !== QUERY_EPOCH) return;
+  renderTaskRecovery(data.task);
+  if (data.task) document.body.dataset.stage = 'app';
+}
+
+async function recoverTaskResult() {
+  if (!recoverableTask) return;
+  const epoch = QUERY_EPOCH;
+  const task = recoverableTask;
+  const button = $('recoveryGo');
+  button.disabled = true;
+  try {
+    if (task.state === 'running') {
+      await refreshTaskRecovery();
+      return;
+    }
+    $('recoveryText').textContent = '正在取回本轮结果。';
+    let done = null;
+    await sseRequest('__ICT_BASE__api/ict/recovery', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: task.id }),
+    }, ev => { if (ev.done) done = ev; });
+    if (epoch !== QUERY_EPOCH) return;
+    if (!done?.report || done.failed) throw new Error(done?.error || '连接中断，未收到已保存的报告。');
+    document.body.dataset.stage = 'app';
+    showVerificationResult(done);
+  } catch (err) {
+    if (epoch === QUERY_EPOCH) renderTaskRecovery(task, err.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function runVerify() {
   const epoch = QUERY_EPOCH;
   const ids = PICK.claims.map(c => c.id).filter(id => PICK.selected.has(id));   // 按简历原顺序
   if (!ids.length || !PICK.token) return;
+  renderTaskRecovery(null);
   delete document.body.dataset.picking;
   $('pick').hidden = true;
   $('pending').hidden = false;
@@ -3411,26 +3494,22 @@ async function runVerify() {
     if (epoch !== QUERY_EPOCH) return;
     if (!doneEv) throw new Error('核验流程异常结束（没有收到完成事件）');
     if (doneEv.failed || !doneEv.report) throw new Error(doneEv.error || '核验失败（后端未返回报告）');
-    Steps.all().forEach((_, i) => Steps.set(i, 'done'));
-    Steps.all()[4].querySelector('.t').textContent =
-      `逐条判定 · ${doneEv.report.claims.length} 条 · ${doneEv.seconds}s`;
-    StatusDock.done(doneEv.seconds);
-    applyReport(doneEv.report,{historyId:doneEv.historyId});
-    $('repick').hidden = false;
-    bringIntoView($('toolbar'));
+    showVerificationResult(doneEv);
   } catch (err) {
     if (epoch !== QUERY_EPOCH) return;
-    const retained = /已保留|仍在核验|核验已完成/.test(err.message);
-    retained ? StatusDock.pending(err.message) : StatusDock.fail(err.message);
+    if (doneEv?.recovery) {
+      StatusDock.pending(err.message);
+      $('pending').hidden = true;
+      renderTaskRecovery(doneEv.recovery, err.message);
+      return;
+    }
+    StatusDock.fail(err.message);
     $('pending').hidden = false;
-    $('pending').textContent = `${retained ? '等待本轮结果' : '核验失败'}：${err.message}`;
+    $('pending').textContent = `核验失败：${err.message}`;
     $('pending').style.color = '#712B13';
     if (/过期/.test(err.message)) return;
-    // 服务器复用本轮任务；保留选择，避免把“核验完成但回执未到”误写成核验失败。
-    $('pickLead').textContent = `${retained ? '等待本轮结果' : '本轮未完成'}：${err.message}`;
-    if (!retained) $('pickLead').append(' 已保留勾选，可检查原因后重试。');
+    $('pickLead').textContent = `本轮未完成：${err.message} 已保留勾选，可检查原因后重试。`;
     showPick();
-    if (retained) $('pickGo').textContent = '取回本轮结果';
   }
 }
 
@@ -3489,6 +3568,11 @@ async function activateAccount(user, gate = true) {
   renderQuota();
   await probeMode();
   await restoreReport();
+  if (ACCOUNT) {
+    try {
+      if (!sessionStorage.getItem(`ub-query-ended:${ACCOUNT.id}`)) await refreshTaskRecovery();
+    } catch { /* 后台状态不可读时仍可使用工作台 */ }
+  }
 }
 
 /** 账户条上的配额胶囊与入口按钮。admin 看"管理台"，user 看剩余额度。 */
@@ -3582,12 +3666,12 @@ const Gate = {
     }, 300);
   },
   settle() {
-    document.body.dataset.stage = REPORT ? 'app' : 'hero';
+    document.body.dataset.stage = REPORT || recoverableTask ? 'app' : 'hero';
     runEnter();
   },
   /** 已登录 / 服务端没设口令：直接进落地页，不播拨云（本来就没走登录这一步） */
   skip() {
-    document.body.dataset.stage = REPORT ? 'app' : 'hero';
+    document.body.dataset.stage = REPORT || recoverableTask ? 'app' : 'hero';
     $('dusk').classList.add('done');
     $('gateCard').style.display = 'none';
     runEnter();
@@ -4001,6 +4085,7 @@ $('navClaims').addEventListener('click', () => {
   $('claims').scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
 });
 $('pickGo').addEventListener('click', runVerify);
+$('recoveryGo').addEventListener('click', recoverTaskResult);
 $('repick').addEventListener('click', () => {
   if (!PICK.token) return;
   $('pickLead').textContent = PICK.lead || '';

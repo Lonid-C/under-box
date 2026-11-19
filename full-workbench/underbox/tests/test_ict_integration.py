@@ -219,11 +219,11 @@ class Tests(unittest.TestCase):
     ident=ict.USER.set('alice')
     try:
       t=ict.register(self.prepared(),[REPORT.claims[0].claim.id],{},queue.Queue(),{})
-      t.update(state='completed',done={'report':{'claims':[]}},created=time.monotonic()-ict.TASK_TTL-10,created_at=time.time()-ict.TASK_TTL-10)
+      t.update(state='completed',done={'report':{'claims':[]}},created=time.monotonic()-ict.REPORT_RECOVERY_TTL-10,created_at=time.time()-ict.REPORT_RECOVERY_TTL-10)
       t['flow_lock'].release();ict.release(t)
       ict.persist_ticket(t);ict.cleanup();self.assertIn(t['id'],ict.TICKETS)
       restored=ict.load_ticket(t['scope']);self.assertIsNotNone(restored);self.assertEqual(restored['state'],'completed')
-      t['finished_at']=time.time()-ict.TASK_TTL-1;ict.persist_ticket(t);ict.cleanup();self.assertNotIn(t['id'],ict.TICKETS)
+      t['finished_at']=time.time()-ict.REPORT_RECOVERY_TTL-1;ict.persist_ticket(t);ict.cleanup();self.assertNotIn(t['id'],ict.TICKETS)
     finally:ict.USER.reset(ident)
  def test_unlimited_count_still_rejects_empty_and_invalid_selected_ids(self):
     u=ict.USER.set('alice')
@@ -305,6 +305,31 @@ class Tests(unittest.TestCase):
     self.assertEqual(core.call_count,1);self.assertEqual(cloud.call_count,1);self.assertEqual(first['report'],second['report'])
     with store.connect(self.db) as c:
       self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1);self.assertEqual(c.execute('SELECT COUNT(*) FROM usage_log WHERE ok=1').fetchone()[0],1)
+ def test_finished_report_recovery_after_reload_and_old_one_hour_expiry(self):
+    token=self.prepared();alice=self.login();bob=self.login('bob');route='/api/ict/recovery'
+    with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core:
+      with patch.object(ict.runtime_client,'invoke',side_effect=self.missing_receipt):first=self.verify_request(token,alice)
+      self.assertTrue(first['failed']);task=first['recovery'];self.assertEqual(task['state'],'completed')
+      t=ict.TICKETS[task['id']];t['finished_at']=time.time()-3700;ict.persist_ticket(t)
+      path=ict.journal_path(t['scope']);os.utime(path,(t['finished_at'],t['finished_at']))
+      ict.TICKETS.clear();serve.PREPARED.clear();ict.cleanup()
+      self.assertTrue(path.exists())
+      self.assertEqual(self.request(route)[0],401)
+      self.assertIsNone(json.loads(self.request(route,cookie=bob)[2])['task'])
+      self.assertEqual(self.request(route,{'taskId':task['id']},bob)[0],404)
+      found=json.loads(self.request(route,cookie=alice)[2])['task'];self.assertEqual(found,task)
+      with patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok) as cloud:
+        for _ in range(2):
+          code,_,raw=self.request(route,{'taskId':task['id']},alice)
+          self.assertEqual(code,200)
+          done=next(json.loads(line[6:]) for line in raw.decode().splitlines() if line.startswith('data: ') and json.loads(line[6:]).get('done'))
+          self.assertFalse(done.get('failed'));self.assertEqual(done['usage']['deepseek']['calls'],1)
+        self.assertEqual(cloud.call_count,1)
+        self.assertEqual(json.loads(cloud.call_args.args[0].split('\n',1)[1]),{'action':'status','job_id':task['id']})
+      self.assertEqual(core.call_count,1)
+      self.assertIsNone(json.loads(self.request(route,cookie=alice)[2])['task'])
+      with store.connect(self.db) as c:
+        self.assertEqual(len(store.list_reports(c,'alice')),1);self.assertEqual(store.get_user(c,'alice')['quota_used'],1)
  def test_unstarted_cloud_failure_cannot_shadow_successful_replacement(self):
     token=self.prepared();cookie=self.login()
     with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core) as core,patch.object(ict.runtime_client,'invoke',side_effect=[urllib.error.HTTPError('https://example.invalid',503,'synthetic_unavailable',{},None)]):
@@ -381,7 +406,7 @@ class Tests(unittest.TestCase):
  def test_expired_completed_journal_is_not_reused(self):
     token=self.prepared();cookie=self.login()
     with patch.object(ict,'ORIGINAL_VERIFY',side_effect=fake_core),patch.object(ict.runtime_client,'invoke',side_effect=cloud_ok):self.verify_request(token,cookie)
-    path=next((self.db.parent/'ict-tasks').glob('*.json'));data=json.loads(path.read_text());data['created_at']=data['finished_at']=time.time()-ict.TASK_TTL-1;path.write_text(json.dumps(data));ict.TICKETS.clear();serve.PREPARED.clear()
+    path=next((self.db.parent/'ict-tasks').glob('*.json'));data=json.loads(path.read_text());data['created_at']=data['finished_at']=time.time()-ict.REPORT_RECOVERY_TTL-1;path.write_text(json.dumps(data));ict.TICKETS.clear();serve.PREPARED.clear()
     code,_,_=self.request('/api/verify/stream',{'token':token,'claimIds':[REPORT.claims[0].claim.id]},cookie,{'X-Underbox-Consent':'1'})
     self.assertEqual(code,404);self.assertFalse(path.exists())
  def test_no_tool_execution_cannot_become_complete(self):

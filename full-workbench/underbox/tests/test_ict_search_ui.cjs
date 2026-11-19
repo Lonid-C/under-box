@@ -39,5 +39,22 @@ console.log('ICT search state, rejection counts and safe text rendering passed')
 const controls=new Map();const byId=id=>{if(!controls.has(id))controls.set(id,{style:{},append(){}});return controls.get(id);};
 let requests=0,rendered=null;
 Object.assign(ctx,{QUERY_EPOCH:1,PICK:{token:'synthetic-split',claims:Array.from({length:14},(_,i)=>({id:'c'+i})),selected:new Set(Array.from({length:14},(_,i)=>'c'+i))},window:{},document:{body:{dataset:{picking:true}}},$:byId,bringIntoView(){},alert(){throw Error('item-count cap must not interrupt submit');},showPick(){throw Error('unexpected verification failure');},Steps:{set(){},all:()=>Array.from({length:5},()=>({querySelector:()=>({})}))},StatusDock:{resume(){},progress(){},open(){},done(){},fail(message){throw Error(message);}},applyReport(report){rendered=report;},async sseRequest(url,init,callback){requests++;const body=JSON.parse(init.body);assert.equal(body.claimIds.length,14);assert.deepEqual(body.claimIds,Array.from({length:14},(_,i)=>'c'+i));callback({done:true,report:{claims:body.claimIds},seconds:.1});}});
-vm.runInContext(html.slice(html.indexOf('async function runVerify()'),html.indexOf('/* 只有风险清单',html.indexOf('async function runVerify()'))),ctx);
-(async()=>{await ctx.runVerify();assert.equal(requests,1);assert.equal(rendered.claims.length,14);ctx.PICK.selected.clear();await ctx.runVerify();assert.equal(requests,1);console.log('ICT 14-item submission and empty-selection guard passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+vm.runInContext(html.slice(html.indexOf('function showVerificationResult('),html.indexOf('/* 只有风险清单',html.indexOf('async function runVerify()'))),ctx);
+(async()=>{
+ await ctx.runVerify();assert.equal(requests,1);assert.equal(rendered.claims.length,14);
+ ctx.PICK.selected.clear();await ctx.runVerify();assert.equal(requests,1);
+ const task={id:'wb_synthetic',state:'completed',claims:1,createdAt:1};
+ ctx.PICK.selected.add('c0');
+ const paths=[];let pending;
+ ctx.StatusDock.pending=message=>{pending=message;};
+ ctx.sseRequest=async(url,init,onEvent)=>{
+  paths.push(url);
+  if(paths.length===1)onEvent({done:true,failed:true,error:'回执暂未确认',recovery:task});
+  else{assert.deepEqual(JSON.parse(init.body),{taskId:task.id});onEvent({done:true,report:{claims:['c0']},seconds:1});}
+ };
+ await ctx.runVerify();assert.equal(pending,'回执暂未确认');assert.equal(byId('pending').hidden,true);
+ assert.equal(byId('resultRecovery').hidden,false);assert.equal(byId('recoveryGo').textContent,'取回本轮结果');
+ await ctx.recoverTaskResult();assert.deepEqual(paths,['__ICT_BASE__api/verify/stream','__ICT_BASE__api/ict/recovery']);
+ assert.equal(byId('resultRecovery').hidden,true);assert.equal(rendered.claims.length,1);
+ console.log('ICT verification selection and receipt-only recovery passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});

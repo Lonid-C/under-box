@@ -10,12 +10,17 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261118.2'
+VERSION='ict-full-20261118.3'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
 BASE_MARKER='__ICT_BASE__'
 TASK_TTL=3600
+REPORT_RECOVERY_TTL=86400
+
+def ticket_expired(ticket,now):
+    ttl=REPORT_RECOVERY_TTL if ticket['state']=='completed' else TASK_TTL
+    return now-(ticket.get('finished_at') or ticket['created_at'])>ttl
 
 def scope_key(token,ids,materials):
     return hashlib.sha256(canonical([USER.get(),token,sorted(set(ids)),materials])).hexdigest()
@@ -26,6 +31,10 @@ def journal_path(key):
     directory=Path(db).parent/'ict-tasks'
     directory.mkdir(mode=0o700,parents=True,exist_ok=True)
     return directory/(key+'.json')
+
+def read_journal(path):
+    try:return json.loads(path.read_text())
+    except (OSError,ValueError):return None
 
 def persist_ticket(t):
     """Private crash recovery; never place resume/report content in process logs."""
@@ -51,7 +60,7 @@ def load_ticket(key):
     data=json.loads(path.read_text())
     if data.get('scope')!=key or data.get('owner')!=USER.get():raise ValueError('核验任务不属于当前账户。')
     age=time.time()-data['created_at']
-    if data['state'] != 'running' and time.time()-(data.get('finished_at') or data['created_at'])>TASK_TTL:
+    if data['state'] != 'running' and ticket_expired(data,time.time()):
         path.unlink();return None
     from app.schema import Report
     from app.strategy import ResumeProfile
@@ -91,11 +100,10 @@ def receipt_for(ticket):
             'notice':'完整报告保留在工作台，仅供人工复核；无证据不表示经历不实。'}
 
 def cleanup():
-    now=time.monotonic()
+    now=time.time()
     for key in list(TICKETS):
         t=TICKETS[key]
-        expired=time.time()-t['finished_at']>TASK_TTL if t.get('finished_at') else now-t['created']>TASK_TTL
-        if expired and t['state'] not in ('running',) and not t['flow_lock'].locked():
+        if t['state']!='running' and ticket_expired(t,now) and not t['flow_lock'].locked():
             TICKETS.pop(key,None)
             path=journal_path(t['scope'])
             if path:path.unlink(missing_ok=True)
@@ -103,7 +111,36 @@ def cleanup():
     if path:
         active={t['scope'] for t in TICKETS.values()}
         for saved in path.parent.glob('*.json'):
-            if saved.stem not in active and time.time()-saved.stat().st_mtime>TASK_TTL:saved.unlink(missing_ok=True)
+            if saved.stem in active or now-saved.stat().st_mtime<=TASK_TTL:continue
+            data=read_journal(saved)
+            if data and ticket_expired(data,now):saved.unlink(missing_ok=True)
+
+def recovery_summary(ticket):
+    report=(ticket.get('done') or {}).get('report') or {}
+    return {'id':ticket['id'],'state':ticket['state'],'createdAt':ticket['created_at'],
+            'claims':len(report.get('claims') or ticket.get('ids') or [])}
+
+def find_recovery(owner,request_id=None):
+    """Find only this account's started jobs. Disk-only running jobs are interrupted."""
+    import store
+    now=time.time()
+    with LOCK:
+        tickets={t['id']:t for t in TICKETS.values() if t['owner']==owner}
+        path=journal_path('_recovery')
+        if path:
+            for saved in path.parent.glob('*.json'):
+                data=read_journal(saved)
+                if data and data.get('owner')==owner and data.get('scope')==saved.stem and data['state']=='completed':
+                    tickets.setdefault(data['id'],data)
+    for t in sorted(tickets.values(),key=lambda t:t['created_at'],reverse=True):
+        if request_id is not None and t['id']!=request_id:continue
+        if t['state']=='running':return t
+        if t['state']!='completed' or ticket_expired(t,now):continue
+        if request_id is None and t.get('verified'):
+            with store.connect(os.environ['UNDERBOX_DB']) as conn:
+                if conn.execute('SELECT 1 FROM meta WHERE key=?',('ict-task-final:'+t['id'],)).fetchone():continue
+        return t
+    return None
 
 def register(token,ids,materials,events,holder):
     if not ids:raise ValueError('请至少选择1项。')
@@ -334,9 +371,27 @@ def cloud_roundtrip(t):
     raise RuntimeError('platform_receipt_missing_or_changed')
 
 def verify_selected(token,ids,events,holder,*,materials=None):
+    verify_ticket(lambda:register(token,ids,materials,events,holder),events,holder)
+
+def recover_report(request_id,events,holder):
+    def acquire():
+        with LOCK:
+            t=find_recovery(USER.get(),request_id)
+            if t is None:raise ValueError('本轮结果已过期或当前账户无法访问。')
+            if t['state']!='completed':raise ValueError('后台仍在核验，请稍后刷新本轮状态。')
+            if t['id'] not in TICKETS:
+                t=load_ticket(t['scope'])
+                if t is None:raise ValueError('本轮结果已过期。')
+                TICKETS[t['id']]=t
+            if not t['flow_lock'].acquire(blocking=False):raise ValueError('本轮已有请求正在取回结果。')
+            t['events']=events
+            return t
+    verify_ticket(acquire,events,holder)
+
+def verify_ticket(acquire,events,holder):
     started=time.monotonic();ticket=None
     try:
-        ticket=register(token,ids,materials,events,holder)
+        ticket=acquire()
         if ticket.get('verified'):message='本轮报告已有匹配回执，正在恢复已保存结果；不重复核验或调用云端。'
         elif ticket['state'] in ('running','completed'):message='正在通过 AgentArts 查询已保留的本轮任务，不重新提交简历。'
         else:message='已确认核验范围，正在请求华为云 AgentArts 编排。'
@@ -344,7 +399,7 @@ def verify_selected(token,ids,events,holder,*,materials=None):
         from app.cost_budget import bind
         with bind(ticket.get('cost_budget')):info=cloud_roundtrip(ticket)
         holder.update(ticket['holder'])
-        event=dict(ticket['done']);event['seconds']=round(time.monotonic()-started,1);event['_ict_request']=ticket['id']
+        event=dict(ticket['done']);event['seconds']=round(ticket.get('seconds') or time.monotonic()-started,1);event['_ict_request']=ticket['id']
         event['report']={**event['report'],'agentarts':info,'edition':'huawei-ict'}
         if ticket.get('cost_budget'):
             event['costBudget']=ticket['cost_budget'].snapshot()
@@ -357,11 +412,14 @@ def verify_selected(token,ids,events,holder,*,materials=None):
         codes={'iam_not_configured':'IAM配置缺失','platform_failed':'平台执行错误','platform_did_not_start_tool':'平台未启动工作台工具','platform_receipt_missing_or_changed':'平台回执缺失或不匹配'}
         code=codes.get(str(exc),type(exc).__name__)
         state=ticket['state'] if ticket else None
-        if state=='completed':message='核验已完成，云端回执暂未确认。结果已保留，可重试获取回执；不会重新核验。'
-        elif state=='running':message='后台仍在核验，任务已保留。稍后重试将继续获取本轮结果，不会重新提交。'
+        if state=='completed':message='核验已完成，AgentArts 回执暂未确认。报告已保留。'
+        elif state=='running':message='后台仍在核验，AgentArts 本轮等待已结束。'
         elif str(exc)=='backend_verification_failed':message=ticket.get('error') or '后台核验未完成，请检查服务状态。'
         else:message=str(exc) if isinstance(exc,ValueError) else 'AgentArts 调用未完成（'+code+'），未自动重复提交。'
-        events.put({'done':True,'failed':True,'error':message,'seconds':round(time.monotonic()-started,1),**({'_ict_task':ticket['id']} if ticket and not ticket.get('unstarted') else {})})
+        event={'done':True,'failed':True,'error':message,'seconds':round(time.monotonic()-started,1)}
+        if ticket and not ticket.get('unstarted'):event['_ict_task']=ticket['id']
+        if state in ('running','completed'):event['recovery']=recovery_summary(ticket)
+        events.put(event)
     finally:
         if ticket:ticket['flow_lock'].release()
         events.put(None)
@@ -426,12 +484,15 @@ def sse(self,target,args,kind=''):
                             entry['owner']=uid
                             if ledger:entry['cost_budget']=ledger
                 if ledger:ev.setdefault('costBudget',ledger.snapshot())
-                ev['usage']=METER.since(base);request_id=ev.pop('_ict_request',None);pending_id=ev.pop('_ict_task',None)
+                request_id=ev.pop('_ict_request',None);pending_id=ev.pop('_ict_task',None)
+                ticket=TICKETS.get(request_id) if request_id else None
+                ev['usage']=(ticket.get('usage') if ticket else None) or METER.since(base)
                 if request_id and kind=='verify' and ev.get('report'):
                     try:ev['historyId']=record_verified_ticket(request_id,ev,uid,holder)
                     except Exception:
                         # Keep the private ticket for a safe retry; never report an unsaved success.
-                        ev={'done':True,'failed':True,'error':'核验结果已保留，但历史记录保存未完成。请重试获取本轮结果，不会重新核验。','usage':ev['usage']}
+                        ev={'done':True,'failed':True,'error':'报告已保留，历史记录保存失败。请取回本轮结果。','usage':ev['usage'],
+                            'recovery':recovery_summary(ticket)}
                         # Existing task snapshot remains attributed once; retry commits report/quota.
                 elif pending_id and kind=='verify':
                     pass  # The retained tool worker owns accounting, including after disconnect.
@@ -526,7 +587,12 @@ def install(engine):
         return False
     def get(self):
         if worker_guard(self):return
-        if self.path.split('?',1)[0] in ('/health','/api/ict/status'):
+        path=self.path.split('?',1)[0]
+        if path=='/api/ict/recovery':
+            if self._deny_api(path):return
+            t=find_recovery(self.uid())
+            return self._json({'task':recovery_summary(t) if t else None})
+        if path in ('/health','/api/ict/status'):
             from app.retrieval_policy import enabled
             from app.cost_budget import enforced
             from app.ict_pipeline import parallel_enabled
@@ -558,7 +624,18 @@ def install(engine):
     old_post=engine.Handler.do_POST
     def post(self):
         if worker_guard(self):return
-        match=re.fullmatch(r'/api/history/(\d+)/activate',self.path.split('?',1)[0])
+        path=self.path.split('?',1)[0]
+        if path=='/api/ict/recovery':
+            if self._deny_api(path):return
+            try:payload=self._read_json()
+            except engine.RequestBodyRejected:return
+            request_id=payload.get('taskId')
+            if not isinstance(request_id,str) or not re.fullmatch(r'wb_[A-Za-z0-9_-]{32}',request_id):
+                return self._json({'error':'缺少有效的本轮任务标识。'},400)
+            if find_recovery(self.uid(),request_id) is None:
+                return self._json({'error':'本轮结果已过期或当前账户无法访问。'},404)
+            return self._sse(recover_report,(request_id,),kind='verify')
+        match=re.fullmatch(r'/api/history/(\d+)/activate',path)
         if match:
             if self._deny_api(self.path.split('?',1)[0]):return
             try:self._read_json()

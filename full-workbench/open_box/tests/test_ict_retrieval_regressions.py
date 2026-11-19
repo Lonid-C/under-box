@@ -180,6 +180,76 @@ class RetrievalRegressionTests(unittest.TestCase):
         self.assertIs(type(build_fetcher()),PageFetcher)
         with patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'0'}):self.assertIsInstance(build_fetcher(),DeepSeekPageFetcher)
 
+    def test_image_only_official_notice_is_a_reviewable_screenshot_lead(self):
+        import base64
+        from types import SimpleNamespace
+        import pymupdf
+        from app import judge
+        from app.collect import Budget, _read_and_extract
+
+        c = claim('学生工作', '清华大学学生会办公室副部长', school='清华大学', org='学生会')
+        c.elements = ['职务=学生会办公室副部长']
+        url = 'https://www.tsinghua.edu.cn/notice'
+        title = '清华大学学生会换届任命公示'
+        snippet = '清华大学 林示例 学生会办公室副部长'
+        with pymupdf.open() as source:
+            page = source.new_page(width=440, height=140)
+            page.insert_text((20, 60), snippet, fontname='china-s', fontsize=19)
+            png = page.get_pixmap().tobytes('png')
+        html = '<main><p>名单如下</p><img src="data:image/png;base64,' + base64.b64encode(png).decode() + '"></main>'
+        model = Mock()
+        model.complete_json.return_value = {'snippet':snippet, 'supports':c.elements, 'publisher':'清华大学'}
+        fetcher = SimpleNamespace(get=Mock(return_value=html))
+        with patch.dict(os.environ, {'UNDERBOX_ICT_SOURCE_REPAIR':'1'}), \
+             patch('app.search.robots_allows',return_value=True), \
+             patch('app.page_screenshot.shutil.which',return_value='/usr/bin/tesseract'), \
+             patch('app.page_screenshot.subprocess.run',return_value=SimpleNamespace(
+                 returncode=0, stdout=snippet.encode())) as ocr:
+            evidence = _read_and_extract(c,[SearchHit(url,title)],fetcher,model,set(),
+                                         candidate_name='林示例',budget=Budget())
+        ocr.assert_called_once()
+        screenshot = ocr.call_args.kwargs['input']
+        self.assertTrue(screenshot.startswith(b'\x89PNG'))
+        self.assertNotEqual(screenshot,png)
+        self.assertEqual([ev.url for ev in evidence],[url])
+        self.assertEqual(evidence[0].source_kind,'official_page_screenshot')
+        self.assertEqual(evidence[0].provenance_state,'ocr_unverified')
+        result = judge.assess(c,evidence)
+        self.assertTrue(result.needs_human)
+        self.assertEqual(result.proved,[])
+
+    def test_screenshot_assets_cannot_load_from_other_origins_or_ignored_pages(self):
+        from app.page_screenshot import _image_bytes, recognize
+        deadline = time.monotonic() + 10
+        url = 'https://www.tsinghua.edu.cn/notice'
+        with patch('httpx.Client') as client, patch('app.search.robots_allows',return_value=False):
+            self.assertEqual(_image_bytes('https://[broken',url,deadline),b'')
+            self.assertEqual(_image_bytes('http://127.0.0.1/hidden.png',url,deadline),b'')
+            self.assertEqual(_image_bytes('/excluded.png',url,deadline),b'')
+            self.assertFalse(recognize(url,'<main><img src="/notice.png"></main>')[0])
+            self.assertEqual(recognize(url,'<form><input type="password"></form><img src="/notice.png">'),('',''))
+        client.assert_not_called()
+
+    def test_screenshot_prioritizes_roster_and_preserves_readable_partial_result(self):
+        import subprocess
+        from app.page_screenshot import recognize
+        html = (
+            '<article><p><img src="/activity.png"></p><p>结果名单见下图</p>'
+            '<p><img src="/roster.png"></p></article>'
+        )
+        summary = '2025 示例获奖名单'
+        ocr_results = [subprocess.CompletedProcess([], 0, summary.encode()),
+                       subprocess.TimeoutExpired("tesseract", 1)]
+        with patch('app.search.robots_allows',return_value=True), \
+             patch('app.page_screenshot.shutil.which',return_value='/usr/bin/tesseract'), \
+             patch('app.page_screenshot._image_bytes',return_value=b'synthetic image') as fetch, \
+             patch('app.page_screenshot._screenshots',return_value=[b'synthetic screenshot']), \
+             patch('app.page_screenshot.subprocess.run',side_effect=ocr_results):
+            text, reason = recognize('https://www.tsinghua.edu.cn/notice', html)
+        self.assertEqual([call.args[0] for call in fetch.call_args_list], ['/roster.png', '/activity.png'])
+        self.assertEqual(text, summary)
+        self.assertEqual(reason, '')
+
     def test_cached_failed_host_skips_lock_robots_and_network(self):
         fetcher=PageFetcher();fetcher.dead_hosts['failed.example']='连接失败'
         with patch.object(fetcher,'_host_lock',side_effect=AssertionError('must not wait')),patch('httpx.get') as network:

@@ -397,7 +397,9 @@ def verify_prepared(
                 vc.source_notes.append('本条允许对应学校（' + '、'.join(allowed) + '）证明本人在本校就读/获本校荣誉；仍核对学段、年份、奖项及本人身份，输入主页不能自证，不能借此证明其他经历。')
             else:
                 vc.source_notes.append('本条从第三方取证，已排除现任机构/当前就读学校（' + '、'.join(current_orgs) + '）的官网、子站及可识别的官方发布主体；这些机构的材料不用于证明本条陈述。')
-        if any(e.extraction_method == "ocr" for e in evidences):
+        if any(e.source_kind == "official_page_screenshot" for e in evidences):
+            vc.source_notes.append("官网截图 OCR 命中了可能对应的记录。请打开原网页图片复核姓名、项目和奖项。")
+        if any(e.extraction_method == "ocr" and e.source_kind != "official_page_screenshot" for e in evidences):
             vc.source_notes.append("已读取官方名单图片的OCR文本；姓名、奖级及合并单元格可能识别错位，需人工核对原图，不能仅据OCR升级为已证实。")
         if any(e.extraction_method == "search_snippet" for e in evidences):
             vc.source_notes.append("部分原文访问失败，仅保留搜索引擎收录的本人摘要作为线索；未回读原文的摘要不能单独完成核验。")

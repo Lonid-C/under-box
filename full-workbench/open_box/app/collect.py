@@ -259,7 +259,8 @@ def _focus_text(text: str, claim: Claim, candidate_name: str) -> str:
 def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
                      *, organizer_hosts: set[str] | None = None,
                      candidate_provided: bool = False, candidate_name: str = "",
-                     school_domains: dict[str, str] | None = None) -> Evidence | None:
+                     school_domains: dict[str, str] | None = None,
+                     extraction_method: str = "text") -> Evidence | None:
     """让模型逐字摘录，然后由规则定级和打身份分。模型不参与任何判定。"""
     from .source_guard import excluded, claim_sources
     from .person_scope import check_person, validated_signals
@@ -500,7 +501,7 @@ def extract_evidence(claim: Claim, hit: SearchHit, page_text: str, llm: LLM,
             supports=supports,
             contradicts=contradicts,
             origin_url=origin_url,
-            extraction_method="ocr" if "名单图片OCR识别" in (hit.title or "") else "text",
+            extraction_method="ocr" if "名单图片OCR识别" in (hit.title or "") else extraction_method,
         )
     except Exception:
         # 兜底：单条证据不合规就丢弃，不让一个脏字段毁掉整份报告。
@@ -1108,19 +1109,24 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                     check = author_match(claim, paper_record(hit))
             if not check.allowed:
                 record_decision("论文登记未采信：" + check.reason, hit.url)
+        ev = None
         if extract_body:
             ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
                                   candidate_name=candidate_name, school_domains=school_domains)
-            if ev:
-                if hit.url in snippet_urls:
-                    ev.extraction_method = "search_snippet"
-                    from .provenance import mark_unverified
-                    mark_unverified(ev)
-                    if ev.source_tier == "A":
-                        ev.source_tier = "B"
-                evidences.append(ev)
-                if observer := EVIDENCE_OBSERVER.get():
-                    observer(claim, ev)
+        if not ev and hit.url not in snippet_urls and not hit.content and not scanned:
+            ev = _screenshot_evidence(claim, hit, html, llm, follow_budget, candidate_name,
+                                      organizer_hosts, school_domains, progress)
+        if ev:
+            if hit.url in snippet_urls:
+                ev.extraction_method = "search_snippet"
+                from .provenance import mark_unverified
+                mark_unverified(ev)
+                if ev.source_tier == "A":
+                    ev.source_tier = "B"
+            evidences.append(ev)
+            if observer := EVIDENCE_OBSERVER.get():
+                observer(claim, ev)
+            if ev.source_kind != "official_page_screenshot":
                 record_decision('通过证据抽取与身份范围校验',hit.url,state='retained')
         # 栏目 → 当年公告 → 附件，最多两层；赛事可按题目读取多份赛果，共用原读页预算。
         children = []
@@ -1173,6 +1179,53 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             summary = "、".join(f"{r}×{n}" for r, n in reasons.items())
             progress(f"      未读到的原因：{summary}（例：{'；'.join(examples)}）")
     return evidences
+
+
+def _screenshot_evidence(claim, hit, html, llm, budget, candidate_name,
+                         organizer_hosts, school_domains, progress, *, candidate_provided=False):
+    if not repair_sources() or "<" not in html[:2000]:
+        return None
+    school = claim_school(claim)
+    original_school = claim.entities.get("source_school_hint", "")
+    official = set(organizer_hosts)
+    competition = competition_for_claim(claim) or {}
+    official.update(competition.get("official_domains", []))
+    for name in (school, original_school):
+        domain = school_domain(name) or (school_domains or {}).get(name)
+        if domain:
+            official.add(domain)
+    if claim.category == "论文":
+        domain = publication_site(claim.entities.get("venue") or "")
+        if domain:
+            official.add(domain)
+    if not any(url_in_domain(hit.url, domain) for domain in official):
+        return None
+    from .search import read_remaining
+    from .page_screenshot import LABEL, recognize
+    key = ("website_screenshot", _url_key(hit.url))
+    attempts = sum(item[0] == key[0] for item in budget.relocation_titles)
+    remaining = min(budget.max_seconds - budget.elapsed(), read_remaining())
+    if key in budget.relocation_titles or attempts >= 2 or remaining < 4:
+        return None
+    text, reason = recognize(hit.url, html, timeout=remaining)
+    if not text and not reason:
+        return None
+    budget.relocation_titles.add(key)
+    message = f"{LABEL}：{reason}" if reason else f"{LABEL} 已提取内嵌图片文字，继续核对本人和事项"
+    record_decision(message, hit.url, state="navigation")
+    if progress:
+        progress(f"    {message} · {hit.url}")
+    if not text:
+        return None
+    visible_hit = replace(hit, title=f"{hit.title} · {LABEL}".strip(" ·"))
+    ev = extract_evidence(claim, visible_hit, text, llm, organizer_hosts=organizer_hosts,
+                          candidate_provided=candidate_provided, candidate_name=candidate_name,
+                          school_domains=school_domains, extraction_method="ocr")
+    if ev:
+        ev.source_kind = "official_page_screenshot"
+        ev.validation_reasons = ["引文已在本次截图 OCR 文本中定位，需按原网页图片复核"]
+        record_decision("官网截图 OCR 保留为待人工复核的线索", hit.url, state="retained")
+    return ev
 
 
 def _search_resilient(text: str, site: str | None, searcher: Searcher, org: str,
@@ -1275,6 +1328,10 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         ev = extract_evidence(claim, SearchHit(url=url, title=title), text, llm,
                               organizer_hosts=organizer_hosts, candidate_provided=True,
                               candidate_name=candidate_name, school_domains=school_domains)
+        if not ev and not isinstance(html, OCRText):
+            resolved = getattr(fetcher, "resolved_urls", {}).get(url) or url
+            ev = _screenshot_evidence(claim, SearchHit(url=resolved), html, llm, budget, candidate_name,
+                                      organizer_hosts, school_domains, progress, candidate_provided=True)
         if ev:
             evidences.append(ev)
             if observer := EVIDENCE_OBSERVER.get():

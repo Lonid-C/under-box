@@ -22,7 +22,7 @@ for(const malicious of ['javascript:alert(1)','https://www.qcc.com.evil.test/fir
   review.queryUrl=malicious;review.contacts[0].sourceUrl=malicious;
   assert.equal(visit(context.render(review)).filter(n=>n.tag==='a').length,0);
 }
-assert.ok(html.includes("'待人工背调'"));
+assert.ok(html.includes("'实习待核查'"));
 assert.ok(html.includes("cats: ['实习']"));
 console.log('Manual-review renderer: company links, sourced phones, missing-phone fallback, unsafe-link rejection and distinct internship entry passed.');
 

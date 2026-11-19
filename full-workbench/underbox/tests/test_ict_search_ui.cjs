@@ -1,17 +1,19 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
 class Node{constructor(text=''){this.text=String(text);this.children=[];this.handlers={};}addEventListener(k,f){this.handlers[k]=f;}appendChild(n){this.children.push(n);return n;}get textContent(){return this.text+this.children.map(n=>n.textContent).join('');}set textContent(v){this.text=String(v);this.children=[];}set innerHTML(v){if(v===''){this.text='';this.children=[];}else throw Error('untrusted markup');}}
-const ctx={URL,window:{},STATUS:{none:{label:'未找到公开记录'},part:{label:'部分证实'},incomplete:{label:'查询遇到问题'},unsearched:{label:'待补充检索信息'}},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.flat().filter(Boolean).forEach(c=>n.appendChild(c));return n;}};
-vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('function retrievalProblems('),html.indexOf('function detailOf(')),ctx);
+const ctx={URL,window:{},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.flat().filter(Boolean).forEach(c=>n.appendChild(c));return n;}};
+vm.createContext(ctx);
+vm.runInContext(html.slice(html.indexOf('const STATUS = {'),html.indexOf('const TIER_NAME = ')),ctx);
+vm.runInContext(html.slice(html.indexOf('function retrievalProblems('),html.indexOf('function detailOf(')),ctx);
 assert.equal(ctx.retrievalLabel({status:'none',retrievalStatus:'not_started'}),'待补充检索信息');
 assert.equal(ctx.retrievalLabel({status:'none'}),'未找到公开记录');
 assert.equal(ctx.retrievalLabel({status:'none',retrievalStatus:'budget_not_started'}),'当时金额预算不足');
 assert.equal(ctx.retrievalLabel({status:'part',retrievalStatus:'budget_limited'}),'部分证实');
 assert.match(ctx.retrievalEmpty({retrievalStatus:'budget_not_started'}),/当时金额预算不足/);
 assert.match(ctx.retrievalEmpty({retrievalStatus:'time_limited'}),/当时执行时限触发停止/);
-const buckets=new Map();Object.assign(ctx,{REPORT:{claims:[{status:'part',retrievalStatus:'budget_limited'},{status:'none',retrievalStatus:'budget_limited'},{status:'none',retrievalStatus:'budget_not_started'},{status:'none'}]},ORDER:['part','none','incomplete','unsearched'],$:id=>{if(!buckets.has(id))buckets.set(id,new Node());return buckets.get(id);}});
+const buckets=new Map();Object.assign(ctx,{REPORT:{claims:[{status:'part',retrievalStatus:'budget_limited'},{status:'none',retrievalStatus:'budget_limited'},{status:'none',retrievalStatus:'budget_not_started'},{status:'none'},{status:'none',manualReview:{kind:'internship'}}]},$:id=>{if(!buckets.has(id))buckets.set(id,new Node());return buckets.get(id);}});
 vm.runInContext(html.slice(html.indexOf('function buildFilters()'),html.indexOf('function initFilters()')),ctx);ctx.buildFilters();
-assert.match(buckets.get('filters').textContent,/部分证实 1/);assert.match(buckets.get('filters').textContent,/查询遇到问题 2/);assert.match(buckets.get('filters').textContent,/未找到公开记录 1/);
+assert.match(buckets.get('filters').textContent,/部分证实 1/);assert.match(buckets.get('filters').textContent,/查询遇到问题 2/);assert.match(buckets.get('filters').textContent,/未找到公开记录 1/);assert.match(buckets.get('filters').textContent,/实习待核查 1/);
 assert.equal(ctx.retrievalDetails({}),null);
 const c={verificationAgent:{sourceAccess:{queryPlan:{state:'ready',queryCount:2},decisionCounts:{'正文缺少本人锚点':3},decisions:[{reason:'正文缺少本人锚点',reference:'https://example.test/<script>alert(1)</script>'}],decisionsTruncated:true}}};
 const box=ctx.retrievalDetails(c);assert.match(box.textContent,/已生成 2 条查询/);assert.match(box.textContent,/正文缺少本人锚点：3/);assert.match(box.textContent,/逐页记录已达显示上限/);
@@ -59,6 +61,9 @@ assert.equal(JSON.stringify(clue),savedClue,'rendering possible links must not r
 assert.equal(ctx.renderManualReviewLinks({status:'none'}),null);
 vm.runInContext(html.slice(html.indexOf('function claimSummary('),html.indexOf('function pageOfLocator(')),ctx);
 ctx.summaryOf=value=>value;
+const internship={category:'实习',status:'none',rawText:'在示例科技有限公司实习',elements:[]};
+assert.equal(ctx.claimSummary(internship),'实习经历 · 在示例科技有限公司实习');
+assert.equal(ctx.retrievalLabel({...internship,manualReview:{kind:'internship'}}),'实习待核查');
 const sharedOriginal='获示例大学示例奖学金及优秀志愿者称号。';
 assert.equal(ctx.claimSummary({category:'奖学金',rawText:sharedOriginal,elements:['奖项=示例奖学金']}),'示例奖学金');
 assert.equal(ctx.claimSummary({category:'校内荣誉',rawText:sharedOriginal,elements:['荣誉：优秀志愿者']}),'优秀志愿者');

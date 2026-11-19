@@ -39,6 +39,35 @@ class RecoveryRouteTests(unittest.TestCase):
     def test_phone_and_amount_are_not_project_identifiers(self):
         self.assertEqual(identifiers(claim(raw='林示例电话13800000000，经费25000元')),[])
 
+    def test_project_and_group_have_person_and_official_roster_routes(self):
+        c = claim(raw='林示例加入清华大学微纳系统实验室，参与示例微纳传感器项目。',
+                  title='示例微纳传感器项目', research_group='微纳系统实验室')
+        queries = build_plan(c, '林示例').queries
+        self.assertCountEqual([q.text for q in queries if q.source == 'recovery:project_person'],
+                              ['"林示例" "示例微纳传感器项目"', '"林示例" "微纳系统实验室"'])
+        self.assertTrue(any(q.site == 'school' and q.source == 'recovery:project_notice'
+                            and '示例微纳传感器项目' in q.text for q in queries))
+        self.assertTrue(any(q.site == 'school' and q.source == 'recovery:project_roster'
+                            and '微纳系统实验室' in q.text for q in queries))
+
+    def test_project_group_found_in_existing_split_only_when_named(self):
+        c = claim(raw='林示例加入清华大学微纳系统实验室。', research_group='凭空生成的实验室')
+        self.assertTrue(any(q.source == 'recovery:project_person' and '微纳系统实验室' in q.text
+                            for q in build_plan(c, '林示例').queries))
+        c = claim(raw='林示例加入项目组，参加学校科研项目。', research_group='项目组', title='科研项目')
+        self.assertFalse(any(q.source.startswith('recovery:project_')
+                             for q in build_plan(c, '林示例').queries))
+
+    def test_only_matching_official_group_page_follows_generic_member_link(self):
+        c = claim(raw='林示例加入清华大学微纳系统实验室。', research_group='微纳系统实验室')
+        page = SearchHit('https://lab.tsinghua.edu.cn/overview', title='简介')
+        html = ('<html><h1>微纳系统实验室</h1><a href="/members">课题组成员</a>'
+                '<a href="/members.pdf">团队成员</a><a href="/old">2024 年成员名单</a>'
+                '<a href="https://example.org/roster">团队成员</a><a href="/index">首页</a></html>')
+        self.assertEqual([hit.url for hit in school_record_links(html, page, c)],
+                         ['https://lab.tsinghua.edu.cn/members', 'https://lab.tsinghua.edu.cn/members.pdf'])
+        self.assertEqual(school_record_links(html.replace('微纳系统实验室', '其他实验室'), page, c), [])
+
     def test_patent_application_number_is_not_used_as_guessed_publication_url(self):
         c=claim('专利','林示例，一种合成测试方法，CN202510123456.7，申请公开')
         qs=build_plan(c,'林示例').queries

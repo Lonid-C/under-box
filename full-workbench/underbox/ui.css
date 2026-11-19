@@ -52,7 +52,7 @@ body[data-stage="gate"] .hero-journey span{color:#fff;mix-blend-mode:difference}
 .ad-mini i{background:var(--ink-3);border-radius:var(--rad)}
 .plan-q{border-color:var(--ink);font-size:11px}.plan-q .meta{font-size:10px;color:var(--ink-3)}
 .status-dock{z-index:65!important;left:24px;bottom:24px}
-.status-panel{z-index:65;left:24px;bottom:24px;width:min(390px,calc(100vw - 48px));border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow-sm);max-height:min(65vh,600px);overflow:hidden}
+.status-panel{--status-panel-offset:0px;z-index:65;left:24px;bottom:24px;width:min(390px,calc(100vw - 48px));border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow-sm);max-height:min(65vh,600px);overflow:hidden}
 #usageDock{left:24px;bottom:24px;z-index:38}
 #usageDock:not(.collapsed){bottom:83px}
 body[data-stage="gate"] #usageDock{display:none!important}
@@ -237,7 +237,7 @@ body[data-stage="hero"] .chat{border:2px solid var(--ink);box-shadow:var(--shado
  .ub-toasts{top:18px;width:calc(100vw - 32px)}.ub-toast{min-width:0;font-size:11px}
  .ub-tour-card{width:315px;padding:20px}
  #usageDock .u-card{width:200px}
- .status-panel{left:12px!important;right:18px!important;bottom:104px!important;top:auto!important;width:auto;max-height:60svh}
+ .status-panel{--status-panel-offset:80px;left:12px;bottom:104px;width:calc(100vw - 30px);max-height:60svh}
 }
 @media(prefers-reduced-motion:reduce){
  html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}

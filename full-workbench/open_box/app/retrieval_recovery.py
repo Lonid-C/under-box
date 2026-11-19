@@ -45,6 +45,43 @@ def identifiers(claim):
     return list(dict.fromkeys(v.strip() for v in values if re.search(r'\d', v)))
 
 
+def _project_topic(claim, entity_keys, element_keys, original_names=()):
+    raw = _compact(claim.raw_text)
+    values = [claim.entities.get(k) for k in entity_keys]
+    values += [e.partition('=')[2] for e in claim.elements
+               if e.partition('=')[0].strip() in element_keys]
+    values.extend(original_names)
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        value = clean_anchor(value).strip('“”"《》')
+        key = _compact(value)
+        if (3 <= len(key) <= 100 and key in raw and key not in {
+                '项目组', '课题组', '实验室', '研究组', '项目团队', '科研团队',
+                '科研项目', '校级项目', '省级项目', '课题研究', '团队项目',
+                '成员名单', '项目成员', '课题成员', '团队成员', '项目负责人', '项目参与者',
+        }):
+            return value
+    return ''
+
+
+def _compact(value):
+    return re.sub(r'\W', '', value or '').casefold()
+
+
+def _project_topics(claim):
+    project = _project_topic(claim, ('project', 'title'), ('项目名称', '课题名称', '项目', '课题'))
+    # Existing split records may have the group only in the original excerpt.
+    original_groups = re.findall(
+        r'(?:加入\s*[“《]?|(?:所属)?(?:项目组|课题组|实验室|团队)\s*[:：]\s*[“《]?)'
+        r'([^，。；、：,;\n（）()“”《》]{2,50}?(?:项目组|课题组|实验室|研究组|研究团队|科研团队))',
+        claim.raw_text or '')
+    group = _project_topic(claim, ('research_group', 'group', 'lab', 'team'),
+                           ('项目组', '课题组', '团队', '实验室', '所属课题组', '所属实验室', '所属团队'),
+                           original_groups)
+    return project, group
+
+
 def discovery_queries(claim, name, ctx):
     from .strategy import Query
     rows = []
@@ -83,6 +120,20 @@ def discovery_queries(claim, name, ctx):
                     '完整英文姓名只用于发现；身份仍需同篇署名、本人单位及合作者交叉关联，拼音或首字母不能独立证明')
 
     school = clean_anchor(ctx.get('school', ''))
+    if claim.category == '项目':
+        project, group = _project_topics(claim)
+        school_term = f' "{school}"' if school else ''
+        site = 'school' if school else None
+        if name:
+            for topic in dict.fromkeys(filter(None, (project, group))):
+                add(f'"{name}" "{topic}"', 'project_person',
+                    '用姓名与原文项目或课题组全称查同一条人员记录，核对所属单位和任期')
+        if project:
+            add(f'"{project}"{school_term} {ctx.get("year", "")} 公示 名单', 'project_notice',
+                '先找正式立项或结题公示，再读名单及附件，分开核对项目状态和本人角色', site=site)
+        if group or project:
+            add(f'"{group or project}"{school_term} 成员', 'project_roster',
+                '姓名可能只在课题组成员页或名单附件，进入原文核对姓名、归属与时间', site=site)
     if claim.category == '竞赛' and not school:
         from .source_guard import campus_school_hint
         school = clean_anchor(claim.entities.get('school_search_hint', '') or campus_school_hint(claim))
@@ -198,7 +249,15 @@ def school_record_links(html, page, claim, school_domains=None):
     # Common project/award notice headings can abbreviate the full input title.
     topic_terms += [t for t in ('教学改革', '奖学金', '毕业设计', '学生会', '科协')
                     if t in claim.raw_text]
-    if not any(t and t in title for t in topic_terms): return []
+    project_page = False
+    if claim.category == '项目':
+        heading_text = _compact(heading.get_text(' ', strip=True)) if heading else ''
+        page_title = _compact(page.title)
+        project_terms = [*filter(None, _project_topics(claim)), *identifiers(claim)]
+        project_page = any(_compact(term) in heading_text or _compact(term) in page_title
+                           for term in project_terms)
+        topic_terms += project_terms
+    if not project_page and not any(t and t in title for t in topic_terms): return []
     year = re.search(r'(?:19|20)\d{2}', claim.date_start or claim.date_label or '')
     year = year.group() if year else ''
     result = []; seen = set()
@@ -209,7 +268,15 @@ def school_record_links(html, page, claim, school_domains=None):
         document = bool(re.search(r'\.(?:pdf|docx?|xlsx?)(?:$|[?#])', url, re.I) or a.has_attr('pdfsrc'))
         years = set(re.findall(r'(?:19|20)\d{2}', label))
         if year and years and year not in years: continue
-        if not document and not (any(t and t in label for t in topic_terms) and re.search(r'名单|公示|立项|结题|表彰|报道|任命|换届|新闻|参访', label)): continue
-        if document and not (a.has_attr('pdfsrc') or re.search(r'附件|名单|公示|立项|结题|表彰|汇总', label)): continue
+        member_link = project_page and bool(re.fullmatch(
+            r'(?:(?:项目组|课题组|团队|实验室|课题|项目|现任|历届)?成员(?:名单|介绍|一览)?|人员名单|研究团队|团队介绍|(?:lab |team )?members)(?:\.(?:pdf|docx?|xlsx?))?',
+            label.strip(), re.I))
+        if not document and not member_link and not (
+                any(t and t in label for t in topic_terms)
+                and re.search(r'名单|公示|立项|结题|表彰|报道|任命|换届|新闻|参访', label)):
+            continue
+        if document and not member_link and not (
+                a.has_attr('pdfsrc') or re.search(r'附件|名单|公示|立项|结题|表彰|汇总', label)):
+            continue
         seen.add(url);result.append(SearchHit(url, title=title.strip() + ' · ' + (label or 'PDF附件'), publisher=page.publisher))
     return result

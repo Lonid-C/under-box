@@ -554,7 +554,7 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
 .status-pill:hover{background:var(--pink-soft)}
 .status-pill .spin{width:9px;height:9px;border-radius:50%;background:var(--pink);display:block;animation:spPulse 1s infinite}
 @keyframes spPulse{0%,100%{opacity:.25}50%{opacity:1}}
-.status-panel{position:fixed;left:22px;bottom:76px;width:min(400px,calc(100vw - 44px));max-height:min(62vh,640px);display:flex;flex-direction:column;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;z-index:66;animation:chatIn .26s var(--ease) both}
+.status-panel{--status-panel-offset:54px;position:fixed;left:22px;bottom:76px;width:min(400px,calc(100vw - 44px));max-height:min(62vh,640px);display:flex;flex-direction:column;background:var(--paper);border:2px solid var(--ink);border-radius:var(--rad);box-shadow:var(--shadow);overflow:hidden;z-index:66;animation:chatIn .26s var(--ease) both}
 .status-panel[hidden]{display:none}
 .sp-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:2px solid var(--ink);background:var(--cream);flex:none}
 .sp-dot{width:9px;height:9px;border-radius:50%;background:var(--pink);display:block;animation:spPulse 1s infinite}
@@ -585,8 +585,8 @@ body[data-noreport] .navlink{opacity:.4;pointer-events:none}
    所以这里只管光标与"拖的时候别选中文字"。touch-action:none 让手机上
    的拖动不被页面滚动抢走。 */
 .sp-h{cursor:grab;touch-action:none;user-select:none}
-.status-pill{touch-action:none;user-select:none}
-.status-dock.dragging .sp-h,
+.status-pill{cursor:grab;touch-action:none;user-select:none}
+.status-panel.dragging .sp-h,
 .status-dock.dragging .status-pill{cursor:grabbing}
 .status-dock.dragging,
 .status-panel.dragging{user-select:none}
@@ -741,7 +741,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-review-links">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-status-drag">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -1151,10 +1151,11 @@ const STATUS = {
   ask:  {label:'待澄清',        dot:'#D85A30', bg:'#FAECE7', fg:'#712B13'},
   none: {label:'未找到公开记录', dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
   who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
+  internship:{label:'实习待核查',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
   incomplete:{label:'查询遇到问题',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
   unsearched:{label:'待补充检索信息',dot:'#B4B2A9',bg:'#F0EDE6',fg:'#44413A'}
 };
-const ORDER = ['ok','part','ask','none','who','incomplete','unsearched'];
+const ORDER = ['ok','part','ask','internship','none','who','incomplete','unsearched'];
 const TIER_NAME = {A:'A 级 · 官方站点上的公示 / 通知 / 名单', B:'B 级 · 官网人物记录 / 认证主体 / 可追溯原始贡献记录', C:'C 级 · 平台元数据（GitHub / Crossref / ORCID）', D:'D 级 · 判不出更高等级'};
 /* 摘要里不要重复日期：原文逐字保留日期，而旁边已经有日期列。
    多数在行首（`2023.05　…`），但也有在行尾的（c01：`…本科在读　2022.09 — 2026.06`），
@@ -1305,7 +1306,7 @@ function retrievalProblemBrief(c) {
   return issues.slice(0,2).map(p=>p.title+(p.count==null?'':` ${p.count} 次`)).join('；')+(issues.length>2?`；另 ${issues.length-2} 类，展开查看`:'');
 }
 function retrievalLabel(c) {
-  if(c.manualReview?.kind==='internship')return '待人工背调';
+  if(c.manualReview?.kind==='internship')return STATUS.internship.label;
   if(c.status!=='none')return STATUS[c.status].label;
   const issues=retrievalProblems(c);
   if(issues.length)return issues[0].title+(issues.length>1?`等${issues.length}类`:'');
@@ -1314,6 +1315,7 @@ function retrievalLabel(c) {
   return ({not_attempted:'尚未执行检索',not_started:'待补充检索信息'})[c.retrievalStatus] || STATUS[c.status].label;
 }
 function displayStatus(c) {
+  if (c.manualReview?.kind === 'internship') return 'internship';
   return c.status !== 'none' ? c.status : ['budget_not_started','budget_limited','time_limited','partial','provider_error','blocked','timeout','budget_exhausted','canceled'].includes(c.retrievalStatus) ? 'incomplete' : ['not_started','not_attempted'].includes(c.retrievalStatus) ? 'unsearched' : c.status;
 }
 function retrievalEmpty(c) {
@@ -1456,6 +1458,8 @@ function retrievalDetails(c) {
 }
 function detailOf(c) {
   const d = el('div', {class:'detail-scroll', tabindex:'0', role:'region', 'aria-label':'经历核验详情，可上下滚动'});
+  if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
+    el('h4', {text:'实习经历 · 公司信息与人工核查'}), renderManualReview(c.manualReview)));
   const links = renderManualReviewLinks(c);
   if (links) d.appendChild(links);
   d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'简历原文（逐字）'}),
@@ -1497,8 +1501,6 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'主张与修饰语逐项核对'}), checks));
   }
   if (c.githubAudit?.triggered) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'GitHub 贡献核验 · 本条关联范围'}), renderGithubAudit(c.githubAudit)));
-  if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
-    el('h4', {text:'实习人工背调 · 尚未核实本人经历'}), renderManualReview(c.manualReview)));
   if (c.sourceNotes && c.sourceNotes.length) {
     const scope = el('div');
     c.sourceNotes.forEach(note => scope.appendChild(el('div', {class:'hint', text:note})));
@@ -1682,7 +1684,7 @@ function renderManualReview(review) {
     box.appendChild(card);
   }
   if (!(review.contacts || []).length) box.appendChild(el('p', {text:'未取得可核实出处的完整公开电话，请打开企查查入口确认。'}));
-  box.appendChild(el('p', {class:'hint',text:review.note || ''}));
+  if (review.note) box.appendChild(el('p', {class:'hint',text:review.note}));
   if (review.authorizationNotice) box.appendChild(el('p', {class:'hint',text:review.authorizationNotice}));
   (review.limitations || []).forEach(note => box.appendChild(el('p', {class:'hint',text:note})));
   const list = el('ol');
@@ -1735,7 +1737,7 @@ function renderClaims() {
       el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c),title:retrievalProblemText(c) || retrievalLabel(c)}),
       el('span', {class:'dt', text:c.date || '—'}),
       el('span', {class:'ct', text:c.category}),
-      el('span', {class:'tx'}, claimSummary(c), retrievalProblems(c).length ? el('small',{class:'query-problem',text:'查询问题：'+retrievalProblemBrief(c),title:retrievalProblemText(c)}) : null, c.needsHuman ? el('span', {class:'flag', text:'人工复核'}) : null),
+      el('span', {class:'tx'}, claimSummary(c), retrievalProblems(c).length ? el('small',{class:'query-problem',text:'查询问题：'+retrievalProblemBrief(c),title:retrievalProblemText(c)}) : null, c.needsHuman && c.manualReview?.kind !== 'internship' ? el('span', {class:'flag', text:'人工复核'}) : null),
       el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);
@@ -2963,6 +2965,7 @@ const StatusDock = {
     dock.classList.toggle('collapsed', !expand);
     this.el('statusPanel').hidden = !expand;
     this.el('statusPill').hidden = expand;
+    DockDrag.fit();
     if (expand) this.el('spLog').scrollTop = this.el('spLog').scrollHeight;
   },
   setStage(i, state) {
@@ -3024,116 +3027,98 @@ const StatusDock = {
   },
 };
 
-/* ══ 状态窗口可拖动 ═══════════════════════════════
-   抓手是面板标题栏（收起时是那颗胶囊）。
-
-   两个必须一起处理的点：
-   1) dock 与 panel 是**兄弟节点**——panel 不能放进 dock 里，因为 dock 身上有
-      入场动画的 transform，会把后代的 fixed 定位捕获成"相对 dock"。所以拖动
-      要让两者同步位移。
-   2) 拖动中只写 transform（合成层，跟手不掉帧），松手才落到 left/bottom。
-      但 panel 有 animation-fill-mode:both 的入场动画，它会盖住 inline
-      transform，所以开拖前先把 animation 清掉、松手再还回去。
-
-   位置记在 localStorage，刷新后仍在原处；窗口变小/转屏会自动收回可视区。 */
+/* 标题栏与收起后的胶囊共用同一锚点。动画独立使用 transform，
+   拖动直接更新固定位置，展开或转屏后按当前可见元素的尺寸限制位置。 */
 const DockDrag = {
   KEY: 'ub.dockpos.v1',
   PAD: 8,
-  THRESHOLD: 3,                 // 位移小于这么多算"点击"，不算拖
-  gap: 54,                      // 展开面板底边比 dock 多出的一段，启动时从 CSS 读
-  dragging: false, moved: false,
-  sx: 0, sy: 0, sl: 22, sb: 22, l: 22, b: 22,
+  THRESHOLD: 3,
+  l: 22, b: 22, gap: 0,
+  drag: null,
+  suppressPillClick: false,
   dock() { return $('statusDock'); },
   panel() { return $('statusPanel'); },
-  expanded() { return !this.panel().hidden; },
-  /** 当前真正可见的那个，边界按它的尺寸算 */
-  visibleEl() { return this.expanded() ? this.panel() : $('statusPill'); },
-  clampPos(l, b) {
-    const el = this.visibleEl();
-    const w = el.offsetWidth, h = el.offsetHeight;
-    const extra = this.expanded() ? this.gap : 0;     // 面板还要再往上占一段
-    const maxL = Math.max(this.PAD, innerWidth - w - this.PAD);
-    const maxB = Math.max(0, innerHeight - extra - h - this.PAD);
-    return { l: Math.min(Math.max(l, this.PAD), maxL), b: Math.min(Math.max(b, 0), maxB) };
+  bounds() {
+    const panel = this.panel();
+    const visible = panel.hidden ? $('statusPill') : panel;
+    const offset = panel.hidden ? 0 : this.gap;
+    const minB = this.PAD - offset;
+    return {
+      maxL: Math.max(this.PAD, innerWidth - visible.offsetWidth - this.PAD),
+      minB,
+      maxB: Math.max(minB, innerHeight - visible.offsetHeight - this.PAD - offset)
+    };
   },
-  apply(l, b, live) {
-    const d = this.dock(), p = this.panel();
-    if (live) {                                       // 跟手：只动 transform
-      const dx = l - this.sl, dy = this.sb - b;       // 手指向下 = bottom 变小
-      d.style.transform = `translate(${dx}px, ${-dy}px)`;
-      p.style.transform = `translate(${dx}px, ${-dy}px)`;
-    } else {                                          // 落地：写 left/bottom，清掉 transform
-      d.style.transform = p.style.transform = '';
-      d.style.left = l + 'px'; d.style.bottom = b + 'px';
-      p.style.left = l + 'px'; p.style.bottom = (b + this.gap) + 'px';
-    }
-    this.l = l; this.b = b;
+  apply(l, b, bounds = this.bounds()) {
+    this.l = Math.min(Math.max(l, this.PAD), bounds.maxL);
+    this.b = Math.min(Math.max(b, bounds.minB), bounds.maxB);
+    const dock = this.dock(), panel = this.panel();
+    dock.style.left = panel.style.left = this.l + 'px';
+    dock.style.bottom = this.b + 'px';
+    panel.style.bottom = (this.b + this.gap) + 'px';
+  },
+  fit() {
+    this.gap = parseFloat(getComputedStyle(this.panel()).getPropertyValue('--status-panel-offset')) || 0;
+    this.apply(this.l, this.b);
   },
   restore() {
     try {
       const v = JSON.parse(localStorage.getItem(this.KEY) || 'null');
       if (v && Number.isFinite(v.l) && Number.isFinite(v.b)) { this.l = v.l; this.b = v.b; }
     } catch { /* 读不到就用默认位置 */ }
-    const c = this.clampPos(this.l, this.b);
-    this.apply(c.l, c.b, false);
+    this.fit();
   },
   start(e) {
-    if (e.button) return;                             // 只认左键 / 触摸
-    if (e.target.closest('.sp-btn')) return;          // 点"收起"不算拖
-    this.dragging = true;
-    this.moved = false;
-    this.sx = e.clientX; this.sy = e.clientY;
-    const d = this.dock();
-    this.sl = parseFloat(getComputedStyle(d).left) || this.l;
-    this.sb = parseFloat(getComputedStyle(d).bottom) || this.b;
-    this.apply(this.sl, this.sb, false);              // 先固化，之后用 transform 做位移
-    this.panel().style.animation = 'none';            // 否则入场动画会盖住 transform
-    d.classList.add('dragging');
-    this.panel().classList.add('dragging');
-    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 合成事件没有真实 pointerId */ }
-    e.preventDefault();
+    if (this.drag || e.button || e.isPrimary === false || e.target.closest('.sp-btn')) return;
+    this.suppressPillClick = false;
+    this.drag = { pointerId:e.pointerId, handle:e.currentTarget, x:e.clientX, y:e.clientY,
+                  l:this.l, b:this.b, bounds:this.bounds(), moved:false };
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
   },
   move(e) {
-    if (!this.dragging) return;
-    const dx = e.clientX - this.sx, dy = e.clientY - this.sy;
-    if (!this.moved && Math.abs(dx) < this.THRESHOLD && Math.abs(dy) < this.THRESHOLD) return;
-    this.moved = true;
-    const c = this.clampPos(this.sl + dx, this.sb - dy);
-    this.apply(c.l, c.b, true);
-  },
-  end() {
-    if (!this.dragging) return;
-    this.dragging = false;
-    const d = this.dock(), p = this.panel();
-    d.classList.remove('dragging');
-    p.classList.remove('dragging');
-    p.style.animation = '';                           // 还回 CSS 的入场动画
-    this.apply(this.l, this.b, false);
-    if (this.moved) {
-      try { localStorage.setItem(this.KEY, JSON.stringify({ l: this.l, b: this.b })); }
-      catch { /* 隐私模式存不了，位置只在本次会话有效 */ }
-      setTimeout(() => { this.moved = false; }, 0);   // 留到本轮 click 之后，好拦住它
+    const drag = this.drag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(dx) < this.THRESHOLD && Math.abs(dy) < this.THRESHOLD) return;
+      drag.moved = true;
+      this.dock().classList.add('dragging');
+      this.panel().classList.add('dragging');
     }
+    this.apply(drag.l + dx, drag.b - dy, drag.bounds);
+  },
+  end(e) {
+    const drag = this.drag;
+    if (!drag || (e && drag.pointerId !== e.pointerId)) return;
+    this.drag = null;
+    this.dock().classList.remove('dragging');
+    this.panel().classList.remove('dragging');
+    if (!drag.moved) return;
+    this.fit();
+    this.suppressPillClick = drag.handle === $('statusPill');
+    try { localStorage.setItem(this.KEY, JSON.stringify({ l: this.l, b: this.b })); } catch {}
   },
   bind() {
-    const d = this.dock(), p = this.panel();
-    // 底边差值从 CSS 读，不写死——以后改样式不会静默错位
-    this.gap = (parseFloat(getComputedStyle(p).bottom) || 76)
-             - (parseFloat(getComputedStyle(d).bottom) || 22);
-    const handles = [$('statusPill'), p.querySelector('.sp-h')];
+    const style = getComputedStyle(this.dock());
+    this.l = parseFloat(style.left) || this.l;
+    this.b = parseFloat(style.bottom) || this.b;
+    const pill = $('statusPill');
+    const handles = [pill, this.panel().querySelector('.sp-h')];
     handles.forEach(node => {
       node.addEventListener('pointerdown', e => this.start(e));
-      node.addEventListener('pointermove', e => this.move(e));
-      node.addEventListener('pointerup', () => this.end());
-      node.addEventListener('pointercancel', () => this.end());
+      node.addEventListener('lostpointercapture', e => this.end(e));
     });
-    // 拖完松手常会顺带触发一次 click——那一下不该被当成"展开/收起"
-    const guard = e => { if (this.moved) { e.stopImmediatePropagation(); e.preventDefault(); } };
-    handles.forEach(node => node.addEventListener('click', guard, true));
-    addEventListener('resize', () => {
-      const c = this.clampPos(this.l, this.b);
-      this.apply(c.l, c.b, false);
-    });
+    pill.addEventListener('click', e => {
+      if (!this.suppressPillClick || !e.detail) return;
+      this.suppressPillClick = false;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }, true);
+    addEventListener('pointermove', e => this.move(e));
+    addEventListener('pointerup', e => this.end(e));
+    addEventListener('pointercancel', e => this.end(e));
+    addEventListener('blur', () => this.end());
+    addEventListener('resize', () => { this.end(); this.fit(); });
     this.restore();
   },
 };
@@ -3206,7 +3191,7 @@ const BLOCKS = [
   { name: '教学活动',     cats: ['教学活动'],           why: '课程、授课角色、活动与评价' },
   { name: '艺术成果',     cats: ['艺术成果'],           why: '作品、演出、创作角色与时间' },
   { name: '任职经历',     cats: ['任职'],             why: '单位、职务、时间' },
-  { name: '实习背调',     cats: ['实习'],             why: '公司企查查入口、公开电话；岗位与时间待人工核对' },
+  { name: '实习背调',     cats: ['实习'],             why: '公司公开资料与人工核查入口' },
   { name: '学生工作',     cats: ['学生工作'],          why: '组织、职务' },
 ];
 /** 显式按设置不核验的条目：列出原文摘要。 */
@@ -3223,6 +3208,7 @@ const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileTy
 
 function blockOf(c) { return BLOCKS.find(b => b.cats.includes(c.category)) || { name: '其他', cats: [], why: '' }; }
 function claimSummary(c) {
+  if (c.category === '实习' || c.manualReview?.kind === 'internship') return '实习经历 · ' + summaryOf(c.rawText);
   const values = Object.fromEntries((c.elements || []).flatMap(element => {
     const match = /^([^=：:]+)[=：:]\s*(.+)$/.exec(element);
     return match ? [[match[1].trim(), match[2].trim()]] : [];
@@ -3291,7 +3277,7 @@ function renderPick() {
       const row = el('label', { class: 'pk' + (input.checked ? ' on' : ''), for: id },
         input, boxEl,
         el('span', { class: 'tx' }, claimSummary(c),
-          c.category === '实习' ? el('small', {text:'提供企查查公司链接和公开电话，岗位与时间待人工背调'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
+          c.category === '实习' ? el('small', {text:'提供可取得的公司公开资料，人工核对岗位、起止时间和职责'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
         el('span', { class: 'meta' }, el('span', { text: c.date || '' }), pgBtn));
       input.addEventListener('change', () => {
         input.checked ? PICK.selected.add(c.id) : PICK.selected.delete(c.id);
@@ -4181,18 +4167,8 @@ function authBadge(on) { const b = $('logoutBtn'); if (b) b.hidden = !on; }
 /* ══ 启动 ═══════════════════════════════════════ */
 renderRisks(); renderOverview(); buildFilters(); initFilters(); initIntake(); initChat(); initViewer();
 renderLeads();
-$('statusCollapse').addEventListener('click', () => {
-  const dock = $('statusDock');
-  dock.classList.add('collapsed');
-  $('statusPanel').hidden = true;
-  $('statusPill').hidden = false;
-});
-$('statusPill').addEventListener('click', () => {
-  const dock = $('statusDock');
-  dock.classList.remove('collapsed');
-  $('statusPanel').hidden = false;
-  $('statusPill').hidden = true;
-});
+$('statusCollapse').addEventListener('click', () => StatusDock.open(false));
+$('statusPill').addEventListener('click', () => StatusDock.open(true));
 /* 云层交互：鼠标一动云就透光，洞平滑地滑向鼠标（全程响应，不再要求"先移出登录卡"）。
    登录卡本身不参与——它是操作焦点，必须稳定；洞在它底下透过来的光会在卡片四周露出，
    背景依然是活的。手机没有 hover，点哪开哪。都只在登录阶段生效。 */

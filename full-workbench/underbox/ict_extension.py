@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 import runtime_client
 
-VERSION='ict-full-20261119.1'
+VERSION='ict-full-20261119.2'
 USER=contextvars.ContextVar('ict_user',default='local')
 LOCK=threading.RLock(); TICKETS={}; ACTIVE=threading.Lock()
 ENGINE=None; ORIGINAL_VERIFY=None; ORIGINAL_SPLIT=None
@@ -242,6 +242,10 @@ def record_ticket_usage(t,conn,*,ok=False,claims=0):
     return True
 
 
+def tool_scope_token(ticket):
+    return 'UNDERBOX-WORKBENCH/1 '+ticket['id']+'\nVERIFY_SELECTED'
+
+
 def tool_action(data):
     action=data.get('action')
     if action=='submit':
@@ -252,7 +256,7 @@ def tool_action(data):
         t=TICKETS.get(rid)
         if not t or data.get('consent') is not True:raise ValueError('invalid_workbench_ticket_or_consent')
         supplied=data.get('resume_text')
-        if not isinstance(supplied,str) or not hmac.compare_digest(supplied.encode(),t['text'].encode()):raise ValueError('selected_scope_mismatch')
+        if not isinstance(supplied,str) or not hmac.compare_digest(supplied.encode(),tool_scope_token(t).encode()):raise ValueError('selected_scope_mismatch')
         with LOCK:
             if t['state']=='awaiting':
                 t['state']='running'
@@ -315,12 +319,12 @@ def find_receipt(value,rid,digest,depth=0):
 
 def cloud_roundtrip(t):
     if t['state'] in ('failed','interrupted'):raise RuntimeError('backend_verification_failed')
-    # Preserve the deployed tool's existing three-field submit contract.
-    # The opaque first line is transport metadata, not a new resume claim.
-    payload={'action':'submit','resume_text':t['text'],'consent':True}
-    query=('我已获得本次材料处理授权，并同意由华为云AgentArts、服务器DeepSeek及智谱搜索处理以下选中事项。'
-           '请调用RunUnderbox提交以下JSON一次，不要修改resume_text（第一行是工作台传输标识，不是经历）。'
-           '拿到job_id后用action=status查询至completed，最多20次，不重复submit。完成后直接返回工具实际result_json，失败如实说明。\n'+json.dumps(payload,ensure_ascii=False))
+    # The authenticated broker resolves the random ID to a server-held consented scope.
+    payload={'action':'submit','resume_text':tool_scope_token(t),'consent':True}
+    query=('已获用户明确授权。请立即调用 RunUnderbox，把下方 JSON 原样提交一次。'
+           'resume_text 字段携带工作台的单次任务令牌，原始材料已由工作台保管。'
+           '不要改写令牌或要求重新提供材料。拿到 job_id 后用 action=status 查询，最多20次，禁止重复提交。'
+           '完成后返回工具实际 result_json。\n'+json.dumps(payload,ensure_ascii=False))
     status_query=('继续已提交任务，仅实际调用RunUnderbox查询以下JSON的status。禁止submit、重新核验、搜索或处理新材料。'
                   '完成后直接返回工具实际result_json，不要自行生成回执。\n'+json.dumps({'action':'status','job_id':t['id']}))
     started=time.monotonic();deadline=started+900;count=0;types=[]

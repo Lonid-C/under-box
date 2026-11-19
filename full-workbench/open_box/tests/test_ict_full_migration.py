@@ -44,6 +44,24 @@ class NativeUploadMigrationTests(unittest.TestCase):
         self.assertEqual(restored.claims[0].proved,[])
 
 class ProviderTransportMigrationTests(unittest.TestCase):
+    def test_deepseek_results_keep_snippets_and_domain_without_promoting_summary_to_body(self):
+        from unittest.mock import patch
+        from app.deepseek_search import DeepSeekSearcher
+        records = [
+            {'url': 'https://lab.example.edu/results', 'title': '合成名单',
+             'snippet': '简短摘要', 'summary': '较长摘要', 'site_name': '合成高校'},
+            {'url': 'https://example.edu/notice', 'summary': '备用摘要'},
+            {'url': 'https://example.edu.invalid/notice', 'snippet': '无关站点'},
+            {'url': 'file:///tmp/example', 'summary': '无效地址'},
+        ]
+        with patch('app.deepseek_client.DeepSeekClient.search', return_value=records) as call:
+            hits = DeepSeekSearcher(api_key='synthetic').search('合成奖项', site='example.edu')
+        call.assert_called_once_with('合成奖项 site:example.edu')
+        self.assertEqual([h.url for h in hits], [r['url'] for r in records[:2]])
+        self.assertEqual([h.snippet for h in hits], ['简短摘要', '备用摘要'])
+        self.assertEqual(hits[0].publisher, '合成高校')
+        self.assertTrue(all(not h.content for h in hits))
+
     def test_account_failure_is_cached_and_not_paid_again_per_query(self):
         from unittest.mock import patch
         from app.deepseek_client import DeepSeekError

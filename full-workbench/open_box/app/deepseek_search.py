@@ -50,8 +50,7 @@ class DeepSeekSearcher:
                 if site and not url_in_domain(url, site):
                     continue
                 hits.append(SearchHit(url=url, title=str(item.get("title") or ""),
-                                      snippet=str(item.get("snippet") or ""),
-                                      summary=str(item.get("summary") or ""),
+                                      snippet=str(item.get("snippet") or item.get("summary") or ""),
                                       publisher=str(item.get("site_name") or "")))
             return hits
         except BudgetLimit:

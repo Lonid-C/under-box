@@ -319,7 +319,8 @@ def _strong_for(claim: Claim, ev: Evidence, element: str) -> bool:
     if ev.github_record is not None:
         return ev.source_tier == "B" and ev.github_record.get("actorConfirmed") is True
     if ev.paper_record is not None:
-        return (element.partition("=")[0].strip() in PAPER_METADATA_FIELDS
+        from .paper_identity import paper_element
+        return (paper_element(element)[0] in PAPER_METADATA_FIELDS
                 and ev.provenance_state == "structured_metadata_verified")
     return ev.source_tier in ("A", "B") and _has_identity_anchor(ev)
 

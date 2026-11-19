@@ -99,6 +99,14 @@ def discovery_queries(claim, name, ctx):
             stage = ctx.get('study_stage', '')
             add(f'"{award}" {year} {stage} 名单 公示', 'award_roster',
                 '姓名可能仅在附件：先查同校同奖公告，再读取名单本人行；公告或名额不能代替个人获奖', site='school')
+    if claim.category == '交流活动' and school:
+        program = _field(claim, ('program',), ('项目/身份', '交流项目', '项目名称'))
+        if program and program in claim.raw_text:
+            quoted = re.search(r'[“"]([^”"]{2,30})[”"]', program)
+            term = quoted.group(1) if quoted else re.sub(r'(成员|学员|参与者)$', '', program).strip()
+            if term:
+                add(f'{school} {term} {ctx.get("year", "")} 名单', 'program_membership',
+                    '单查原文明确的培养项目或成员身份，回读官网。项目名单与外访本人参与须分别核对', site='school')
     return rows
 
 
@@ -166,8 +174,8 @@ def identifier_feedback(claim, query, hits):
 
 
 def school_record_links(html, page, claim, school_domains=None):
-    """Official notice -> matching notice/attachment, before personal extraction."""
-    if claim.category not in {'项目', '奖学金', '校内荣誉', '学生工作'} or '<' not in html[:2000]: return []
+    """Follow matching pages and documents on the same institution's official site."""
+    if claim.category not in {'项目', '奖学金', '校内荣誉', '学生工作', '交流活动'} or '<' not in html[:2000]: return []
     from bs4 import BeautifulSoup
     from .plan import claim_school, school_domain
     from .search import SearchHit, url_in_domain
@@ -177,13 +185,16 @@ def school_record_links(html, page, claim, school_domains=None):
     fields = {'项目': (('project', 'title'), ('项目名称', '项目')),
               '奖学金': (('award',), ('奖项', '奖学金', '奖项名称')),
               '校内荣誉': (('award',), ('荣誉', '奖项', '荣誉名称')),
-              '学生工作': (('org',), ('任职组织', '组织'))}
+              '学生工作': (('org',), ('任职组织', '组织')),
+              '交流活动': (('program',), ('项目/身份', '交流项目', '项目名称'))}
     keys, labels = fields[claim.category]; topic = _field(claim, keys, labels)
     topic = topic.strip('“”"')
     body = BeautifulSoup(html, 'lxml')
     heading = body.find('h1') or body.title
     title = page.title + ' ' + (heading.get_text(' ', strip=True) if heading else '')
     topic_terms = [topic] if topic else []
+    if claim.category == '交流活动':
+        topic_terms += re.findall(r'[“"]([^”"]{2,30})[”"]', topic)
     # Common project/award notice headings can abbreviate the full input title.
     topic_terms += [t for t in ('教学改革', '奖学金', '毕业设计', '学生会', '科协')
                     if t in claim.raw_text]
@@ -198,7 +209,7 @@ def school_record_links(html, page, claim, school_domains=None):
         document = bool(re.search(r'\.(?:pdf|docx?|xlsx?)(?:$|[?#])', url, re.I) or a.has_attr('pdfsrc'))
         years = set(re.findall(r'(?:19|20)\d{2}', label))
         if year and years and year not in years: continue
-        if not document and not (any(t and t in label for t in topic_terms) and re.search(r'名单|公示|立项|结题|表彰', label)): continue
+        if not document and not (any(t and t in label for t in topic_terms) and re.search(r'名单|公示|立项|结题|表彰|报道|任命|换届|新闻|参访', label)): continue
         if document and not (a.has_attr('pdfsrc') or re.search(r'附件|名单|公示|立项|结题|表彰|汇总', label)): continue
         seen.add(url);result.append(SearchHit(url, title=title.strip() + ' · ' + (label or 'PDF附件'), publisher=page.publisher))
     return result

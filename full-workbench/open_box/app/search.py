@@ -20,7 +20,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from .usage import UsageExecutor as ThreadPoolExecutor
 from typing import Protocol
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from .usage import METER
 from contextvars import ContextVar
@@ -1090,47 +1090,90 @@ def openalex_hits(title: str, limit: int = 5) -> list[SearchHit]:
     items.sort(key=lambda it: -SequenceMatcher(
         None, wanted, norm(it.get("display_name") or "")).ratio())
 
-    out: list[SearchHit] = []
-    for it in items:
-        paper_title = (it.get("display_name") or "").strip()
-        if not paper_title:
-            continue
-        authors = []
-        author_records = []
-        for a in it.get("authorships") or []:
-            name = ((a.get("author") or {}).get("display_name") or "").strip()
-            if name:
-                insts = "、".join(
-                    (i.get("display_name") or "") for i in (a.get("institutions") or []))
-                authors.append(f"{name}（{insts}）" if insts else name)
-                author_records.append({"name": name, "position": len(authors),
-                    "institutions": [i.get("display_name") for i in a.get("institutions", []) if i.get("display_name")],
-                    "institution_records": [{"name": i.get("display_name") or "", "ror": i.get("ror") or ""}
-                                            for i in a.get("institutions", [])],
-                    "orcid": (a.get("author") or {}).get("orcid") or ""})
-        loc = (it.get("primary_location") or {}).get("source") or {}
-        venue = (loc.get("display_name") or "").strip()
-        landing = ((it.get("primary_location") or {}).get("landing_page_url") or "").strip()
-        doi = (it.get("doi") or "").strip()
-        url = doi or it.get("id") or ""
-        content = (
-            f"OpenAlex 元数据\n题名：{paper_title}\n"
-            f"作者（按元数据顺序）：{'; '.join(authors) or '（未提供）'}\n"
-            f"刊物或会议：{venue or '（未提供）'}\n"
-            f"发表年份：{it.get('publication_year') or '（未提供）'}\n"
-            f"被引次数：{it.get('cited_by_count', 0)}\nDOI：{doi or '（无）'}"
+    return [hit for hit in map(_openalex_hit, items) if hit][:max(1, int(limit))]
+
+
+def _openalex_hit(it: dict) -> SearchHit | None:
+    paper_title = (it.get("display_name") or "").strip()
+    if not paper_title:
+        return None
+    authors = []
+    author_records = []
+    for a in it.get("authorships") or []:
+        name = ((a.get("author") or {}).get("display_name") or "").strip()
+        if name:
+            insts = "、".join(
+                (i.get("display_name") or "") for i in (a.get("institutions") or []))
+            authors.append(f"{name}（{insts}）" if insts else name)
+            author_records.append({"name": name, "position": len(authors),
+                "institutions": [i.get("display_name") for i in a.get("institutions", []) if i.get("display_name")],
+                "institution_records": [{"name": i.get("display_name") or "", "ror": i.get("ror") or ""}
+                                        for i in a.get("institutions", [])],
+                "orcid": (a.get("author") or {}).get("orcid") or ""})
+    loc = (it.get("primary_location") or {}).get("source") or {}
+    venue = (loc.get("display_name") or "").strip()
+    landing = ((it.get("primary_location") or {}).get("landing_page_url") or "").strip()
+    doi = (it.get("doi") or "").strip()
+    url = doi or it.get("id") or ""
+    content = (
+        f"OpenAlex 元数据\n题名：{paper_title}\n"
+        f"作者（按元数据顺序）：{'; '.join(authors) or '（未提供）'}\n"
+        f"刊物或会议：{venue or '（未提供）'}\n"
+        f"发表年份：{it.get('publication_year') or '（未提供）'}\n"
+        f"被引次数：{it.get('cited_by_count', 0)}\nDOI：{doi or '（无）'}"
+    )
+    if not url:
+        return None
+    return SearchHit(
+        url=url, title=paper_title, snippet=content.replace("\n", "；"),
+        publisher=venue or "OpenAlex", content=content,
+        official_url=landing if landing.startswith(("https://", "http://")) else "",
+        authors=tuple(authors), venue=venue,
+        year=str(it.get("publication_year") or ""), author_records=tuple(author_records),
+        registry_sources=(str(it.get("id") or "").replace("https://openalex.org/", "https://api.openalex.org/works/"),),
+        publication_type="journal-article" if loc.get("type") == "journal" and it.get("type") == "article" else it.get("type") or "")
+
+
+def openalex_doi_hit(doi: str) -> SearchHit | None:
+    """Read author affiliations for a known DOI from the public works registry."""
+    import httpx
+    from .paper_identity import _doi
+    value = _doi(doi)
+    if not value:
+        return None
+    try:
+        response = httpx.get(
+            "https://api.openalex.org/works/https://doi.org/" + quote(value, safe="/"),
+            headers={"User-Agent": UA, "Accept": "application/json"}, timeout=15.0,
         )
-        if not url:
-            continue
-        out.append(SearchHit(
-            url=url, title=paper_title, snippet=content.replace("\n", "；"),
-            publisher=venue or "OpenAlex", content=content,
-            official_url=landing if landing.startswith(("https://", "http://")) else "",
-            authors=tuple(authors), venue=venue,
-            year=str(it.get("publication_year") or ""), author_records=tuple(author_records),
-            registry_sources=(str(it.get("id") or "").replace("https://openalex.org/", "https://api.openalex.org/works/"),),
-            publication_type="journal-article" if loc.get("type") == "journal" and it.get("type") == "article" else it.get("type") or ""))
-    return out[:max(1, int(limit))]
+        response.raise_for_status()
+        hit = _openalex_hit(response.json())
+        return hit if hit and _doi(hit.url) == value else None
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def merge_paper_metadata(base: SearchHit, additional: SearchHit) -> SearchHit:
+    """Combine only identical title/DOI records and match affiliations by author and position."""
+    from .paper_identity import compact, _doi
+    doi = _doi(base.url)
+    if not doi or doi != _doi(additional.url) or compact(base.title) != compact(additional.title):
+        return base
+    if not base.official_url and additional.official_url:
+        base.official_url = additional.official_url
+    by_author = {(compact(row["name"]), row.get("position")): row for row in additional.author_records}
+    records = []
+    for author in base.author_records:
+        row = dict(author)
+        other = by_author.get((compact(row["name"]), row.get("position")))
+        if other:
+            row["institutions"] = list(dict.fromkeys([*row.get("institutions", []), *other.get("institutions", [])]))
+            row["institution_records"] = list(other.get("institution_records") or row.get("institution_records") or [])
+            row["orcid"] = row.get("orcid") or other.get("orcid") or ""
+        records.append(row)
+    base.author_records = tuple(records or additional.author_records)
+    base.registry_sources = tuple(dict.fromkeys([*base.registry_sources, *additional.registry_sources]))
+    return base
 
 
 def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
@@ -1159,21 +1202,7 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
         key = hit.url.lower().rstrip("/")
         if key in positions:
             previous = out[positions[key]]
-            if not previous.official_url and hit.official_url:
-                previous.official_url = hit.official_url
-            # 同 DOI 且题名一致，按作者全名逐人合并；不把整篇机构列表归给第一作者。
-            if norm(previous.title) == norm(hit.title):
-                from copy import deepcopy
-                records = [deepcopy(r) for r in previous.author_records]
-                by_name = {norm(r["name"]): r for r in records}
-                for other in hit.author_records:
-                    row = by_name.get(norm(other["name"]))
-                    if row is not None:
-                        row["institutions"] = list(dict.fromkeys([*row.get("institutions", []), *other.get("institutions", [])]))
-                        row["institution_records"] = list(other.get("institution_records") or row.get("institution_records") or [])
-                        if not row.get("orcid"): row["orcid"] = other.get("orcid") or ""
-                previous.author_records = tuple(records or hit.author_records)
-                previous.registry_sources = tuple(dict.fromkeys([*previous.registry_sources, *hit.registry_sources]))
+            merge_paper_metadata(previous, hit)
             continue
         positions[key] = len(out)
         out.append(hit)
@@ -1200,19 +1229,24 @@ def paper_hits(title: str, limit: int = 5, *, author: str = "", venue: str = "",
     out = [hit for hit in out if relevance(hit)[0] >= 0.75]
     out.sort(key=relevance, reverse=True)
     selected = out[:max(1, int(limit))]
+    resolve_paper_affiliations(selected, author)
+    return selected
+
+
+def resolve_paper_affiliations(hits: list[SearchHit], author: str) -> None:
+    """Resolve institution domains for the named author, never coauthors."""
     from .paper_identity import latin_names, compact
-    aliases = {compact(n) for n in latin_names(author)}
+    aliases = {compact(n) for n in [author, *latin_names(author)] if n}
     resolved = {}; remaining = 3
-    for hit in selected:
+    for hit in hits:
         for row in hit.author_records:
             if compact(row.get("name")) not in aliases:
                 continue
             for inst in row.get("institution_records", []):
                 key = inst.get("ror") or ""
-                if key not in resolved and remaining:
+                if key and not inst.get("source") and key not in resolved and remaining:
                     remaining -= 1; resolved[key] = institution_record(key)
                 if resolved.get(key): inst.update(resolved[key])
-    return selected
 
 
 _INSTITUTIONS = {}

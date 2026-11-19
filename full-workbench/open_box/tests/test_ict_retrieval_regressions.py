@@ -113,6 +113,68 @@ class RetrievalRegressionTests(unittest.TestCase):
         hit.author_records[1]['institutions']=['清华大学']
         self.assertIsNone(from_hit(c,hit))
 
+    def test_colon_fields_and_exact_doi_affiliations_produce_independent_proofs(self):
+        from app.collect import Budget, _read_and_extract
+        from app import judge
+        from copy import deepcopy
+        c,hit=self.paper()
+        c.elements=[v.replace('=', '：', 1) for v in c.elements]
+        source=deepcopy(hit)
+        hit.author_records[0]['institutions']=[]
+        hit.content='Registry entry with no affiliation for its author.'
+        source.registry_sources=('https://api.openalex.org/works/W12345',)
+        ror='https://ror.org/012345678'
+        source.author_records[0].update(institutions=['Unlisted English name'],
+                                        institution_records=[{'ror':ror}])
+        affiliation={'domains':['tsinghua.edu.cn'],'source':'https://api.ror.org/v2/organizations/012345678'}
+        with patch.dict(os.environ,{'UNDERBOX_ICT_SOURCE_REPAIR':'1'}), \
+             patch('app.search.openalex_doi_hit',return_value=source) as metadata, \
+             patch('app.search.institution_record',return_value=affiliation) as institution:
+            ev=_read_and_extract(c,[hit],object(),object(),set(),candidate_name='Alice Example',budget=Budget())
+        metadata.assert_called_once_with('10.5555/synthetic')
+        institution.assert_called_once_with(ror)
+        self.assertEqual(len(ev),1)
+        result=judge.assess(c,ev)
+        self.assertIn(c.elements[0],result.proved)
+        self.assertIn(c.elements[2],result.proved)
+        self.assertNotIn(c.elements[1],result.proved)
+
+    def test_publisher_webpage_uses_doi_metadata_with_no_attachment(self):
+        from app.collect import Budget, _read_and_extract
+        from types import SimpleNamespace
+        c,hit=self.paper();hit.content='structured publisher record'
+        url='https://publication.example/html-page'
+        webpage=f'<html><article><h1>{hit.title}</h1><a href="{hit.url}">DOI</a></article></html>'
+        with patch.dict(os.environ,{'UNDERBOX_ICT_SOURCE_REPAIR':'1'}), \
+             patch('app.search.crossref_doi_hit',return_value=hit) as metadata:
+            ev=_read_and_extract(c,[SearchHit(url,content=webpage)],SimpleNamespace(),object(),set(),
+                                 candidate_name='Alice Example',budget=Budget())
+        metadata.assert_called_once_with('10.5555/synthetic')
+        self.assertEqual([e.url for e in ev],list(hit.registry_sources))
+
+    def test_html_body_rows_survive_article_extractor_and_dead_attachment(self):
+        import sys
+        from types import SimpleNamespace
+        from app.collect import Budget, _read_and_extract
+        c=claim('学生工作','清华大学学生会办公室副部长',school='清华大学',org='学生会',
+                candidate_name='林示例',candidate_identity_context={'policy':'person_v2',
+                'candidate_name':'林示例','education_schools':['清华大学']})
+        c.elements=['职务=学生会办公室副部长']
+        url='https://www.tsinghua.edu.cn/notice'
+        document='https://www.tsinghua.edu.cn/file.pdf'
+        title='清华大学学生会换届任命公示'
+        snippet='清华大学 | 林示例 | 学生会办公室副部长'
+        html=f'<article><h1>{title}</h1><table><tr><td>清华大学</td><td>林示例</td><td>学生会办公室副部长</td></tr></table><a href="{document}">附件</a></article>'
+        llm=Mock()
+        llm.complete_json.return_value={'snippet':snippet,'supports':c.elements,'publisher':'清华大学'}
+        read=Mock(return_value=None)
+        with patch.dict(sys.modules,{'trafilatura':SimpleNamespace(extract=lambda _: '本次换届公示。')}), \
+             patch.dict(os.environ,{'UNDERBOX_ICT_RECALL':'1'}),patch('app.search.robots_allows',return_value=True):
+            ev=_read_and_extract(c,[SearchHit(url,title,content=html)],SimpleNamespace(get=read),llm,set(),
+                                 candidate_name='林示例',budget=Budget())
+        self.assertEqual([e.url for e in ev],[url]);self.assertTrue(ev[0].quote_verified)
+        self.assertIn(c.elements[0],ev[0].supports);read.assert_called_once_with(document)
+
     def test_ict_fetch_factory_uses_native_reader_without_paid_fetch_first(self):
         from app.deepseek_fetch import build_fetcher,DeepSeekPageFetcher
         self.assertIs(type(build_fetcher()),PageFetcher)

@@ -13,6 +13,18 @@ def compact(value):
     return re.sub(r"[^a-z0-9\u3400-\u9fff]", "", unicodedata.normalize("NFKD", str(value or "")).lower())
 
 
+def paper_element(element):
+    # Older reports also contain fields rendered with a colon; keep their original text as proof keys.
+    parts = re.split(r"[=：:]", element, maxsplit=1)
+    return parts[0].strip(), parts[1].strip() if len(parts) == 2 else ""
+
+
+def paper_title(claim):
+    return str(claim.entities.get("title") or next(
+        (value for field, value in map(paper_element, claim.elements)
+         if field in {"论文标题", "论文题目", "题目"} and value), ""))
+
+
 def latin_names(name):
     """全名用于定位，不扩展首字母；多音姓缺少明示英文名时保持未知。"""
     if re.fullmatch(r"[\u3400-\u9fff]{2,5}", name or ""):
@@ -68,13 +80,16 @@ def _citation_name(raw, row):
                           + r"(?:\.|#|\*|\s*[,，;；])", raw or "", re.I))
 
 
+MISSING_AFFILIATION = "本人作者行的单位不对应，不能借同篇其他作者的单位"
+
+
 def author_match(claim, record):
     from .person_scope import PersonCheck
     if claim.category != "论文" or not isinstance(record, dict):
         return PersonCheck(False, reason="不是论文登记记录")
     ent = claim.entities or {}; context = ent.get("candidate_identity_context") or {}
     name = ent.get("candidate_name") or context.get("candidate_name") or ""
-    title = ent.get("title") or next((e.partition("=")[2] for e in claim.elements if e.startswith("论文标题=")), "")
+    title = paper_title(claim)
     doi = _doi(record.get("doi")); sources = record.get("sources") or []
     rows = record.get("authors") or []
     if (not isinstance(sources, list) or not isinstance(rows, list)
@@ -113,8 +128,6 @@ def author_match(claim, record):
             if any(isinstance(d, str) and re.fullmatch(r"[a-z0-9.-]+", d)
                    and url_in_domain("https://" + d, expected) for d in institution.get("domains", [])): return True
         return False
-    if not any(institution_matches(org) for org in orgs):
-        return PersonCheck(False, reason="本人作者行的单位不对应，不能借同篇其他作者的单位")
     # 姓名 + 本人单位 + 本篇明确署名，中文拼音还必须有原文明示的同篇合作者。
     if not _citation_name(claim.raw_text, row):
         return PersonCheck(False, reason="输入未明确提及这个作者")
@@ -122,6 +135,8 @@ def author_match(claim, record):
         colleagues = [r for r in rows if r is not row and _citation_name(claim.raw_text, r)]
         if not colleagues:
             return PersonCheck(False, reason="拼音匹配缺少同篇合作者交叉关联")
+    if not any(institution_matches(org) for org in orgs):
+        return PersonCheck(False, reason=MISSING_AFFILIATION)
     return PersonCheck(True, ["英文作者联合关联"])
 
 
@@ -133,7 +148,7 @@ def supports_for(claim, record):
     row = next(r for r in record["authors"] if compact(r["name"]) in aliases or r["name"] == name)
     result = []
     for element in claim.elements:
-        field, _, value = element.partition("="); value = value.strip()
+        field, value = paper_element(element)
         if field.strip() in {"论文标题", "论文题目", "题目"} and compact(value) == compact(record["title"]):
             result.append(element)
         elif field.strip() in {"刊物", "期刊", "会议"} and venue_matches(value,record.get("venue")):
@@ -150,17 +165,21 @@ def supports_for(claim, record):
     return result
 
 
+def paper_record(hit):
+    doi = _doi(hit.url)
+    return {"title": hit.title, "doi": doi, "venue": hit.venue, "year": hit.year,
+              "type": hit.publication_type, "authors": list(hit.author_records), "sources": list(hit.registry_sources)}
+
+
 def from_hit(claim, hit):
     if not hit.author_records or not hit.registry_sources:
         return None
-    doi = _doi(hit.url)
-    record = {"title": hit.title, "doi": doi, "venue": hit.venue, "year": hit.year,
-              "type": hit.publication_type, "authors": list(hit.author_records), "sources": list(hit.registry_sources)}
+    record = paper_record(hit)
     checked = author_match(claim, record)
     if not checked.allowed:
         return None
-    lines = ["论文登记题名：" + hit.title, "DOI：" + doi, "刊物：" + hit.venue, "发表年份：" + hit.year]
-    venue=claim.entities.get('venue') or next((e.partition('=')[2] for e in claim.elements if e.startswith('刊物=')),'')
+    lines = ["论文登记题名：" + hit.title, "DOI：" + record["doi"], "刊物：" + hit.venue, "发表年份：" + hit.year]
+    venue=claim.entities.get('venue') or next((v for k,v in map(paper_element,claim.elements) if k in {'刊物','期刊','会议'}),'')
     if venue and not venue_matches(venue,hit.venue):
         lines.append('刊物名称与输入尚未匹配；仅保留已核实要素，会议与Workshop等归属需另行核对。')
     lines += ["公开登记来源：" + url for url in hit.registry_sources]

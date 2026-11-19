@@ -809,7 +809,13 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                       searcher: Searcher | None = None) -> list[Evidence]:
     """把已选中的页面**按域分组并发回读**（同域串行由 fetcher 的按域锁保证），
     再逐页交给模型逐字摘录。抓取可以并行，模型抽取仍是串行，保持确定性。"""
+    from .person_scope import check_person
     from .source_guard import excluded, claim_sources
+    candidate_name = candidate_name or claim.entities.get("candidate_name", "")
+    if candidate_name:
+        claim.entities = {**claim.entities, "candidate_name": candidate_name}
+    context = claim.entities.get("candidate_identity_context") or {}
+    person_v2 = isinstance(context, dict) and context.get("policy") == "person_v2"
     sources = claim_sources(claim)
     allowed = []
     for hit in selected:
@@ -878,29 +884,36 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
     seen_urls = seen_urls if seen_urls is not None else {_url_key(h.url) for h in selected}
     recovered = []; recovery_attempts = 0
     repair = repair_sources()
-    if repair and budget and claim.category == "论文":
+    wanted = ""
+
+    def lookup_registry(doi):
         from .data_sources import invoke_source
         from .paper_identity import compact
         from .search import crossref_doi_hit
+        key = ("crossref", doi.casefold())
+        if (not doi or not wanted or compact(wanted) not in compact(claim.raw_text)
+                or key in budget.relocation_titles
+                or sum(k[0] == "crossref" for k in budget.relocation_titles) >= 2
+                or budget.elapsed() >= budget.max_seconds):
+            return None
+        budget.relocation_titles.add(key)
+        found = invoke_source("paper_metadata", lambda: crossref_doi_hit(doi),
+                              reference=doi, action="catalog", category="论文")
+        if (found and compact(found.title) == compact(wanted) and found.author_records
+                and found.content and not excluded(found.url, sources, found.publisher)):
+            return found
+        return None
+
+    if repair and budget and claim.category == "论文":
+        from .paper_identity import paper_title
         from .source_repairs import doi_from_url, failed_entry
-        wanted = str(claim.entities.get("title") or next(
-            (e.partition("=")[2] for e in claim.elements if e.partition("=")[0] in {"论文标题", "论文题目"}), ""))
+        wanted = paper_title(claim)
         failed = getattr(fetcher, "failures", {})
         for old in selected:
-            doi = doi_from_url(old.url)
-            key = ("crossref", doi.casefold())
-            if (not doi or not wanted or compact(wanted) not in compact(claim.raw_text)
-                    or not failed_entry(failed.get(old.url, ""))
-                    or key in budget.relocation_titles
-                    or sum(k[0] == "crossref" for k in budget.relocation_titles) >= 2
-                    or not budget.can_read()):
+            if not failed_entry(failed.get(old.url, "")) or not budget.can_read():
                 continue
-            budget.relocation_titles.add(key)
-            found = invoke_source("paper_metadata", lambda: crossref_doi_hit(doi),
-                                  reference=doi, action="catalog", category="论文")
-            if (found and compact(found.title) == compact(wanted) and found.author_records
-                    and found.content and not excluded(found.url, sources, found.publisher)
-                    and _url_key(found.url) not in seen_urls):
+            found = lookup_registry(doi_from_url(old.url))
+            if found:
                 seen_urls.add(_url_key(found.url))
                 recovered.append((found, found.content))
                 record_decision("出版商原文不可读，另取得对应 DOI 的登记资料", found.url, state="navigation")
@@ -1029,7 +1042,14 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             record_decision('读取后达到本条时间上限，尚未完成抽取',hit.url)
             budget.exhausted = True
             break
-        text = extract_main_text(html, preserve_tables=claim.category in {"学历", "竞赛", "著作", "教学活动", "项目", "奖学金", "校内荣誉", "学生工作"}) if "<" in html[:2000] else html
+        text = extract_main_text(html, preserve_tables=True) if "<" in html[:2000] else html
+        if wanted and not hit.author_records and hit.url not in snippet_urls:
+            from .source_repairs import publication_page_doi
+            record_hit = lookup_registry(publication_page_doi(html, wanted))
+            if record_hit:
+                seen_urls.add(_url_key(record_hit.url))
+                queue.append((record_hit, record_hit.content, depth))
+                record_decision('从公开论文网页跟进准确 DOI 登记', record_hit.url, state='navigation')
         if hit.title.startswith("[赛事目录入口]"):
             # 目录的入口说明不能冒充网页原始标题，否则首页会被错误分级为获奖名单。
             from bs4 import BeautifulSoup
@@ -1050,27 +1070,45 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
             links = [SearchHit(**p) for p in roster_links(html, hit, claim, school_domains=school_domains)]
             if "<" in html[:2000]:
                 links += [SearchHit(**p) for p in roster_image_links(html, hit, claim)]
-        compact_text = re.sub(r"\s+", "", text).casefold()
-        has_name = any(name.replace(" ", "").casefold() in compact_text
-                       for name in _name_variants(candidate_name))
-        competition = competition_for_claim(claim)
-        has_team_anchor = any(str((claim.entities or {}).get(k, "")).strip().replace(" ", "").casefold() in compact_text
-                              for k in ("team_id", "team_number", "team", "project", "title")
-                              if str((claim.entities or {}).get(k, "") or "").strip())
-        # 仅作为附件目录的公示页不必再花一次模型调用抽取个人证据。
-        if has_name or (not links and claim.category != "学历"
-                        and (not competition or has_team_anchor)):
-            from .person_scope import check_person
-            if claim.category == "论文" and hit.author_records:
-                from .paper_identity import from_hit
-                structured = from_hit(claim, hit)
-                checked = None if structured else check_person(claim, hit.url, text, hit.title,
-                                                               school_domains=school_domains, final=False)
-            else:
-                checked = check_person(claim, hit.url, text, hit.title,
-                                       school_domains=school_domains, final=False)
-            if checked and not checked.allowed and progress:
-                progress(f"    排除未能关联本人的来源：{checked.reason} · {hit.url}")
+        # A page with attachments can still prove a claim through its own body.
+        extract_body = bool(claim.category == "论文" and hit.author_records)
+        if not extract_body and person_v2:
+            checked = check_person(claim, hit.url, text, hit.title, school_domains=school_domains, final=False)
+            extract_body = checked.allowed
+            if not checked.allowed:
+                if progress:
+                    progress(f"    排除未能关联本人的来源：{checked.reason} · {hit.url}")
+                record_decision("本人关联不足：" + checked.reason, hit.url)
+        elif not extract_body:
+            # Older callers supply a name and sometimes a team or project identifier.
+            body = re.sub(r"\s+", "", text).casefold()
+            has_name = any(re.sub(r"\s+", "", name).casefold() in body for name in _name_variants(candidate_name))
+            anchors = [re.sub(r"\s+", "", str(claim.entities.get(key) or "")).casefold()
+                       for key in ("team_id", "team_number", "team", "project", "title")]
+            has_team_anchor = any(anchor and anchor in body for anchor in anchors)
+            extract_body = bool(has_name or has_team_anchor or (
+                not links and claim.category != "学历" and not competition_for_claim(claim)))
+            if not extract_body:
+                record_decision("正文缺少本人或团队身份锚点", hit.url)
+        if repair and budget and claim.category == "论文" and hit.author_records:
+            from .data_sources import invoke_source
+            from .paper_identity import author_match, paper_record, MISSING_AFFILIATION
+            from .search import openalex_doi_hit, merge_paper_metadata, resolve_paper_affiliations
+            record = paper_record(hit)
+            check = author_match(claim, record)
+            key = ("openalex_doi", record["doi"])
+            if (check.reason == MISSING_AFFILIATION and key not in budget.relocation_titles
+                    and sum(k[0] == "openalex_doi" for k in budget.relocation_titles) < 2):
+                budget.relocation_titles.add(key)
+                other = invoke_source("paper_metadata", lambda: openalex_doi_hit(record["doi"]),
+                                      reference=record["doi"], action="catalog", category="论文")
+                if other:
+                    hit = merge_paper_metadata(replace(hit), other)
+                    resolve_paper_affiliations([hit], candidate_name or context.get("candidate_name", ""))
+                    check = author_match(claim, paper_record(hit))
+            if not check.allowed:
+                record_decision("论文登记未采信：" + check.reason, hit.url)
+        if extract_body:
             ev = extract_evidence(claim, hit, text, llm, organizer_hosts=organizer_hosts,
                                   candidate_name=candidate_name, school_domains=school_domains)
             if ev:
@@ -1084,10 +1122,6 @@ def _read_and_extract(claim: Claim, selected: list[SearchHit], fetcher, llm: LLM
                 if observer := EVIDENCE_OBSERVER.get():
                     observer(claim, ev)
                 record_decision('通过证据抽取与身份范围校验',hit.url,state='retained')
-        elif repair and not links and not has_name:
-            record_decision("本人关联不足：正文未出现候选人姓名", hit.url)
-        else:
-            record_decision('正文缺少本人或团队身份锚点，目录仅跟进附件',hit.url)
         # 栏目 → 当年公告 → 附件，最多两层；赛事可按题目读取多份赛果，共用原读页预算。
         children = []
         for linked in links:
@@ -1235,7 +1269,7 @@ def collect_for_claim(claim: Claim, candidate_name: str, searcher: Searcher, llm
         budget.finish_read(bool(html))
         if not html:
             continue
-        text = extract_main_text(html) if "<" in html[:2000] else html
+        text = extract_main_text(html, preserve_tables=True) if "<" in html[:2000] else html
         from .ocr import OCRText
         title = "名单图片OCR识别（扫描 PDF）" if isinstance(html, OCRText) else ""
         ev = extract_evidence(claim, SearchHit(url=url, title=title), text, llm,

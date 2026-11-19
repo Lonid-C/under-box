@@ -297,9 +297,15 @@ def extract_main_text(html: str, *, preserve_tables: bool = False) -> str:
         if value and len(value) <= 300:
             context.append(f"{label}：{value}")
 
+    table_rows: list[str] = []
     if preserve_tables:
         for table in soup.find_all("table"):
             if table.parent is None:
+                continue
+            if table.find_parent(("nav", "header", "footer", "aside", "template", "noscript")):
+                continue
+            if any(tag.has_attr("hidden") or str(tag.get("aria-hidden", "")).lower() == "true"
+                   for tag in (table, *table.parents)):
                 continue
             rows = []
             for row in table.find_all("tr"):
@@ -307,6 +313,7 @@ def extract_main_text(html: str, *, preserve_tables: bool = False) -> str:
                 if cells:
                     rows.append(" | ".join(c.get_text(" ", strip=True) for c in cells))
             if rows:
+                table_rows.extend(rows)
                 block = soup.new_tag("div")
                 block.string = "\n".join(rows)
                 table.replace_with(block)
@@ -316,7 +323,9 @@ def extract_main_text(html: str, *, preserve_tables: bool = False) -> str:
         import trafilatura
         got = trafilatura.extract(html)
         if got:
-            return "\n".join([*context, got]) if context else got
+            found = re.sub(r"\s+", "", got)
+            missing = [row for row in table_rows if re.sub(r"\s+", "", row) not in found]
+            return "\n".join([*context, got, *missing])
     except ImportError:
         pass
     for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):

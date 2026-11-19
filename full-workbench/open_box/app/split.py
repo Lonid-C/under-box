@@ -150,6 +150,9 @@ def split_claims(resume_text: str, llm: LLM, *, complete_section=False) -> list[
         item.setdefault("date_label", "")
         item.setdefault("elements", [])
         item.setdefault("entities", {})
+        if isinstance(item["elements"], list):
+            item["elements"] = [re.sub(r"^\s*([^=：:\n]{1,30}?)\s*[=：:]\s*", r"\1=", e)
+                                if isinstance(e, str) else e for e in item["elements"]]
         try:
             claims.append(Claim(**item))
         except Exception as exc:

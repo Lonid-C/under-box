@@ -1,7 +1,8 @@
 """ICT-only provider selection; synthetic credentials and no network."""
 import os,unittest
 from unittest.mock import patch
-from app.search import build_searcher,ZhipuSearcher,NullSearcher
+from app.search import build_searcher,ict_search_policy,ZhipuSearcher,NullSearcher
+from app.deepseek_search import DeepSeekSearcher
 from app.api_config import SearchCredentials,bind_search_credentials
 from app.retrieval_policy import RecallFallbackSearcher
 
@@ -34,5 +35,15 @@ class GLMSearchTests(unittest.TestCase):
     def test_absent_policy_keeps_existing_configured_route(self):
         with patch.dict(os.environ,{**SETTINGS,'UNDERBOX_ICT_GLM_ONLY':'0'}):search=build_searcher('zhipu')
         self.assertIsInstance(search,RecallFallbackSearcher)
+
+    def test_explicit_ict_deepseek_mode_uses_no_glm_or_cross_provider_fallback(self):
+        with patch.dict(os.environ,{**SETTINGS,'UNDERBOX_ICT_SEARCH_PROVIDER':'deepseek'}), \
+             bind_search_credentials(SearchCredentials(api_key='synthetic-account')), \
+             patch('app.search.ZhipuSearcher') as glm:
+            search=build_searcher()
+            self.assertEqual(ict_search_policy(),'deepseek_only')
+        self.assertIs(type(search),DeepSeekSearcher)
+        self.assertEqual(search.api_key,'synthetic-ds')
+        glm.assert_not_called()
 
 if __name__=='__main__':unittest.main()

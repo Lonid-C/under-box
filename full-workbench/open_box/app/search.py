@@ -1628,6 +1628,14 @@ SEARCH_PROVIDERS = {"zhipu": ZhipuSearcher, "generic": HTTPSearcher,
                     "brave": BraveSearcher}
 
 
+def ict_search_policy() -> str:
+    if os.environ.get('UNDERBOX_ICT_SEARCH_PROVIDER') == 'deepseek':
+        return 'deepseek_only'
+    if os.environ.get('UNDERBOX_ICT_GLM_ONLY') == '1':
+        return 'zhipu_only'
+    return 'configured_with_fallback'
+
+
 def build_searcher(provider: str | None = None) -> Searcher:
     """按环境变量装配。默认智谱。
 
@@ -1639,13 +1647,17 @@ def build_searcher(provider: str | None = None) -> Searcher:
     SEARCH_ENDPOINT=...                # 可选：端点有变时覆盖
     SEARCH_PROVIDER=zhipu|brave|generic # 可选
     """
+    policy = ict_search_policy()
+    if policy == 'deepseek_only':
+        from .deepseek_search import DeepSeekSearcher
+        return DeepSeekSearcher()
     from .api_config import search_credentials
     credentials = search_credentials()
     if credentials is not None:
         # Account binding is exclusive: never borrow another account's Brave key
         # or send the bound Zhipu key to a globally configured custom endpoint.
         return ZhipuSearcher(api_key=credentials.api_key, endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
-    if os.environ.get('UNDERBOX_ICT_GLM_ONLY') == '1':
+    if policy == 'zhipu_only':
         # Restore the GitHub Zhipu route for ICT; no cross-provider fallback.
         return (ZhipuSearcher(endpoint=ZhipuSearcher.DEFAULT_ENDPOINT)
                 if os.environ.get('SEARCH_API_KEY') else NullSearcher())

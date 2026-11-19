@@ -422,11 +422,19 @@ body[data-stage="hero"] #intake{box-shadow:var(--shadow-hero)}
 .row[aria-expanded="true"] .cv{transform:rotate(180deg)}
 .flag{display:inline-block;font-size:10px;font-weight:600;margin-left:7px;padding:1px 6px;border:1.5px solid var(--ink);border-radius:3px;background:var(--paper);vertical-align:1px}
 
-.detail{display:none;padding:4px 16px 20px;background:#FCFAF6;border-top:1.5px dashed #D8D4C9}
-.detail.on{display:block;max-height:min(62vh,560px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.detail{display:none;background:#FCFAF6;border-top:1.5px dashed #D8D4C9}
+.detail.on{display:flex;flex-direction:column}
+.detail-scroll{max-height:min(48vh,420px);max-height:min(48dvh,420px);min-width:0;padding:0 16px 16px;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable;overflow-wrap:anywhere}
+.detail-scroll:focus-visible{outline:2px solid var(--pink);outline-offset:-2px}
+.review-links-list{margin:8px 0 0;padding:0;list-style:none}
+.review-links-list>li{padding:8px 0;font-size:13px}
+.review-link-url{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-3)}
+.review-link-reason{margin:3px 0 0;color:var(--ink-2);font-size:12px}
+.review-links-more{margin-top:7px;font-size:12px}
+.review-links-more>summary{cursor:pointer}
 .ev.more[hidden]{display:none}
 .evmore{margin-top:10px}
-.dclose{position:sticky;bottom:0;display:flex;justify-content:center;padding:10px 0 2px;margin-top:16px;background:linear-gradient(to top,#FCFAF6 70%,rgba(252,250,246,0))}
+.dclose{display:flex;justify-content:flex-end;padding:7px 16px;border-top:1px solid #E4E0D6;background:#FCFAF6}
 .claims{padding-bottom:0}
 #claims{scroll-margin-top:8px}
 .claims>li{scroll-margin-top:8px}
@@ -725,13 +733,15 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
   .top-right{gap:10px}
   .top-right .rno{display:none}
   .row .dt,.row .ct,.row .tr{display:none}
+  .detail-scroll{max-height:min(45vh,380px);max-height:min(45dvh,380px);padding-inline:12px}
+  .dclose{padding-inline:12px}
 }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-ds-diagnosis17">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-review-links">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -1315,6 +1325,97 @@ function retrievalEmpty(c) {
   if(Object.keys(decisions).some(k=>/缺少本人|身份.*不匹配/.test(k)))return '已读取的候选页面缺少本人或团队身份关联，未能作为本条证据。可补充能关联本人的原始材料。';
   return '已执行的公开查询未取得可关联到本人的证据；不等于经历不实，可补充原始材料。';
 }
+function reviewLinkUrl(value) {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value) || /[\s<>]/.test(value)) return '';
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (url.username || url.password || url.port || !host.includes('.') || /^[\d.]+$/.test(host) || host.includes(':')
+        || /\.(?:local|localhost|internal|home|lan)$/.test(host)
+        || /(?:%5B|\[)redacted(?:%5D|\])/i.test(url.href)) return '';
+    return url.href;
+  } catch { return ''; }
+}
+function manualReviewLinks(c) {
+  if (c.status === 'ok' && !c.needsHuman) return [];
+  const access = c.verificationAgent?.sourceAccess || {};
+  const decisions = access.decisions || [];
+  const reads = (access.events || []).filter(event => event.action === 'read');
+  const failures = [
+    ...(access.failureGroups || []).filter(group => group.action === 'read'),
+    ...reads.filter(event => ['failed','blocked','empty'].includes(event.state)),
+    ...(c.retrievalSummary?.pageFailures || [])
+  ];
+  const references = entry => entry.references || [entry.reference];
+  const keyOf = href => {
+    const url = new URL(href);
+    for (const name of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(name)) url.searchParams.delete(name);
+    }
+    url.searchParams.sort();
+    return url.href;
+  };
+  const excluded = new Set();
+  const suppress = values => {
+    for (const value of values) {
+      const href = reviewLinkUrl(value);
+      if (href) excluded.add(keyOf(href));
+    }
+  };
+  for (const item of [...decisions, ...failures]) {
+    if (/排除(?:范围|来源)|不在原机构|不在本项|未授权|SourceNotAllowed|UnsafeURL|内网|不接受该端口|安全解析|身份冲突|学校不匹配|明确(?:为|属于)他人|不是同一人|赛事(?:或赛级)?不匹配|年份不匹配|HTTP\s*(?:404|410)\b/i.test((item.reason || '')+' '+(item.error || ''))) {
+      suppress(references(item));
+    }
+  }
+  const candidates = new Map();
+  const add = (value, reason, rank, title = '') => {
+    const href = reviewLinkUrl(value);
+    if (!href) return;
+    const key = keyOf(href);
+    if (excluded.has(key)) return;
+    const saved = candidates.get(key);
+    if (!saved || rank > saved.rank) candidates.set(key, {href, reason, rank, title:title || saved?.title || ''});
+    else if (title && !saved.title) saved.title = title;
+  };
+  const evidence = c.evidence || [];
+  for (const ev of evidence) {
+    if (['page_text_verified','structured_metadata_verified'].includes(ev.provenanceState) || ev.conflicts?.length) {
+      suppress([ev.url, ev.originalUrl, ev.resolvedUrl]);
+    }
+  }
+  for (const ev of evidence) {
+    const reason = ({ocr_unverified:'图片识别结果待核对原图', search_snippet_unverified:'仅取得搜索摘要，原文待核对',
+      legacy_unrecorded:'旧报告保存了来源，原文校验记录不全'})[ev.provenanceState];
+    if (reason) add(ev.url, reason, 4, ev.title);
+  }
+  for (const item of decisions) {
+    if (item.state === 'retained') continue;
+    add(item.reference, item.reason || '来源内容待核对', item.state === 'navigation' ? 1 : 3);
+  }
+  for (const failure of failures) {
+    for (const url of references(failure)) add(url, failure.reason || '系统未能读取原文', 2);
+  }
+  for (const event of reads) {
+    if (event.state === 'returned') add(event.reference, '已读取页面，现有记录未能确认本条经历', 1);
+  }
+  for (const sample of access.searchSamples || []) {
+    for (const hit of sample.hits || []) add(hit.url, '搜索结果命中，报告未记录原文核验结果', 0, hit.title);
+  }
+  return [...candidates.values()].sort((a,b) => b.rank - a.rank);
+}
+function renderManualReviewLinks(c) {
+  const links = manualReviewLinks(c);
+  if (!links.length) return null;
+  const box = el('section', {class:'dsec review-links'}, el('h4', {text:`待人工核验的网址 · ${links.length} 个`}));
+  const list = items => el('ul', {class:'review-links-list'}, items.map(item =>
+    el('li', {}, contextLink(item.href, item.title || item.href),
+      item.title ? el('span', {class:'review-link-url', text:item.href, title:item.href}) : null,
+      el('p', {class:'review-link-reason', text:item.reason}))));
+  box.appendChild(list(links.slice(0, 3)));
+  if (links.length > 3) box.appendChild(el('details', {class:'review-links-more'},
+    el('summary', {text:`查看其余 ${links.length - 3} 个网址`}), list(links.slice(3))));
+  return box;
+}
 function retrievalDetails(c) {
   const access=c.verificationAgent?.sourceAccess || {}, issues=retrievalProblems(c);
   if(!access.queryPlan && !issues.length)return null;
@@ -1354,7 +1455,9 @@ function retrievalDetails(c) {
   return box;
 }
 function detailOf(c) {
-  const d = el('div', {class:'detail'});
+  const d = el('div', {class:'detail-scroll', tabindex:'0', role:'region', 'aria-label':'经历核验详情，可上下滚动'});
+  const links = renderManualReviewLinks(c);
+  if (links) d.appendChild(links);
   d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'简历原文（逐字）'}),
     el('div', {class:'raw'}, c.rawText, el('span', {class:'loc', text:c.locator}))));
   if (c.elements.length) {
@@ -1491,8 +1594,7 @@ function detailOf(c) {
   }
   const close = el('button', {class:'ghost', type:'button', text:'收起 ▴'});
   close.dataset.close = '1';
-  d.appendChild(el('div', {class:'dclose'}, close));
-  return d;
+  return el('div', {class:'detail'}, d, el('div', {class:'dclose'}, close));
 }
 
 function toggleReviewForm(claimId, container, btn) {
@@ -1627,7 +1729,8 @@ function renderClaims() {
   const ul = $('claims'); ul.innerHTML = '';
   REPORT.claims.forEach((c, i) => {
     const st = STATUS[displayStatus(c)];
-    const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'data-id':c.id, 'data-status':displayStatus(c)},
+    const detailId = 'claim-detail-' + (i + 1);
+    const row = el('button', {class:'row', type:'button', 'aria-expanded':'false', 'aria-controls':detailId, 'data-id':c.id, 'data-status':displayStatus(c)},
       el('span', {class:'dot', style:`background:${st.dot}`}),
       el('span', {class:'st', style:`background:${st.bg};color:${st.fg}`, text:retrievalLabel(c),title:retrievalProblemText(c) || retrievalLabel(c)}),
       el('span', {class:'dt', text:c.date || '—'}),
@@ -1636,6 +1739,7 @@ function renderClaims() {
       el('span', {class:'tr' + (c.tier ? '' : ' none'), text:c.tier || '—', title:c.tier ? TIER_NAME[c.tier] : '没有检索到来源，因此没有等级'}),
       el('span', {class:'cv', text:'▾'}));
     const det = detailOf(c);
+    det.id = detailId;
     const setOpen = on => {
       row.setAttribute('aria-expanded', String(on));
       det.classList.toggle('on', on);
@@ -1644,9 +1748,12 @@ function renderClaims() {
       const on = row.getAttribute('aria-expanded') !== 'true';
       if (on) ul.querySelectorAll('.row[aria-expanded="true"]').forEach(r => r.click()); // 同时只展开一条，避免互相顶开
       setOpen(on);
-      if (on) li.scrollIntoView({block:'nearest', behavior: reduceMotion() ? 'auto' : 'smooth'});
+      if (on) row.scrollIntoView({block:'nearest', behavior: reduceMotion() ? 'auto' : 'smooth'});
     });
-    det.querySelector('[data-close]').addEventListener('click', () => { setOpen(false); li.scrollIntoView({block:'nearest'}); });
+    det.querySelector('[data-close]').addEventListener('click', () => {
+      setOpen(false);
+      row.focus();
+    });
     const li = el('li', {}, row, det);
     li.style.animationDelay = (i * 42) + 'ms';
     ul.appendChild(li);

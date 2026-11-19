@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
 class Node{constructor(text=''){this.text=String(text);this.children=[];this.handlers={};}addEventListener(k,f){this.handlers[k]=f;}appendChild(n){this.children.push(n);return n;}get textContent(){return this.text+this.children.map(n=>n.textContent).join('');}set textContent(v){this.text=String(v);this.children=[];}set innerHTML(v){if(v===''){this.text='';this.children=[];}else throw Error('untrusted markup');}}
-const ctx={window:{},STATUS:{none:{label:'未找到公开记录'},part:{label:'部分证实'},incomplete:{label:'查询遇到问题'},unsearched:{label:'待补充检索信息'}},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.forEach(c=>n.appendChild(c));return n;}};
+const ctx={URL,window:{},STATUS:{none:{label:'未找到公开记录'},part:{label:'部分证实'},incomplete:{label:'查询遇到问题'},unsearched:{label:'待补充检索信息'}},contextLink:(url,label)=>/^https?:\/\//.test(url)?new Node(label):null,el:(tag,props={},...children)=>{const n=new Node(props.text||'');children.flat().filter(Boolean).forEach(c=>n.appendChild(c));return n;}};
 vm.createContext(ctx);vm.runInContext(html.slice(html.indexOf('function retrievalProblems('),html.indexOf('function detailOf(')),ctx);
 assert.equal(ctx.retrievalLabel({status:'none',retrievalStatus:'not_started'}),'待补充检索信息');
 assert.equal(ctx.retrievalLabel({status:'none'}),'未找到公开记录');
@@ -34,6 +34,29 @@ const complete={status:'none',retrievalStatus:'complete',verificationAgent:{sour
 assert.equal(ctx.retrievalLabel(complete),'未找到本人关联证据');assert.match(ctx.retrievalEmpty(complete),/缺少本人或团队身份关联/);
 const snapshot=JSON.stringify(mixed);ctx.retrievalProblems(mixed);ctx.retrievalDetails(mixed);assert.equal(JSON.stringify(mixed),snapshot,'rendering history must not rewrite stored evidence or failure records');
 const bad=make([failure('<img onerror=alert(1)>','javascript:alert(1)')]);assert.match(ctx.retrievalDetails(bad).textContent,/未保存可打开的来源链接/);
+const clue=make([failure('HTTP 403','https://school.example/roster?year=2025'),failure('请求失败（UnsafeURL）','https://school.example/unsafe'),failure('HTTP 404','https://school.example/dead')]);
+clue.evidence=[{url:'https://school.example/image',provenanceState:'ocr_unverified',title:'海报名单'},
+               {url:'https://school.example/proved',provenanceState:'page_text_verified'}];
+Object.assign(clue.verificationAgent.sourceAccess,{
+ decisions:[{state:'rejected',reason:'本人关联不足：摘录不含候选人的完整姓名',reference:'https://school.example/notice'},
+            {state:'rejected',reason:'搜索结果赛事或赛级不匹配',reference:'https://school.example/mismatch'}],
+ searchSamples:[{hits:[
+  {url:'https://school.example/roster?utm_medium=search&year=2025',title:'结果名单'},
+  {url:'https://school.example/other',title:'候选公告 <script>'},
+  ...['proved','mismatch','unsafe','dead'].map(x=>({url:'https://school.example/'+x})),
+  {url:'https://127.0.0.1:8000/hidden'},{url:'https://user:pwd@school.example/private'},
+  {url:'https://school.example/doc?key=%5Bredacted%5D'},{url:'javascript:alert(1)'}
+ ]}]
+});
+const savedClue=JSON.stringify(clue), links=ctx.manualReviewLinks(clue);
+assert.deepEqual(Array.from(links, x=>new URL(x.href).pathname),['/image','/notice','/roster','/other']);
+assert.equal(links[2].title,'结果名单');
+assert.equal(links[2].reason,'HTTP 403');
+assert.match(ctx.renderManualReviewLinks(clue).textContent,/待人工核验的网址 · 4 个/);
+assert.match(ctx.renderManualReviewLinks(clue).textContent,/查看其余 1 个网址/);
+assert.match(ctx.renderManualReviewLinks(clue).textContent,/候选公告 <script>/);
+assert.equal(JSON.stringify(clue),savedClue,'rendering possible links must not rewrite saved evidence');
+assert.equal(ctx.renderManualReviewLinks({status:'none'}),null);
 assert.ok(!html.includes('检索未完成'),'UI copy must not reintroduce the ambiguous label');
 console.log('ICT search state, rejection counts and safe text rendering passed');
 const controls=new Map();const byId=id=>{if(!controls.has(id))controls.set(id,{style:{},append(){}});return controls.get(id);};

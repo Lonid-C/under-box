@@ -18,7 +18,6 @@ body[data-stage="gate"] .hero-journey span{color:#fff;mix-blend-mode:difference}
 .institution-context>p,.institution-context>ol,.institution-context>.hint{grid-column:1/-1}
 .institution-context ol{margin:5px 0;padding-left:20px;font-size:12px;line-height:1.9}
 .institution-context a{overflow-wrap:anywhere}
-.detail.on{max-height:none;overflow:visible}
 .ub-drawer-backdrop{position:fixed;inset:0;z-index:199;background:rgba(20,19,15,0.145);backdrop-filter:blur(3px);animation:ubFadeIn .18s ease}
 .tierpanel,.risk-panel,.ad-sheet{position:fixed;left:auto;right:12px;top:12px;bottom:12px;transform:none;z-index:200;width:min(460px,calc(100vw - 24px));max-height:none;border:2px solid var(--ink);border-radius:var(--rad);background:var(--paper);box-shadow:var(--shadow-sm);animation:ubDrawerIn .3s var(--ease);overflow:auto;color:var(--ink-2)}
 .tierpanel{padding:30px}

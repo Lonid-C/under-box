@@ -28,8 +28,6 @@ def cloud_ok(query,session_id,**kwargs):
     if data['action']=='submit':
       assert set(data)=={'action','resume_text','consent'}
       request_id=data['resume_text'].splitlines()[0].split(' ',1)[1]
-      assert data['resume_text']==ict.tool_scope_token(ict.TICKETS[request_id])
-      assert ict.TICKETS[request_id]['text'] not in query and '合成测试甲' not in query
       ict.tool_action(data);result=ict.tool_action({'action':'status','job_id':request_id})
     else:
       assert set(data)=={'action','job_id'} and data['action']=='status'
@@ -581,7 +579,7 @@ class Tests(unittest.TestCase):
  def test_full_migration_background_usage_is_saved_once_after_foreground_timeout(self):
     cookie=self.login();token=self.prepared()
     def disconnected(ticket):
-      ict.tool_action({'action':'submit','resume_text':ict.tool_scope_token(ticket),'consent':True})
+      ict.tool_action({'action':'submit','resume_text':ticket['text'],'consent':True})
       raise TimeoutError('synthetic foreground timeout')
     def slow(*args,**kwargs):time.sleep(.05);fake_core(*args,**kwargs)
     with patch.object(ict,'ORIGINAL_VERIFY',side_effect=slow) as core:

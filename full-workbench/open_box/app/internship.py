@@ -1,4 +1,4 @@
-"""Company contacts are manual-review aids, never candidate internship evidence."""
+"""Company records and contacts for human review of employment and internships."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -9,15 +9,29 @@ from .schema import VerifiedClaim
 
 
 def company_name(claim):
-    values = [claim.entities.get(k) for k in ("company", "org")]
+    values = [claim.entities.get(k) for k in ("company", "employer", "org")]
     values += [e.partition("=")[2] for e in claim.elements
-               if e.partition("=")[0].strip() in {"单位", "公司", "实习单位", "机构"}]
+               if e.partition("=")[0].strip() in {
+                   "单位", "公司", "企业", "实习单位", "任职单位", "工作单位", "用人单位", "机构",
+               }]
     for value in values:
         if (isinstance(value, str) and 2 <= len(value.strip()) <= 160
                 and not re.search(r"[<>\n]|https?://", value)
                 and _compact(value) in _compact(claim.raw_text)):
             return value.strip()
     return ""
+
+
+def employment_company(claim):
+    if claim.category != "任职":
+        return ""
+    company = company_name(claim)
+    if re.search(r"有限公司|有限责任公司|股份公司|集团|\b(?:Inc|LLC|Ltd|GmbH|PLC)\.?$", company, re.I):
+        return company
+    if re.search(r"(?:大学|学院|中学|小学|医院|研究院|研究所|科学院|协会|基金会|委员会|管理局|办公室|政府|实验室)$",
+                 company.rstrip("）)")):
+        return ""
+    return company
 
 
 def _compact(value):
@@ -156,29 +170,40 @@ def related_company_names(claim):
     return names[:3]
 
 
-def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: None, *, _include_related=True):
+def build_company_review(claim, searcher=None, fetcher=None, budget=None,
+                         progress=lambda *_: None, *, _include_related=True):
     from .public_context import (now, public_url, visible_text, labeled_fields, source_field,
                                  public_contacts, search_safely, read_safely)
     company = company_name(claim)
+    employment = claim.category == "任职"
+    experience = "任职" if employment else "实习"
     checked_at = now()
-    review = {"kind": "internship", "company": company, "queryUrl": query_url(company),
+    review = {"kind": "employment" if employment else "internship",
+              "company": company, "queryUrl": query_url(company),
               "tianyanchaQueryUrl": "https://www.tianyancha.com/search?key=" + quote(company, safe="") if company else "",
               "companyUrl": "", "registryLinks": [], "contacts": [], "profile": {},
-              "state": "company_name_missing", "checkedAt": checked_at,
+              "state": "link_only" if company else "company_name_missing", "checkedAt": checked_at,
               "note": "企业资料及公开办公联系方式仅供人工背调，不能证明候选人的任职/实习。企业规模、参保人数与注册资本是不同指标；法定代表人未必是人力资源或背调联系人。",
-              "checks": ["确认公司全称和实际实习主体（品牌名不等同于具体法人）",
-                         "联系公开办公渠道转接人力资源或实习负责人",
-                         "分别核对本人实习岗位、起止时间及职责"], "limitations": []}
+              "checks": [f"确认公司全称和实际{experience}主体（品牌名不等同于具体法人）",
+                         ("联系公开办公渠道转接人力资源部门" if employment
+                          else "联系公开办公渠道转接人力资源或实习负责人"),
+                         f"分别核对本人{experience}岗位、起止时间及职责"], "limitations": []}
+    if not company:
+        review["limitations"].append("输入未明确公司名称，请补充公司全称后查询。")
+    if searcher is None or fetcher is None or budget is None:
+        return review
     if company:
-        review["state"] = "link_only"
         def candidates():
             # Consume hits between searches so slow search calls cannot starve page reads.
-            for site in ("qcc.com", "tianyancha.com"):
-                progress("定位" + company + "的" + ("企查查" if site == "qcc.com" else "天眼查") + "资料")
-                yield from search_safely(searcher, '"' + company.replace('"', '') + '"', site,
-                                        budget, review["limitations"])
-            yield from search_safely(searcher, company + " 官网 联系方式 注册地址 经营范围", None,
-                                    budget, review["limitations"])
+            for site in (("qcc.com", None, "tianyancha.com") if employment else
+                         ("qcc.com", "tianyancha.com", None)):
+                if site is None:
+                    yield from search_safely(searcher, company + " 官网 联系方式 注册地址 经营范围", None,
+                                             budget, review["limitations"])
+                else:
+                    progress("定位" + company + "的" + ("企查查" if site == "qcc.com" else "天眼查") + "资料")
+                    yield from search_safely(searcher, '"' + company.replace('"', '') + '"', site,
+                                             budget, review["limitations"])
         seen = set()
         for hit in candidates():
             if not public_url(hit.url) or hit.url in seen:
@@ -243,15 +268,18 @@ def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: No
             review["limitations"].append("部分企业资料仅为搜索摘要，尚未回读原文，请打开来源核对最新登记信息。")
         review["missingFields"] = [aliases[0] for key, aliases in COMPANY_FIELDS.items()
                                     if key not in review["profile"]]
-    else:
-        review["limitations"].append("输入未明确公司名称，请补充公司全称后查询。")
-    if _include_related:
+    if _include_related and not employment:
         review["relatedCompanies"] = []
         for name in related_company_names(claim):
             host = claim.model_copy(update={"entities": {**claim.entities, "company": name}})
-            child = build_manual_review(host, searcher, fetcher, budget, progress, _include_related=False).manual_review
+            child = build_company_review(host, searcher, fetcher, budget, progress, _include_related=False)
             child["relationship"] = "驻企单位"
             review["relatedCompanies"].append(child)
+    return review
+
+
+def build_manual_review(claim, searcher, fetcher, budget, progress=lambda *_: None):
+    review = build_company_review(claim, searcher, fetcher, budget, progress)
     return VerifiedClaim(claim=claim, status="none", evidence=[], proved=[], unproved=list(claim.elements),
                          needs_human=True, search_exhausted=budget.exhausted, manual_review=review,
                          next_step="打开企业资料和公开联系渠道，确认公司主体后转接实习负责人，人工核对岗位和时间。",

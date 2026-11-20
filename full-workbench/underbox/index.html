@@ -741,7 +741,7 @@ body.reading::before{content:"";position:fixed;inset:0;background:rgba(20,19,15,
 }
 .chat-web{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px}.chat-web span{font-size:10px;color:var(--ink-3)}.chat-web input{accent-color:var(--pink)}
 </style>
-<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-status-drag">
+<link rel="stylesheet" href="__ICT_BASE__ui.css?v=ict-internship-blue">
 </head>
 <body data-session-pending data-stage="gate">
 <div class="ict-edition-bar">UNDERBOX / HUAWEI ICT · AGENTARTS 编排核验 <a class="ict-admin-entry" href="__ICT_BASE__?login=1">管理登录</a> <a href="https://console.huaweicloud.com/agentarts/?region=cn-southwest-2#/home/overview" target="_blank" rel="noopener noreferrer">AgentArts 控制台 ↗</a></div><div class="ub-brand-strip"><button class="ghost" id="helpHero" type="button">使用指南 ↗</button></div>
@@ -1151,7 +1151,7 @@ const STATUS = {
   ask:  {label:'待澄清',        dot:'#D85A30', bg:'#FAECE7', fg:'#712B13'},
   none: {label:'未找到公开记录', dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
   who:  {label:'身份未确认',    dot:'#B4B2A9', bg:'#F0EDE6', fg:'#44413A'},
-  internship:{label:'实习待核查',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
+  internship:{label:'实习待核查',dot:'var(--internship-blue)',bg:'var(--internship-tint)',fg:'var(--internship-ink)'},
   incomplete:{label:'查询遇到问题',dot:'#BA7517',bg:'#FAEEDA',fg:'#633806'},
   unsearched:{label:'待补充检索信息',dot:'#B4B2A9',bg:'#F0EDE6',fg:'#44413A'}
 };
@@ -1319,7 +1319,7 @@ function displayStatus(c) {
   return c.status !== 'none' ? c.status : ['budget_not_started','budget_limited','time_limited','partial','provider_error','blocked','timeout','budget_exhausted','canceled'].includes(c.retrievalStatus) ? 'incomplete' : ['not_started','not_attempted'].includes(c.retrievalStatus) ? 'unsearched' : c.status;
 }
 function retrievalEmpty(c) {
-  if(c.manualReview)return '请联系企业核实实习岗位、时间和职责。';
+  if(c.manualReview?.kind==='internship')return '请联系企业核实实习岗位、时间和职责。';
   const issues=retrievalProblems(c);
   if(issues.length)return '尚未取得足够的本人关联证据。查询遇到：'+retrievalProblemText(c)+'。已取得的可用材料保留；来源访问失败不能证明经历不实。';
   if(['not_started','not_attempted'].includes(c.retrievalStatus))return '本条未执行有效查询，请补充必要信息后再核验；不能据此认定没有公开记录。';
@@ -1458,8 +1458,13 @@ function retrievalDetails(c) {
 }
 function detailOf(c) {
   const d = el('div', {class:'detail-scroll', tabindex:'0', role:'region', 'aria-label':'经历核验详情，可上下滚动'});
-  if (c.manualReview?.kind === 'internship') d.appendChild(el('div', {class:'dsec'},
-    el('h4', {text:'实习经历 · 公司信息与人工核查'}), renderManualReview(c.manualReview)));
+  if (['internship', 'employment'].includes(c.manualReview?.kind)) {
+    const title = c.manualReview.kind === 'employment' ? '任职经历 · 企业信息与人工核查' : '实习经历 · 公司信息与人工核查';
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:title}), renderManualReview(c.manualReview)));
+  } else if (c.category === '任职' && c.verificationContacts) {
+    d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'任职经历 · 单位公开联系渠道'}),
+      renderVerificationContacts(c.verificationContacts)));
+  }
   const links = renderManualReviewLinks(c);
   if (links) d.appendChild(links);
   d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'简历原文（逐字）'}),
@@ -1555,10 +1560,10 @@ function detailOf(c) {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:`证据 ${c.evidence.length} 条`}), box));
   } else {
     d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'证据 0 条'}),
-      el('div', {class:'empty', text:c.manualReview ? '实习岗位、时间及职责待人工联系确认，公司链接和电话不计入本人经历证据。' : retrievalEmpty(c)})));
+      el('div', {class:'empty', text:retrievalEmpty(c)})));
   }
   if(c.educationReview)d.appendChild(renderEducationReview(c.educationReview));
-  if(c.verificationContacts)d.appendChild(renderVerificationContacts(c.verificationContacts));
+  if(c.verificationContacts && c.category !== '任职')d.appendChild(renderVerificationContacts(c.verificationContacts));
   const trace=retrievalDetails(c);if(trace)d.appendChild(trace);
   const diffs = c.evidence.flatMap(e => e.contradicts || []);
   if (diffs.length) d.appendChild(el('div', {class:'dsec'}, el('h4', {text:'差异'}),
@@ -1584,7 +1589,7 @@ function detailOf(c) {
       el('p',{text:review.reason}),el('div',{class:'hint',text:`材料索引：${review.source || '未提供'} · ${review.reviewer_id} · ${review.at}`})));
     history.appendChild(el('p',{class:'hint',text:'复核记录单独保存，原自动结论与来源等级保持不变。'}));d.appendChild(history);
   }
-  if (REPORT.coverage && !c.manualReview) {
+  if (REPORT.coverage && c.manualReview?.kind !== 'internship') {
     const rsec = el('div', {class:'dsec'}, el('h4', {text:'人工复核'}));
     const rbtn = el('button', {class:'ghost', type:'button', text:'发起/录入复核'});
     const rout = el('div', {class:'planout'});
@@ -1658,7 +1663,8 @@ function toggleReviewForm(claimId, container, btn) {
 
 function renderManualReview(review) {
   const box = el('div', {class:'manual-review'});
-  box.appendChild(el('p', {text:'实习公司：' + (review.company || '待补充公司全称')}));
+  const label = review.kind === 'employment' ? '任职公司：' : '实习公司：';
+  box.appendChild(el('p', {text:label + (review.company || '待补充公司全称')}));
   const qccLink = (url, label) => {
     try {
       const u = new URL(url);
@@ -3190,8 +3196,7 @@ const BLOCKS = [
   { name: '项目经历',     cats: ['项目', '开源项目'],   why: '项目名、角色、仓库' },
   { name: '教学活动',     cats: ['教学活动'],           why: '课程、授课角色、活动与评价' },
   { name: '艺术成果',     cats: ['艺术成果'],           why: '作品、演出、创作角色与时间' },
-  { name: '任职经历',     cats: ['任职'],             why: '单位、职务、时间' },
-  { name: '实习背调',     cats: ['实习'],             why: '公司公开资料与人工核查入口' },
+  { name: '就业经历',     cats: ['任职', '实习'],      why: '任职与实习的单位、岗位、时间和人工核查入口' },
   { name: '学生工作',     cats: ['学生工作'],          why: '组织、职务' },
 ];
 /** 显式按设置不核验的条目：列出原文摘要。 */
@@ -3209,6 +3214,7 @@ const PICK = { token: null, claims: [], skipped: [], selected: new Set(), fileTy
 function blockOf(c) { return BLOCKS.find(b => b.cats.includes(c.category)) || { name: '其他', cats: [], why: '' }; }
 function claimSummary(c) {
   if (c.category === '实习' || c.manualReview?.kind === 'internship') return '实习经历 · ' + summaryOf(c.rawText);
+  if (c.category === '任职') return '任职经历 · ' + summaryOf(c.rawText);
   const values = Object.fromEntries((c.elements || []).flatMap(element => {
     const match = /^([^=：:]+)[=：:]\s*(.+)$/.exec(element);
     return match ? [[match[1].trim(), match[2].trim()]] : [];
@@ -3277,7 +3283,7 @@ function renderPick() {
       const row = el('label', { class: 'pk' + (input.checked ? ' on' : ''), for: id },
         input, boxEl,
         el('span', { class: 'tx' }, claimSummary(c),
-          c.category === '实习' ? el('small', {text:'提供可取得的公司公开资料，人工核对岗位、起止时间和职责'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
+          b.name === '就业经历' ? el('small', {text:'提供可取得的单位公开资料，人工核对岗位、起止时间和职责'}) : (keys.length ? el('small', { text: '要核对：' + keys.join('、') }) : null)),
         el('span', { class: 'meta' }, el('span', { text: c.date || '' }), pgBtn));
       input.addEventListener('change', () => {
         input.checked ? PICK.selected.add(c.id) : PICK.selected.delete(c.id);

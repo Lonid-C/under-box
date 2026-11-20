@@ -56,6 +56,21 @@ body[data-stage="gate"] .hero-journey span{color:#fff;mix-blend-mode:difference}
 #usageDock{left:24px;bottom:24px;z-index:38}
 #usageDock:not(.collapsed){bottom:83px}
 body[data-stage="gate"] #usageDock{display:none!important}
+:root{
+  --internship-blue:#225BA5;
+  --internship-ink:#174785;
+  --internship-tint:#EAF3FF;
+}
+.row[data-status="internship"] .st,
+.chipf[data-s="internship"]{border-color:var(--internship-blue)}
+.chipf[data-s="internship"]{
+  background:var(--internship-tint);
+  color:var(--internship-ink);
+}
+.chipf[data-s="internship"][aria-pressed="true"]{background:var(--internship-blue);color:#fff}
+.legend .it[data-s="internship"]{color:var(--internship-ink)}
+.chipf[data-s="internship"]:not([aria-pressed="true"]) i,
+.legend .it[data-s="internship"] i{border-color:var(--internship-blue)}
 .chat-dock{position:fixed;right:30px;bottom:22px;z-index:70;animation:none!important}
 body[data-stage="hero"] .chat-dock,body[data-picking] .chat-dock{display:flex}
 body[data-stage="gate"] .chat-dock{display:none}

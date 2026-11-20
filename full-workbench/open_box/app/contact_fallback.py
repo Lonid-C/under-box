@@ -213,20 +213,34 @@ def build_contact_review(vc, searcher=None, fetcher=None, budget=None, school_do
 
 def attach_contact_reviews(verified, searcher, fetcher, budget_factory, school_domains=None, progress=lambda *_: None):
     from threading import Lock
+    from .internship import build_company_review, employment_company
     from .usage import UsageExecutor
-    pending = [vc for vc in verified if needs_contacts(vc)]
+    companies = {vc.claim.id: name for vc in verified if (name := employment_company(vc.claim))}
+    pending = [vc for vc in verified if vc.claim.id in companies or needs_contacts(vc)]
     if not pending:
         return
-    progress("[6/6] 补充待核验条目的公开电话与邮箱")
+    progress("[6/6] 整理企业公开资料与待核验条目的联系方式" if companies else
+             "[6/6] 补充待核验条目的公开电话与邮箱")
     cache, locks, guard = {}, {}, Lock()
-    def cached_lookup(target):
+    def cached_result(key, load):
         with guard:
-            lock = locks.setdefault(target, Lock())
+            lock = locks.setdefault(key, Lock())
         with lock:
-            if target not in cache:
-                cache[target] = lookup_contacts(target, searcher, fetcher, budget_factory(), [])
-            return deepcopy(cache[target])
+            if key not in cache:
+                cache[key] = load()
+            return deepcopy(cache[key])
+    def cached_lookup(target):
+        return cached_result(target, lambda: lookup_contacts(target, searcher, fetcher, budget_factory(), []))
     def add(vc):
+        company = companies.get(vc.claim.id)
+        if company:
+            try:
+                vc.manual_review = cached_result(("employment", company), lambda: build_company_review(
+                    vc.claim, searcher, fetcher, budget_factory(), progress))
+            except Exception:
+                vc.manual_review = build_company_review(vc.claim)
+                vc.manual_review["limitations"].append("本次企业资料暂不可用，仍可通过企业查询入口核对。")
+            return
         # Every non-project unresolved claim receives a contact result, including
         # an explicit empty result if the institution publishes no usable channel.
         try:

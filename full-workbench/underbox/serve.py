@@ -774,7 +774,8 @@ def report_to_markdown(rep: dict) -> str:
             if c.get(key):L.append(render_context_material(c[key]))
         if c.get("manualReview"):
             review = c["manualReview"]
-            L.append("### 实习人工背调（尚未核实本人经历）")
+            L.append("### 任职经历 · 企业人工核查" if review.get("kind") == "employment" else
+                     "### 实习人工背调（尚未核实本人经历）")
             L.append("- 公司：" + review.get("company", ""))
             L.append(render_context_material(review))
             L.append("- 企查查入口：" + (review.get("companyUrl") or review.get("queryUrl") or "待补充公司全称"))
@@ -1588,6 +1589,8 @@ def main() -> int:
 def followup_contacts(vc):
     """Old saved reports can reuse public routes without a network request."""
     from app.contact_fallback import build_contact_review, needs_contacts
+    if (vc.manual_review or {}).get("kind") == "employment":
+        return None  # The dedicated company panel already carries the public routes.
     if not needs_contacts(vc):
         return None
     return getattr(vc, "verification_contacts", None) or build_contact_review(vc)

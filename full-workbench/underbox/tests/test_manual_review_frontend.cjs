@@ -23,7 +23,7 @@ for(const malicious of ['javascript:alert(1)','https://www.qcc.com.evil.test/fir
   assert.equal(visit(context.render(review)).filter(n=>n.tag==='a').length,0);
 }
 assert.ok(html.includes("'实习待核查'"));
-assert.ok(html.includes("cats: ['实习']"));
+assert.ok(visit(context.render({...review,kind:'employment'})).some(n=>n.attrs.text==='任职公司：合成公司有限公司'));
 console.log('Manual-review renderer: company links, sourced phones, missing-phone fallback, unsafe-link rejection and distinct internship entry passed.');
 
 // Execute original context renderers together; catches accidental self-recursion
